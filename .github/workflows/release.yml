@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release"
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+permissions:
+  contents: read
+
+jobs:
+  build-cli:
+    name: Build CLI (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            binary: rzn-tools
+            archive_kind: tar.gz
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            binary: rzn-tools.exe
+            archive_kind: zip
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            binary: rzn-tools
+            archive_kind: tar.gz
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            binary: rzn-tools
+            archive_kind: tar.gz
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target ${{ matrix.target }} -p rzn_tools_cli --features full
+      - if: matrix.archive_kind == 'tar.gz'
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "dist/${{ matrix.binary }}"
+          tar -C dist -czf "dist/rzn-tools-${RELEASE_TAG}-${{ matrix.target }}.tar.gz" "${{ matrix.binary }}"
+          rm "dist/${{ matrix.binary }}"
+      - if: matrix.archive_kind == 'zip'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary }}" "dist/${{ matrix.binary }}"
+          Compress-Archive -Path "dist/${{ matrix.binary }}" -DestinationPath "dist/rzn-tools-${env:RELEASE_TAG}-${{ matrix.target }}.zip" -Force
+          Remove-Item "dist/${{ matrix.binary }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  workflow-bundle:
+    name: Build Workflow Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p rzn_tools_core --features "examples,full" --examples
+      - run: cargo test -p rzn_tools_core --test system_metadata_conformance
+      - run: |
+          mkdir -p dist/share/rzn-tools
+          cp -R resources dist/share/rzn-tools/
+          cp -R examples dist/share/rzn-tools/
+          tar -C dist -czf "dist/rzn-tools-workflows-${RELEASE_TAG}.tar.gz" share
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workflows
+          path: dist/rzn-tools-workflows-${{ env.RELEASE_TAG }}.tar.gz
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-cli, workflow-bundle]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: "*"
+          merge-multiple: true
+      - run: python3 scripts/generate_release_notes.py --tag "${RELEASE_TAG}" --output dist/release-notes.md
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_RELEASE_NOTES_MODEL }}
+          OPENAI_ORG_ID: ${{ secrets.OPENAI_ORG_ID }}
+          OPENAI_PROJECT_ID: ${{ secrets.OPENAI_PROJECT_ID }}
+      - run: |
+          python3 - <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+
+          dist = Path("dist")
+          lines = []
+          for path in sorted(dist.iterdir()):
+              if path.is_file() and path.name != "release-notes.md":
+                  lines.append(f"{sha256(path.read_bytes()).hexdigest()}  {path.name}")
+          (dist / "checksums.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: rzn-tools ${{ env.RELEASE_TAG }}
+          body_path: dist/release-notes.md
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false

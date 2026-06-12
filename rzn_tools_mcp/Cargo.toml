@@ -1,0 +1,98 @@
+[package]
+name = "rzn_tools_mcp"
+version = "0.2.17"
+edition = "2021"
+description = "MCP server for rzn-tools - Model Context Protocol compliant server"
+license = "AGPL-3.0-only"
+readme = "../README.md"
+repository = "https://github.com/srv1n/rzn-tools"
+keywords = ["mcp", "server", "data", "protocol"]
+categories = ["network-programming"]
+
+[[bin]]
+name = "rzn-tools-mcp"
+path = "src/main.rs"
+
+[dependencies]
+# Core library with feature forwarding
+rzn_tools_core = { package = "rzn_tools_core", path = "../rzn_tools_core", default-features = false }
+
+# MCP and async
+axum = "0.8.6"
+futures = "0.3.31"
+rmcp = "0.8.0"
+tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros", "signal", "time", "io-util"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+thiserror = "1.0.69"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", default-features = false, features = ["env-filter", "fmt", "std"] }
+
+[features]
+default = []
+full = ["all-connectors"]
+all-connectors = ["rzn_tools_core/all-connectors"]
+
+# Fine-grained pass-through
+reddit = ["rzn_tools_core/reddit"]
+biorxiv = ["rzn_tools_core/biorxiv"]
+rss = ["rzn_tools_core/rss"]
+play-store = ["rzn_tools_core/play-store"]
+app-store = ["rzn_tools_core/app-store"]
+app-store-connect = ["rzn_tools_core/app-store-connect"]
+apple-search-ads = ["rzn_tools_core/apple-search-ads"]
+wikipedia = ["rzn_tools_core/wikipedia"]
+arxiv = ["rzn_tools_core/arxiv"]
+pubmed = ["rzn_tools_core/pubmed"]
+polymarket = ["rzn_tools_core/polymarket"]
+kalshi = ["rzn_tools_core/kalshi"]
+semantic-scholar = ["rzn_tools_core/semantic-scholar"]
+semantic_scholar = ["semantic-scholar"]
+web = ["rzn_tools_core/web"]
+web-lite = ["rzn_tools_core/web-lite"]
+x-twitter = ["rzn_tools_core/x-twitter"]
+x-browser = ["x-twitter"]
+x = ["x-twitter"]
+youtube = ["rzn_tools_core/youtube"]
+hackernews = ["rzn_tools_core/hackernews"]
+weather = ["rzn_tools_core/weather"]
+scihub = ["rzn_tools_core/scihub"]
+imap = ["rzn_tools_core/imap"]
+smtp = ["rzn_tools_core/smtp"]
+caldav = ["rzn_tools_core/caldav"]
+slack = ["rzn_tools_core/slack"]
+github = ["rzn_tools_core/github"]
+atlassian = ["rzn_tools_core/atlassian"]
+macos-automation = ["rzn_tools_core/macos-automation"]
+macos-spotlight = ["rzn_tools_core/macos-spotlight"]
+discord = ["rzn_tools_core/discord"]
+google-scholar = ["rzn_tools_core/google-scholar"]
+telegram = ["rzn_tools_core/telegram"]
+whatsapp = ["rzn_tools_core/whatsapp"]
+microsoft-graph = ["rzn_tools_core/microsoft-graph"]
+google-drive = ["rzn_tools_core/google-drive"]
+google-gmail = ["rzn_tools_core/google-gmail"]
+google-calendar = ["rzn_tools_core/google-calendar"]
+google-people = ["rzn_tools_core/google-people"]
+google-search-console = ["rzn_tools_core/google-search-console"]
+bing-webmaster-tools = ["rzn_tools_core/bing-webmaster-tools"]
+linkedin = ["rzn_tools_core/linkedin"]
+openai-search = ["rzn_tools_core/openai-search"]
+anthropic-search = ["rzn_tools_core/anthropic-search"]
+gemini-search = ["rzn_tools_core/gemini-search"]
+perplexity-search = ["rzn_tools_core/perplexity-search"]
+xai-search = ["rzn_tools_core/xai-search"]
+exa-search = ["rzn_tools_core/exa-search"]
+firecrawl-search = ["rzn_tools_core/firecrawl-search"]
+serper-search = ["rzn_tools_core/serper-search"]
+tavily-search = ["rzn_tools_core/tavily-search"]
+serpapi-search = ["rzn_tools_core/serpapi-search"]
+parallel-search = ["rzn_tools_core/parallel-search"]
+llm-macros = ["rzn_tools_core/llm-macros"]
+apple-mail = ["rzn_tools_core/apple-mail"]
+apple-notes = ["rzn_tools_core/apple-notes"]
+apple-messages = ["rzn_tools_core/apple-messages"]
+apple-reminders = ["rzn_tools_core/apple-reminders"]
+apple-contacts = ["rzn_tools_core/apple-contacts"]
+apple-ecosystem = ["rzn_tools_core/apple-ecosystem"]
+localfs = ["rzn_tools_core/localfs"]

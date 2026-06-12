@@ -1,0 +1,6 @@
+interface:
+  display_name: "RZN Tools"
+  short_description: "Work on RZN Integrations connectors and releases"
+  default_prompt: "Use $rzn-tools to add or modify an RZN Integrations connector and validate the CLI/MCP surfaces."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,157 @@
+[package]
+name = "rzn_tools_cli"
+version = "0.2.17"
+edition = "2021"
+description = "CLI interface for rzn-tools - unified data access tool"
+license = "AGPL-3.0-only"
+readme = "../README.md"
+repository = "https://github.com/srv1n/rzn-tools"
+keywords = ["cli", "data", "mcp", "scraping", "api"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "rzn-tools"
+path = "src/main.rs"
+
+[dependencies]
+# Core library (feature-forwarding from this crate)
+rzn_tools_core = { package = "rzn_tools_core", path = "../rzn_tools_core", default-features = false }
+rzn_tools_mcp = { package = "rzn_tools_mcp", path = "../rzn_tools_mcp", default-features = false }
+
+# CLI dependencies - optimized for binary size
+clap = { version = "4.5.4", default-features = false, features = ["std", "derive", "env", "help", "usage", "error-context"] }
+owo-colors = { version = "4.2.3", default-features = false }
+indicatif = { version = "0.17.11", default-features = false }
+comfy-table = { version = "7.2.1", default-features = false }
+terminal_size = "0.4"
+arboard = { version = "3.4", default-features = false }
+textwrap = { version = "0.16", default-features = false, features = ["smawk"] }
+serde_yaml = "0.9.34"
+rpassword = "7.3"
+
+# Async runtime - only features needed for CLI
+tokio = { version = "1.47.1", default-features = false, features = ["rt-multi-thread", "macros", "sync", "time"] }
+serde = { version = "1.0.228", default-features = false, features = ["derive", "std"] }
+serde_json = "1.0.145"
+thiserror = "1.0.69"
+tracing = { version = "0.1.41", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3.20", default-features = false, features = ["env-filter", "fmt", "std", "smallvec"] }
+reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
+flate2 = { version = "1.1.5", default-features = false, features = ["rust_backend"] }
+tar = "0.4.44"
+
+# Optional TUI dependencies
+ratatui = { version = "0.24.0", optional = true }
+crossterm = { version = "0.29.0", optional = true }
+
+[features]
+default = ["default-connectors"]
+
+# A practical default connector set for users building from source.
+# Keep this lightweight-ish (no enterprise auth/OAuth providers) while ensuring
+# common quick-start commands work.
+default-connectors = [
+    "arxiv",
+    "biorxiv",
+    "github",
+    "hackernews",
+    "app-store",
+    "play-store",
+    "pubmed",
+    "polymarket",
+    "kalshi",
+    "linkedin",
+    "reddit",
+    "rss",
+    "parallel-search",
+    "exa-search",
+    "weather",
+    "semantic-scholar",
+    "web-lite",
+    "wikipedia",
+    "youtube",
+]
+full = ["all-connectors"]
+all-connectors = ["rzn_tools_core/all-connectors"]
+
+# Fine-grained pass-through features
+reddit = ["rzn_tools_core/reddit", "rzn_tools_mcp/reddit"]
+play-store = ["rzn_tools_core/play-store", "rzn_tools_mcp/play-store"]
+app-store = ["rzn_tools_core/app-store", "rzn_tools_mcp/app-store"]
+app-store-connect = ["rzn_tools_core/app-store-connect", "rzn_tools_mcp/app-store-connect"]
+apple-search-ads = ["rzn_tools_core/apple-search-ads", "rzn_tools_mcp/apple-search-ads"]
+wikipedia = ["rzn_tools_core/wikipedia", "rzn_tools_mcp/wikipedia"]
+arxiv = ["rzn_tools_core/arxiv", "rzn_tools_mcp/arxiv"]
+pubmed = ["rzn_tools_core/pubmed", "rzn_tools_mcp/pubmed"]
+polymarket = ["rzn_tools_core/polymarket", "rzn_tools_mcp/polymarket"]
+kalshi = ["rzn_tools_core/kalshi", "rzn_tools_mcp/kalshi"]
+semantic-scholar = ["rzn_tools_core/semantic-scholar", "rzn_tools_mcp/semantic-scholar"]
+semantic_scholar = ["semantic-scholar"]
+web = ["rzn_tools_core/web", "rzn_tools_mcp/web"]
+web-lite = ["rzn_tools_core/web-lite", "rzn_tools_mcp/web-lite"]
+x-twitter = ["rzn_tools_core/x-twitter", "rzn_tools_mcp/x-twitter"]
+x-browser = ["x-twitter"]
+x = ["rzn_tools_core/x-api", "rzn_tools_mcp/x"]
+youtube = ["rzn_tools_core/youtube", "rzn_tools_mcp/youtube"]
+hackernews = ["rzn_tools_core/hackernews", "rzn_tools_mcp/hackernews"]
+scihub = ["rzn_tools_core/scihub", "rzn_tools_mcp/scihub"]
+imap = ["rzn_tools_core/imap", "rzn_tools_mcp/imap"]
+smtp = ["rzn_tools_core/smtp", "rzn_tools_mcp/smtp"]
+caldav = ["rzn_tools_core/caldav", "rzn_tools_mcp/caldav"]
+slack = ["rzn_tools_core/slack", "rzn_tools_mcp/slack"]
+github = ["rzn_tools_core/github", "rzn_tools_mcp/github"]
+atlassian = ["rzn_tools_core/atlassian", "rzn_tools_mcp/atlassian"]
+
+# New connectors
+biorxiv = ["rzn_tools_core/biorxiv", "rzn_tools_mcp/biorxiv"]
+rss = ["rzn_tools_core/rss", "rzn_tools_mcp/rss"]
+weather = ["rzn_tools_core/weather", "rzn_tools_mcp/weather"]
+discord = ["rzn_tools_core/discord", "rzn_tools_mcp/discord"]
+google-scholar = ["rzn_tools_core/google-scholar", "rzn_tools_mcp/google-scholar"]
+telegram = ["rzn_tools_core/telegram", "rzn_tools_mcp/telegram"]
+whatsapp = ["rzn_tools_core/whatsapp", "rzn_tools_mcp/whatsapp"]
+
+# LLM provider web search (pass-through)
+openai-search = ["rzn_tools_core/openai-search", "rzn_tools_mcp/openai-search"]
+anthropic-search = ["rzn_tools_core/anthropic-search", "rzn_tools_mcp/anthropic-search"]
+gemini-search = ["rzn_tools_core/gemini-search", "rzn_tools_mcp/gemini-search"]
+perplexity-search = ["rzn_tools_core/perplexity-search", "rzn_tools_mcp/perplexity-search"]
+xai-search = ["rzn_tools_core/xai-search", "rzn_tools_mcp/xai-search"]
+exa-search = ["rzn_tools_core/exa-search", "rzn_tools_mcp/exa-search"]
+firecrawl-search = ["rzn_tools_core/firecrawl-search", "rzn_tools_mcp/firecrawl-search"]
+serper-search = ["rzn_tools_core/serper-search", "rzn_tools_mcp/serper-search"]
+tavily-search = ["rzn_tools_core/tavily-search", "rzn_tools_mcp/tavily-search"]
+serpapi-search = ["rzn_tools_core/serpapi-search", "rzn_tools_mcp/serpapi-search"]
+parallel-search = ["rzn_tools_core/parallel-search", "rzn_tools_mcp/parallel-search"]
+
+# Productivity & Cloud (pass-through)
+microsoft-graph = ["rzn_tools_core/microsoft-graph", "rzn_tools_mcp/microsoft-graph"]
+google-drive = ["rzn_tools_core/google-drive", "rzn_tools_mcp/google-drive"]
+google-gmail = ["rzn_tools_core/google-gmail", "rzn_tools_mcp/google-gmail"]
+google-calendar = ["rzn_tools_core/google-calendar", "rzn_tools_mcp/google-calendar"]
+google-people = ["rzn_tools_core/google-people", "rzn_tools_mcp/google-people"]
+google-search-console = ["rzn_tools_core/google-search-console", "rzn_tools_mcp/google-search-console"]
+bing-webmaster-tools = ["rzn_tools_core/bing-webmaster-tools", "rzn_tools_mcp/bing-webmaster-tools"]
+linkedin = ["rzn_tools_core/linkedin", "rzn_tools_mcp/linkedin"]
+
+# LLM-first composite tools (enable extra macro tools)
+llm-macros = ["rzn_tools_core/llm-macros", "rzn_tools_mcp/llm-macros"]
+
+# macOS-specific connectors
+macos-automation = ["rzn_tools_core/macos-automation", "rzn_tools_mcp/macos-automation"]
+macos-spotlight = ["rzn_tools_core/macos-spotlight", "rzn_tools_mcp/macos-spotlight"]
+# EXPERIMENTAL - NOT READY: See rzn_tools_core/src/connectors/apple_health/NOT_READY.md
+# apple-health = ["rzn_tools_core/apple-health"]
+
+# Apple Ecosystem connectors (macOS only)
+apple-mail = ["rzn_tools_core/apple-mail", "rzn_tools_mcp/apple-mail"]
+apple-notes = ["rzn_tools_core/apple-notes", "rzn_tools_mcp/apple-notes"]
+apple-messages = ["rzn_tools_core/apple-messages", "rzn_tools_mcp/apple-messages"]
+apple-reminders = ["rzn_tools_core/apple-reminders", "rzn_tools_mcp/apple-reminders"]
+apple-contacts = ["rzn_tools_core/apple-contacts", "rzn_tools_mcp/apple-contacts"]
+apple-ecosystem = ["rzn_tools_core/apple-ecosystem", "rzn_tools_mcp/apple-ecosystem"]
+
+# Local filesystem text extraction
+localfs = ["rzn_tools_core/localfs", "rzn_tools_mcp/localfs"]
+
+tui = ["ratatui", "crossterm"]

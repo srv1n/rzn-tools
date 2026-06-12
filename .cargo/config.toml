@@ -1,0 +1,21 @@
+# Cargo configuration for rzn-tools
+# See: https://doc.rust-lang.org/cargo/reference/config.html
+
+[alias]
+# Development shortcuts
+lint = "clippy --all-targets --all-features -- -D warnings"
+fmt-check = "fmt --all -- --check"
+
+[build]
+# Use all available CPU cores
+jobs = -1
+
+[net]
+# Retry downloads on failure
+retry = 3
+
+[term]
+# Enable colors
+color = "auto"
+# Show warnings during build
+verbose = false

@@ -1,0 +1,143 @@
+version: 1
+
+system:
+  id: "web_search"
+  display_name: "Web Search"
+  what_it_does: "Search the public web and fetch readable page content for downstream review or indexing."
+  use_cases:
+    - "Run a broad web search before fetching specific URLs."
+    - "Fetch readable content from a selected result URL."
+    - "Feed web results into normalized indexing pipelines."
+
+capability_groups:
+  - id: "search_web"
+    name: "Search web"
+    description: "Search across web-oriented providers and grouped web profiles."
+    tool_ids: ["search"]
+  - id: "fetch_pages"
+    name: "Fetch page content"
+    description: "Fetch readable text and metadata from a concrete URL."
+    tool_ids: ["get"]
+
+setup_steps:
+  - id: "connectivity"
+    kind: "connectivity"
+    label: "Verify outbound web access"
+    description: "Confirm outbound HTTPS access for both web search providers and page fetches."
+  - id: "provider_choice"
+    kind: "usage"
+    label: "Choose a search runtime"
+    description: "The system-native `web_search/search` tool routes through rzn-tools' federated web profile, while `web_search/get` fetches readable content with the generic web connector."
+  - id: "provider_auth"
+    kind: "auth"
+    label: "Know which web actions need keys"
+    description: "Page fetch (`web_search/get`) is no-auth. Search providers behind the federated web profile may require API keys depending on which connector the deployment enables."
+
+context_parameters:
+  - id: "query"
+    label: "Search query"
+    kind: "string"
+    required: false
+  - id: "url"
+    label: "Result URL"
+    kind: "string"
+    required: false
+  - id: "profile"
+    label: "Search profile"
+    kind: "string"
+    required: false
+    default: "web"
+
+quick_starts:
+  - id: "search_web"
+    title: "Search the web"
+    description: "Use the current web federated profile for general search."
+    tool_id: "search"
+    args:
+      query: "AI agent browser automation"
+      profile: "web"
+      limit: 5
+      merge: "grouped"
+  - id: "fetch_result"
+    title: "Fetch a result URL"
+    description: "Pull readable page content from a concrete URL."
+    tool_id: "get"
+    args:
+      url: "https://example.com"
+      output_format: "normalized_v1"
+
+result_handling:
+  tools:
+    search:
+      human_view:
+        renderer: "list"
+        items_path: "results[]"
+        primary_text: "title"
+        secondary_text: "url"
+      llm_view:
+        include:
+          - "query"
+          - "results[].title"
+          - "results[].url"
+          - "results[].snippet"
+        max_items: 8
+      index_view:
+        mode: "records"
+        records_path: "results[]"
+        fields:
+          record_type: "record_type"
+          external_id: "id"
+          title: "title"
+          body_text: "snippet"
+          source_url: "url"
+          source_name: "source"
+        bm25_text:
+          template: "{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+    get:
+      human_view:
+        renderer: "summary"
+        document_path: "item"
+        title_field: "title"
+        body_field: "blocks[].text"
+      llm_view:
+        include:
+          - "item.title"
+          - "item.canonical_url"
+          - "item.blocks[].text"
+      index_view:
+        mode: "document"
+        document_path: "item"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          body_text: "blocks[].text"
+          source_url: "canonical_url"
+        bm25_text:
+          template: "{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+
+x_runtime:
+  search:
+    primary_tool: "web_search/search"
+    underlying_tool: "federated/federated_search"
+    default_args:
+      profile: "web"
+  fetch:
+    primary_tool: "web_search/get"
+    underlying_tool: "web/get"
+  provider_auth:
+    no_auth:
+      - "web_search/get"
+    may_require_keys:
+      - "web_search/search"
+  notes:
+    - "The MCP surface now exposes system-native `web_search/*` aliases for desktop discovery."
+    - "Search is still backed by the federated web profile, while fetch is backed by the generic web connector."

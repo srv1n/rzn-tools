@@ -1,0 +1,111 @@
+version: 1
+
+system:
+  id: "openai_web_search"
+  display_name: "OpenAI Web Search"
+  what_it_does: "Run grounded web search through OpenAI's Responses API web search tool, using tenant-provided OpenAI credentials."
+  use_cases:
+    - "Answer time-sensitive questions with source-backed web context."
+    - "Search with domain, date, locale, and region hints."
+    - "Reuse the same OpenAI key material configured for other OpenAI-backed systems."
+
+capability_groups:
+  - id: "grounded_search"
+    name: "Grounded search"
+    description: "Ask OpenAI to search the web and return a concise answer with cited source context."
+    tool_ids: ["search"]
+
+setup_steps:
+  - id: "openai_key"
+    kind: "auth"
+    label: "Connect OpenAI"
+    description: "Add an OpenAI API key. Optional organization, project, and default model values can be supplied when the account requires them."
+  - id: "web_search_access"
+    kind: "auth"
+    label: "Verify web search access"
+    description: "Use an OpenAI project whose selected model can call the Responses API web_search tool."
+  - id: "cost_boundary"
+    kind: "usage"
+    label: "Set search limits"
+    description: "Use limit and max_output_tokens to keep source count and generated answer size bounded."
+
+context_parameters:
+  - id: "query"
+    label: "Question or search query"
+    kind: "string"
+    required: false
+  - id: "model"
+    label: "OpenAI model"
+    kind: "string"
+    required: false
+    default: "o4-mini"
+  - id: "region"
+    label: "Region"
+    kind: "string"
+    required: false
+  - id: "include_domains"
+    label: "Include domains"
+    kind: "string_array"
+    required: false
+
+quick_starts:
+  - id: "grounded_answer"
+    title: "Grounded answer"
+    description: "Ask a current-events question and request a small cited source set."
+    tool_id: "search"
+    args:
+      query: "What changed in OpenAI web search APIs this year?"
+      limit: 5
+      response_format: "concise"
+  - id: "domain_limited_search"
+    title: "Domain-limited search"
+    description: "Restrict search to a trusted domain for source-controlled retrieval."
+    tool_id: "search"
+    args:
+      query: "Responses API web search"
+      include_domains:
+        - "platform.openai.com"
+      limit: 5
+      response_format: "concise"
+
+result_handling:
+  tools:
+    search:
+      human_view:
+        renderer: "summary"
+        title_field: "query"
+        body_field: "answer"
+        citations_path: "citations[]"
+      llm_view:
+        include:
+          - "query"
+          - "answer"
+          - "citations"
+          - "usage"
+        max_items: 8
+      index_view:
+        mode: "document"
+        fields:
+          record_type: "provider"
+          external_id: "query"
+          title: "query"
+          body_text: "answer"
+        bm25_text:
+          template: "{{query}}\n\n{{answer}}"
+        embedding_text:
+          template: "{{query}}\n\n{{answer}}"
+      debug_view:
+        mode: "raw_json"
+
+x_runtime:
+  connector_namespace: "openai-search"
+  auth:
+    provider_id: "openai"
+    auth_kind: "api_key"
+    env_fallbacks:
+      - "OPENAI_API_KEY"
+      - "OPENAI_ORG_ID"
+      - "OPENAI_PROJECT_ID"
+  notes:
+    - "Runtime tool calls use `openai-search/search`."
+    - "This system is intentionally separate from generic `web_search` so auth-backed OpenAI search is visible in installer and setup surfaces."

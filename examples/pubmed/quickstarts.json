@@ -1,0 +1,25 @@
+[
+  {
+    "id": "search_papers",
+    "title": "Search papers",
+    "system_id": "pubmed",
+    "runtime_tool": "pubmed/search",
+    "args": {
+      "query": "CRISPR off-target",
+      "limit": 5,
+      "response_format": "concise",
+      "output_format": "normalized_v1"
+    }
+  },
+  {
+    "id": "fetch_paper",
+    "title": "Fetch paper by PMID",
+    "system_id": "pubmed",
+    "runtime_tool": "pubmed/get",
+    "args": {
+      "pmid": "34762503",
+      "response_format": "concise",
+      "output_format": "normalized_v1"
+    }
+  }
+]

@@ -1,0 +1,64 @@
+[
+  {
+    "id": "search_companies",
+    "title": "Search companies",
+    "system_id": "exa_search",
+    "runtime_tool": "exa/search",
+    "args": {
+      "query": "seed-stage fintech companies using AI for compliance",
+      "category": "company",
+      "limit": 5,
+      "type": "auto"
+    }
+  },
+  {
+    "id": "fetch_contents",
+    "title": "Fetch page contents",
+    "system_id": "exa_search",
+    "runtime_tool": "exa/get_contents",
+    "args": {
+      "ids": [
+        "https://exa.ai"
+      ],
+      "text": {
+        "maxCharacters": 5000
+      },
+      "highlights": {
+        "numSentences": 2
+      }
+    }
+  },
+  {
+    "id": "find_similar",
+    "title": "Find similar pages",
+    "system_id": "exa_search",
+    "runtime_tool": "exa/find_similar",
+    "args": {
+      "url": "https://exa.ai",
+      "limit": 5,
+      "category": "company"
+    }
+  },
+  {
+    "id": "answer_with_citations",
+    "title": "Answer with citations",
+    "system_id": "exa_search",
+    "runtime_tool": "exa/answer",
+    "args": {
+      "query": "What is Exa best used for in agent research workflows?",
+      "mode": "precise",
+      "include_citations": true,
+      "limit": 5
+    }
+  },
+  {
+    "id": "deep_research",
+    "title": "Deep research",
+    "system_id": "exa_search",
+    "runtime_tool": "exa/research",
+    "args": {
+      "instructions": "Find 5 examples of AI-native search APIs for developer agents and return a short comparison with URLs.",
+      "model": "exa-research-fast"
+    }
+  }
+]

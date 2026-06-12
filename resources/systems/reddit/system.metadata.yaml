@@ -1,0 +1,202 @@
+version: 1
+
+system:
+  id: "reddit"
+  display_name: "Reddit"
+  what_it_does: "Read public subreddit feeds, search discussions, fetch threads with comments, and inspect public user profiles."
+  use_cases:
+    - "Monitor a subreddit feed for relevant posts."
+    - "Search Reddit discussions by keyword or subreddit."
+    - "Fetch a thread with comments for analysis or summarization."
+
+capability_groups:
+  - id: "read_public"
+    name: "Read public content"
+    description: "Browse subreddit feeds, search posts, fetch threads, and inspect public profiles."
+    tool_patterns: ["list", "search", "get", "user"]
+  - id: "write_authenticated"
+    name: "Authenticated actions"
+    description: "Posting, commenting, voting, and similar account-scoped Reddit actions require OAuth credentials and should stay visibly separate from public-read tooling."
+    tool_patterns: ["submit", "comment", "vote", "save", "unsave", "delete", "edit"]
+
+setup_steps:
+  - id: "public_access"
+    kind: "connectivity"
+    label: "Verify public Reddit access"
+    description: "Public-read tools work anonymously. Confirm outbound HTTPS access to reddit.com."
+  - id: "optional_auth"
+    kind: "auth"
+    label: "Configure optional Reddit auth"
+    description: "Public-read tools work without credentials. Auth is required for posting, commenting, voting, or any account-scoped action."
+
+context_parameters:
+  - id: "subreddit"
+    label: "Subreddit"
+    kind: "string"
+    required: false
+  - id: "query"
+    label: "Search query"
+    kind: "string"
+    required: false
+  - id: "post_url"
+    label: "Thread URL"
+    kind: "string"
+    required: false
+  - id: "username"
+    label: "Username"
+    kind: "string"
+    required: false
+
+quick_starts:
+  - id: "top_posts"
+    title: "Top posts in a subreddit"
+    description: "Browse a subreddit feed without running keyword search."
+    tool_id: "list"
+    args:
+      subreddit: "rust"
+      sort: "top"
+      time: "week"
+      limit: 10
+      output_format: "normalized_v1"
+  - id: "search_posts"
+    title: "Search discussions"
+    description: "Search Reddit by keywords, optionally scoped to a subreddit."
+    tool_id: "search"
+    args:
+      query: "async await"
+      subreddit: "rust"
+      limit: 10
+      output_format: "normalized_v1"
+  - id: "fetch_thread"
+    title: "Fetch thread with comments"
+    description: "Pull a thread and a bounded comment tree."
+    tool_id: "get"
+    args:
+      post_url: "https://www.reddit.com/r/rust/comments/8v1i5t/why_is_rust_so_hard_to_learn/"
+      comment_limit: 20
+      comment_sort: "best"
+      output_format: "normalized_v1"
+
+result_handling:
+  tools:
+    list:
+      human_view:
+        renderer: "table"
+        rows_path: "items[]"
+        columns:
+          - key: "title"
+            label: "Post"
+          - key: "canonical_url"
+            label: "URL"
+      llm_view:
+        include:
+          - "items[].title"
+          - "items[].canonical_url"
+          - "items[].metadata.subreddit"
+        max_items: 12
+      index_view:
+        mode: "records"
+        records_path: "items[]"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          source_url: "canonical_url"
+          published_at: "created_at"
+          metadata.subreddit: "metadata.subreddit"
+        bm25_text:
+          template: "{{title}}"
+        embedding_text:
+          template: "{{title}}"
+      debug_view:
+        mode: "raw_json"
+    search:
+      human_view:
+        renderer: "table"
+        rows_path: "items[]"
+        columns:
+          - key: "title"
+            label: "Post"
+          - key: "canonical_url"
+            label: "URL"
+      llm_view:
+        include:
+          - "items[].title"
+          - "items[].canonical_url"
+          - "items[].metadata.subreddit"
+        max_items: 12
+      index_view:
+        mode: "records"
+        records_path: "items[]"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          source_url: "canonical_url"
+          published_at: "created_at"
+          metadata.subreddit: "metadata.subreddit"
+        bm25_text:
+          template: "{{title}}"
+        embedding_text:
+          template: "{{title}}"
+      debug_view:
+        mode: "raw_json"
+    get:
+      human_view:
+        renderer: "summary"
+        document_path: "item"
+        title_field: "title"
+        body_field: "blocks[].text"
+      llm_view:
+        include:
+          - "item.title"
+          - "item.canonical_url"
+          - "item.metadata.subreddit"
+          - "item.blocks[].text"
+      index_view:
+        mode: "document"
+        document_path: "item"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          body_text: "blocks[].text"
+          source_url: "canonical_url"
+          published_at: "created_at"
+          metadata.subreddit: "metadata.subreddit"
+        bm25_text:
+          template: "{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+    user:
+      human_view:
+        renderer: "key_value"
+        object_path: "item.metadata"
+      llm_view:
+        include:
+          - "item.title"
+          - "item.metadata"
+      index_view:
+        mode: "document"
+        document_path: "item"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          body_text: "blocks[].text"
+          source_url: "canonical_url"
+        bm25_text:
+          template: "{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+
+x_runtime:
+  connector_namespace: "reddit"
+  notes:
+    - "Current published tools cover public-read surfaces only."
+    - "Authenticated write actions are modeled separately in metadata so the desktop can keep read-only and signed-in flows distinct."
+    - "Authenticated write tools are not exported yet in the v1 MCP surface."

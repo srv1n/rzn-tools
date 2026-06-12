@@ -1,0 +1,264 @@
+version: 1
+
+system:
+  id: "exa_search"
+  display_name: "Exa Search"
+  what_it_does: "Search, fetch, expand, answer, and run deeper research with Exa using tenant-provided Exa credentials."
+  use_cases:
+    - "Find people, companies, research papers, GitHub repos, filings, or other entity-shaped results."
+    - "Fetch clean text, highlights, or summaries for trusted URLs."
+    - "Expand from one strong seed URL into similar pages or run a deeper cited research job."
+
+capability_groups:
+  - id: "discovery"
+    name: "Entity discovery"
+    description: "Discover candidate URLs and entities with semantic search and category filters."
+    tool_ids: ["search", "find_similar"]
+  - id: "content_fetch"
+    name: "Content fetch"
+    description: "Fetch readable contents, highlights, and summaries from Exa ids or URLs."
+    tool_ids: ["get_contents"]
+  - id: "synthesis"
+    name: "Cited synthesis"
+    description: "Produce grounded answers or structured deeper research output."
+    tool_ids: ["answer", "research"]
+
+setup_steps:
+  - id: "exa_key"
+    kind: "auth"
+    label: "Connect Exa"
+    description: "Add an Exa API key from the Exa dashboard before using search, contents, answer, or research tools."
+  - id: "query_shape"
+    kind: "usage"
+    label: "Choose the right Exa flow"
+    description: "Use search for candidates, get_contents for known URLs, find_similar for seed expansion, answer for concise cited answers, and research for deeper synthesis."
+  - id: "cost_boundary"
+    kind: "usage"
+    label: "Bound expensive calls"
+    description: "Use limit, content options, and the research model setting to control cost and latency."
+
+context_parameters:
+  - id: "query"
+    label: "Search query"
+    kind: "string"
+    required: false
+  - id: "category"
+    label: "Category"
+    kind: "string"
+    required: false
+  - id: "url"
+    label: "Seed URL"
+    kind: "string"
+    required: false
+  - id: "ids"
+    label: "Exa ids or URLs"
+    kind: "string_array"
+    required: false
+
+quick_starts:
+  - id: "search_companies"
+    title: "Search companies"
+    description: "Find company-shaped results with Exa's semantic search."
+    tool_id: "search"
+    args:
+      query: "seed-stage fintech companies using AI for compliance"
+      category: "company"
+      limit: 5
+      type: "auto"
+  - id: "fetch_contents"
+    title: "Fetch page contents"
+    description: "Fetch clean text and highlights for a trusted URL."
+    tool_id: "get_contents"
+    args:
+      ids:
+        - "https://exa.ai"
+      text:
+        maxCharacters: 5000
+      highlights:
+        numSentences: 2
+  - id: "find_similar"
+    title: "Find similar pages"
+    description: "Expand from one known-good URL into adjacent pages."
+    tool_id: "find_similar"
+    args:
+      url: "https://exa.ai"
+      limit: 5
+      category: "company"
+  - id: "answer_with_citations"
+    title: "Answer with citations"
+    description: "Generate a concise answer from Exa search results with source citations."
+    tool_id: "answer"
+    args:
+      query: "What is Exa best used for in agent research workflows?"
+      mode: "precise"
+      include_citations: true
+      limit: 5
+  - id: "deep_research"
+    title: "Deep research"
+    description: "Run a deeper Exa research job for a bounded investigation."
+    tool_id: "research"
+    args:
+      instructions: "Find 5 examples of AI-native search APIs for developer agents and return a short comparison with URLs."
+      model: "exa-research-fast"
+
+result_handling:
+  tools:
+    search:
+      human_view:
+        renderer: "table"
+        rows_path: "results[]"
+        columns:
+          - key: "title"
+            label: "Title"
+          - key: "url"
+            label: "URL"
+      llm_view:
+        include:
+          - "query"
+          - "results[].title"
+          - "results[].url"
+          - "results[].highlights"
+          - "results[].summary"
+        max_items: 10
+      index_view:
+        mode: "records"
+        records_path: "results[]"
+        fields:
+          record_type: "provider"
+          external_id: "id"
+          title: "title"
+          body_text: "highlights"
+          source_url: "url"
+        bm25_text:
+          template: "{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+    get_contents:
+      human_view:
+        renderer: "table"
+        rows_path: "results[]"
+        columns:
+          - key: "title"
+            label: "Title"
+          - key: "url"
+            label: "URL"
+      llm_view:
+        include:
+          - "results[].title"
+          - "results[].url"
+          - "results[].text"
+          - "results[].highlights"
+          - "results[].summary"
+        max_items: 8
+      index_view:
+        mode: "records"
+        records_path: "results[]"
+        fields:
+          record_type: "provider"
+          external_id: "id"
+          title: "title"
+          body_text: "text"
+          source_url: "url"
+        bm25_text:
+          template: "{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+    find_similar:
+      human_view:
+        renderer: "table"
+        rows_path: "results[]"
+        columns:
+          - key: "title"
+            label: "Title"
+          - key: "url"
+            label: "URL"
+      llm_view:
+        include:
+          - "url"
+          - "results[].title"
+          - "results[].url"
+          - "results[].highlights"
+        max_items: 10
+      index_view:
+        mode: "records"
+        records_path: "results[]"
+        fields:
+          record_type: "provider"
+          external_id: "id"
+          title: "title"
+          body_text: "highlights"
+          source_url: "url"
+        bm25_text:
+          template: "{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+    answer:
+      human_view:
+        renderer: "summary"
+        title_field: "query"
+        body_field: "answer"
+        citations_path: "citations[]"
+      llm_view:
+        include:
+          - "query"
+          - "answer"
+          - "citations"
+          - "search_results"
+        max_items: 8
+      index_view:
+        mode: "document"
+        fields:
+          record_type: "provider"
+          external_id: "query"
+          title: "query"
+          body_text: "answer"
+        bm25_text:
+          template: "{{query}}\n\n{{answer}}"
+        embedding_text:
+          template: "{{query}}\n\n{{answer}}"
+      debug_view:
+        mode: "raw_json"
+    research:
+      human_view:
+        renderer: "summary"
+        title_field: "research_id"
+        body_field: "output"
+      llm_view:
+        include:
+          - "research_id"
+          - "status"
+          - "output"
+          - "cost"
+        max_items: 1
+      index_view:
+        mode: "document"
+        fields:
+          record_type: "provider"
+          external_id: "research_id"
+          title: "research_id"
+          body_text: "output"
+        bm25_text:
+          template: "{{research_id}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{research_id}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+
+x_runtime:
+  connector_namespace: "exa"
+  aliases:
+    - "exa-search"
+  auth:
+    provider_id: "exa"
+    auth_kind: "api_key"
+    env_fallbacks:
+      - "EXA_API_KEY"
+  notes:
+    - "Runtime tool calls use `exa/*`; `exa-search/*` is registered as a compatibility alias."
+    - "This system is intentionally separate from generic `web_search` so Exa's auth and richer entity/research tools are visible in installer and setup surfaces."

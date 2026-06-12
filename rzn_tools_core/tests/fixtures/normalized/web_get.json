@@ -1,0 +1,25 @@
+{
+  "type": "rzn-tools.normalized_item.v1",
+  "item": {
+    "item_ref": "web:page:aHR0cHM6Ly9leGFtcGxlLmNvbS8",
+    "kind": "page",
+    "canonical_url": "https://example.com/",
+    "title": "Example Page",
+    "created_at": null,
+    "source_updated_at": null,
+    "authors": [],
+    "tags": [],
+    "metadata": null,
+    "blocks": [
+      {
+        "block_ref": "web:page:aHR0cHM6Ly9leGFtcGxlLmNvbS8:content",
+        "block_kind": "content",
+        "text": "Example content."
+      }
+    ],
+    "relationships": [],
+    "truncation": null
+  },
+  "partial": { "is_partial": false },
+  "source": { "connector": "web", "tool": "get", "fetched_at": "2025-12-29T00:00:00Z" }
+}

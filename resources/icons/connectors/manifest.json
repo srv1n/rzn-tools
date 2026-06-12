@@ -1,0 +1,415 @@
+{
+  "version": 1,
+  "description": "Bundled connector icon assets and connector-to-icon mapping.",
+  "icons": {
+    "anthropic": {
+      "path": "resources/icons/connectors/anthropic.svg"
+    },
+    "app_store": {
+      "path": "resources/icons/connectors/app_store.svg"
+    },
+    "apple-contacts": {
+      "path": "resources/icons/connectors/apple-contacts.svg"
+    },
+    "apple-health": {
+      "path": "resources/icons/connectors/apple-health.svg"
+    },
+    "apple-mail": {
+      "path": "resources/icons/connectors/apple-mail.svg"
+    },
+    "apple-messages": {
+      "path": "resources/icons/connectors/apple-messages.svg"
+    },
+    "apple-notes": {
+      "path": "resources/icons/connectors/apple-notes.svg"
+    },
+    "apple-reminders": {
+      "path": "resources/icons/connectors/apple-reminders.svg"
+    },
+    "apple": {
+      "path": "resources/icons/connectors/apple.svg"
+    },
+    "arxiv": {
+      "path": "resources/icons/connectors/arxiv.svg"
+    },
+    "atlassian": {
+      "path": "resources/icons/connectors/atlassian.svg"
+    },
+    "bing": {
+      "path": "resources/icons/connectors/bing.svg"
+    },
+    "biorxiv": {
+      "path": "resources/icons/connectors/biorxiv.svg"
+    },
+    "calendar": {
+      "path": "resources/icons/connectors/calendar.svg"
+    },
+    "discord": {
+      "path": "resources/icons/connectors/discord.svg"
+    },
+    "exa": {
+      "path": "resources/icons/connectors/exa.svg"
+    },
+    "federated": {
+      "path": "resources/icons/connectors/federated.svg"
+    },
+    "firecrawl": {
+      "path": "resources/icons/connectors/firecrawl.svg"
+    },
+    "gemini": {
+      "path": "resources/icons/connectors/gemini.svg"
+    },
+    "github": {
+      "path": "resources/icons/connectors/github.svg"
+    },
+    "gmail": {
+      "path": "resources/icons/connectors/gmail.svg"
+    },
+    "google_calendar": {
+      "path": "resources/icons/connectors/google_calendar.svg"
+    },
+    "google_drive": {
+      "path": "resources/icons/connectors/google_drive.svg"
+    },
+    "google_people": {
+      "path": "resources/icons/connectors/google_people.svg"
+    },
+    "google_play": {
+      "path": "resources/icons/connectors/google_play.svg"
+    },
+    "google_scholar": {
+      "path": "resources/icons/connectors/google_scholar.svg"
+    },
+    "google_search_console": {
+      "path": "resources/icons/connectors/google_search_console.svg"
+    },
+    "hackernews": {
+      "path": "resources/icons/connectors/hackernews.svg"
+    },
+    "imap": {
+      "path": "resources/icons/connectors/imap.svg"
+    },
+    "kalshi": {
+      "path": "resources/icons/connectors/kalshi.svg"
+    },
+    "linkedin": {
+      "path": "resources/icons/connectors/linkedin.svg"
+    },
+    "localfs": {
+      "path": "resources/icons/connectors/localfs.svg"
+    },
+    "macos": {
+      "path": "resources/icons/connectors/macos.svg"
+    },
+    "mailgun": {
+      "path": "resources/icons/connectors/mailgun.svg"
+    },
+    "message-circle": {
+      "path": "resources/icons/connectors/message-circle.svg"
+    },
+    "microsoft": {
+      "path": "resources/icons/connectors/microsoft.svg"
+    },
+    "openai": {
+      "path": "resources/icons/connectors/openai.svg"
+    },
+    "parallel": {
+      "path": "resources/icons/connectors/parallel.svg"
+    },
+    "perplexity": {
+      "path": "resources/icons/connectors/perplexity.svg"
+    },
+    "polymarket": {
+      "path": "resources/icons/connectors/polymarket.svg"
+    },
+    "pubmed": {
+      "path": "resources/icons/connectors/pubmed.svg"
+    },
+    "reddit": {
+      "path": "resources/icons/connectors/reddit.svg"
+    },
+    "rss": {
+      "path": "resources/icons/connectors/rss.svg"
+    },
+    "scihub": {
+      "path": "resources/icons/connectors/scihub.svg"
+    },
+    "semantic_scholar": {
+      "path": "resources/icons/connectors/semantic_scholar.svg"
+    },
+    "send": {
+      "path": "resources/icons/connectors/send.svg"
+    },
+    "serpapi": {
+      "path": "resources/icons/connectors/serpapi.svg"
+    },
+    "serper": {
+      "path": "resources/icons/connectors/serper.svg"
+    },
+    "slack": {
+      "path": "resources/icons/connectors/slack.svg"
+    },
+    "spotlight": {
+      "path": "resources/icons/connectors/spotlight.svg"
+    },
+    "tavily": {
+      "path": "resources/icons/connectors/tavily.svg"
+    },
+    "weather": {
+      "path": "resources/icons/connectors/weather.svg"
+    },
+    "web": {
+      "path": "resources/icons/connectors/web.svg"
+    },
+    "wikipedia": {
+      "path": "resources/icons/connectors/wikipedia.svg"
+    },
+    "x": {
+      "path": "resources/icons/connectors/x.svg"
+    },
+    "xai": {
+      "path": "resources/icons/connectors/xai.svg"
+    },
+    "youtube": {
+      "path": "resources/icons/connectors/youtube.svg"
+    }
+  },
+  "connectors": {
+    "anthropic-search": {
+      "icon": "anthropic",
+      "path": "resources/icons/connectors/anthropic.svg"
+    },
+    "app-store": {
+      "icon": "app_store",
+      "path": "resources/icons/connectors/app_store.svg"
+    },
+    "app-store-connect": {
+      "icon": "app_store",
+      "path": "resources/icons/connectors/app_store.svg"
+    },
+    "apple-contacts": {
+      "icon": "apple-contacts",
+      "path": "resources/icons/connectors/apple-contacts.svg"
+    },
+    "apple-health": {
+      "icon": "apple-health",
+      "path": "resources/icons/connectors/apple-health.svg"
+    },
+    "apple-mail": {
+      "icon": "apple-mail",
+      "path": "resources/icons/connectors/apple-mail.svg"
+    },
+    "apple-messages": {
+      "icon": "apple-messages",
+      "path": "resources/icons/connectors/apple-messages.svg"
+    },
+    "apple-notes": {
+      "icon": "apple-notes",
+      "path": "resources/icons/connectors/apple-notes.svg"
+    },
+    "apple-reminders": {
+      "icon": "apple-reminders",
+      "path": "resources/icons/connectors/apple-reminders.svg"
+    },
+    "apple-search-ads": {
+      "icon": "apple",
+      "path": "resources/icons/connectors/apple.svg"
+    },
+    "arxiv": {
+      "icon": "arxiv",
+      "path": "resources/icons/connectors/arxiv.svg"
+    },
+    "atlassian": {
+      "icon": "atlassian",
+      "path": "resources/icons/connectors/atlassian.svg"
+    },
+    "bing-webmaster-tools": {
+      "icon": "bing",
+      "path": "resources/icons/connectors/bing.svg"
+    },
+    "biorxiv": {
+      "icon": "biorxiv",
+      "path": "resources/icons/connectors/biorxiv.svg"
+    },
+    "caldav": {
+      "icon": "calendar",
+      "path": "resources/icons/connectors/calendar.svg"
+    },
+    "discord": {
+      "icon": "discord",
+      "path": "resources/icons/connectors/discord.svg"
+    },
+    "exa": {
+      "icon": "exa",
+      "path": "resources/icons/connectors/exa.svg"
+    },
+    "federated": {
+      "icon": "federated",
+      "path": "resources/icons/connectors/federated.svg"
+    },
+    "firecrawl-search": {
+      "icon": "firecrawl",
+      "path": "resources/icons/connectors/firecrawl.svg"
+    },
+    "gemini-search": {
+      "icon": "gemini",
+      "path": "resources/icons/connectors/gemini.svg"
+    },
+    "github": {
+      "icon": "github",
+      "path": "resources/icons/connectors/github.svg"
+    },
+    "google-calendar": {
+      "icon": "google_calendar",
+      "path": "resources/icons/connectors/google_calendar.svg"
+    },
+    "google-drive": {
+      "icon": "google_drive",
+      "path": "resources/icons/connectors/google_drive.svg"
+    },
+    "google-gmail": {
+      "icon": "gmail",
+      "path": "resources/icons/connectors/gmail.svg"
+    },
+    "google-people": {
+      "icon": "google_people",
+      "path": "resources/icons/connectors/google_people.svg"
+    },
+    "google-scholar": {
+      "icon": "google_scholar",
+      "path": "resources/icons/connectors/google_scholar.svg"
+    },
+    "google-search-console": {
+      "icon": "google_search_console",
+      "path": "resources/icons/connectors/google_search_console.svg"
+    },
+    "hackernews": {
+      "icon": "hackernews",
+      "path": "resources/icons/connectors/hackernews.svg"
+    },
+    "imap": {
+      "icon": "imap",
+      "path": "resources/icons/connectors/imap.svg"
+    },
+    "kalshi": {
+      "icon": "kalshi",
+      "path": "resources/icons/connectors/kalshi.svg"
+    },
+    "linkedin": {
+      "icon": "linkedin",
+      "path": "resources/icons/connectors/linkedin.svg"
+    },
+    "localfs": {
+      "icon": "localfs",
+      "path": "resources/icons/connectors/localfs.svg"
+    },
+    "macos": {
+      "icon": "macos",
+      "path": "resources/icons/connectors/macos.svg"
+    },
+    "microsoft-graph": {
+      "icon": "microsoft",
+      "path": "resources/icons/connectors/microsoft.svg"
+    },
+    "openai-search": {
+      "icon": "openai",
+      "path": "resources/icons/connectors/openai.svg"
+    },
+    "parallel-search": {
+      "icon": "parallel",
+      "path": "resources/icons/connectors/parallel.svg"
+    },
+    "perplexity-search": {
+      "icon": "perplexity",
+      "path": "resources/icons/connectors/perplexity.svg"
+    },
+    "play-store": {
+      "icon": "google_play",
+      "path": "resources/icons/connectors/google_play.svg"
+    },
+    "polymarket": {
+      "icon": "polymarket",
+      "path": "resources/icons/connectors/polymarket.svg"
+    },
+    "pubmed": {
+      "icon": "pubmed",
+      "path": "resources/icons/connectors/pubmed.svg"
+    },
+    "reddit": {
+      "icon": "reddit",
+      "path": "resources/icons/connectors/reddit.svg"
+    },
+    "rss": {
+      "icon": "rss",
+      "path": "resources/icons/connectors/rss.svg"
+    },
+    "scihub": {
+      "icon": "scihub",
+      "path": "resources/icons/connectors/scihub.svg"
+    },
+    "semantic-scholar": {
+      "icon": "semantic_scholar",
+      "path": "resources/icons/connectors/semantic_scholar.svg"
+    },
+    "serpapi-search": {
+      "icon": "serpapi",
+      "path": "resources/icons/connectors/serpapi.svg"
+    },
+    "serper-search": {
+      "icon": "serper",
+      "path": "resources/icons/connectors/serper.svg"
+    },
+    "slack": {
+      "icon": "slack",
+      "path": "resources/icons/connectors/slack.svg"
+    },
+    "smtp": {
+      "icon": "mailgun",
+      "path": "resources/icons/connectors/mailgun.svg"
+    },
+    "spotlight": {
+      "icon": "spotlight",
+      "path": "resources/icons/connectors/spotlight.svg"
+    },
+    "tavily-search": {
+      "icon": "tavily",
+      "path": "resources/icons/connectors/tavily.svg"
+    },
+    "telegram": {
+      "icon": "send",
+      "path": "resources/icons/connectors/send.svg"
+    },
+    "weather": {
+      "icon": "weather",
+      "path": "resources/icons/connectors/weather.svg"
+    },
+    "web": {
+      "icon": "web",
+      "path": "resources/icons/connectors/web.svg"
+    },
+    "whatsapp": {
+      "icon": "message-circle",
+      "path": "resources/icons/connectors/message-circle.svg"
+    },
+    "wikipedia": {
+      "icon": "wikipedia",
+      "path": "resources/icons/connectors/wikipedia.svg"
+    },
+    "x": {
+      "icon": "x",
+      "path": "resources/icons/connectors/x.svg"
+    },
+    "x-browser": {
+      "icon": "x",
+      "path": "resources/icons/connectors/x.svg"
+    },
+    "xai-search": {
+      "icon": "xai",
+      "path": "resources/icons/connectors/xai.svg"
+    },
+    "youtube": {
+      "icon": "youtube",
+      "path": "resources/icons/connectors/youtube.svg"
+    }
+  }
+}

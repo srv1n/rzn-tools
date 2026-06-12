@@ -1,0 +1,37 @@
+[
+  {
+    "id": "search_article",
+    "title": "Search article",
+    "system_id": "wikipedia",
+    "runtime_tool": "wikipedia/search",
+    "args": {
+      "query": "Rust programming language",
+      "limit": 5,
+      "response_format": "concise",
+      "output_format": "normalized_v1"
+    }
+  },
+  {
+    "id": "fetch_summary",
+    "title": "Fetch summary",
+    "system_id": "wikipedia",
+    "runtime_tool": "wikipedia/get",
+    "args": {
+      "title": "Rust (programming language)",
+      "response_format": "concise",
+      "output_format": "normalized_v1"
+    }
+  },
+  {
+    "id": "geo_lookup",
+    "title": "Search nearby articles",
+    "system_id": "wikipedia",
+    "runtime_tool": "wikipedia/geosearch",
+    "args": {
+      "latitude": 37.7749,
+      "longitude": -122.4194,
+      "radius": 1000,
+      "output_format": "normalized_v1"
+    }
+  }
+]

@@ -1,0 +1,43 @@
+# Build artifacts
+/target
+**/target
+
+# IDE and editor files
+.cursor/
+.vscode/
+.idea/
+.playwright-cli/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+*.env
+.secrets/
+auth.json
+credentials.json
+*.pem
+*.key
+*.p12
+*.pfx
+token.json
+client_secret*.json
+
+# Logs
+*.log
+logs/
+scripts/__pycache__/
+
+# Test artifacts
+*.profraw
+coverage/
+hn_copy.md
+
+# RZN Desktop extension bundle artifacts (plugin ZIPs)
+dist/plugins/

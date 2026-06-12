@@ -1,0 +1,24 @@
+[
+  {
+    "id": "search_web",
+    "title": "Search the web",
+    "system_id": "web_search",
+    "runtime_tool": "web_search/search",
+    "args": {
+      "query": "AI agent browser automation",
+      "profile": "web",
+      "limit": 5,
+      "merge": "grouped"
+    }
+  },
+  {
+    "id": "fetch_result",
+    "title": "Fetch a result URL",
+    "system_id": "web_search",
+    "runtime_tool": "web_search/get",
+    "args": {
+      "url": "https://example.com",
+      "output_format": "normalized_v1"
+    }
+  }
+]

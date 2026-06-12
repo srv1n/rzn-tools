@@ -1,0 +1,13 @@
+{
+  "kind": "t2",
+  "data": {
+    "name": "spez",
+    "id": "t2_1",
+    "created_utc": 1134028003.0,
+    "link_karma": 123,
+    "comment_karma": 456,
+    "is_employee": false,
+    "is_mod": false,
+    "verified": true
+  }
+}

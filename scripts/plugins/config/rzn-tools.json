@@ -1,0 +1,51 @@
+{
+  "id": "rzn-tools",
+  "version": "0.2.17",
+  "name": "rzn-tools",
+  "description": "Connector pack (rzn-tools MCP server)",
+  "mcp_protocol_version": "2025-06-18",
+  "platforms": ["macos_arm64"],
+  "workers": [
+    {
+      "id": "worker",
+      "kind": "mcp_stdio",
+      "auto_start": false,
+      "tools_namespace": "plugin:rzn-tools",
+      "entrypoints": {
+        "macos_arm64": "bin/macos/arm64/rzn-tools-mcp"
+      },
+      "args": [],
+      "env": {}
+    }
+  ],
+  "resources": [
+    { "path": "resources/systems" },
+    { "path": "resources/icons" },
+    { "path": "examples" }
+  ],
+  "payloads": [
+    {
+      "source": "${RZN_TOOLS_MCP_BIN_MACOS_ARM64}",
+      "dest": "bin/macos/arm64/rzn-tools-mcp",
+      "platforms": ["macos_arm64"],
+      "mode": "755"
+    }
+  ],
+  "shared_payloads": [
+    {
+      "source": "resources/systems",
+      "dest": "resources/systems",
+      "mode": "644"
+    },
+    {
+      "source": "resources/icons",
+      "dest": "resources/icons",
+      "mode": "644"
+    },
+    {
+      "source": "examples",
+      "dest": "examples",
+      "mode": "644"
+    }
+  ]
+}

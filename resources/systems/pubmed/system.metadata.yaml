@@ -1,0 +1,129 @@
+version: 1
+
+system:
+  id: "pubmed"
+  display_name: "PubMed"
+  what_it_does: "Search PubMed and fetch paper abstracts with stable IDs and canonical URLs."
+  use_cases:
+    - "Search biomedical literature for a topic."
+    - "Fetch the abstract and metadata for a known PMID."
+    - "Generate citation-ready research records for downstream indexing."
+
+capability_groups:
+  - id: "literature_search"
+    name: "Literature search"
+    description: "Search papers and fetch article abstracts by PMID."
+    tool_patterns: ["search", "get"]
+
+setup_steps:
+  - id: "connectivity"
+    kind: "connectivity"
+    label: "Verify public PubMed access"
+    description: "No account is required. Confirm outbound HTTPS access to PubMed."
+  - id: "query_shape"
+    kind: "usage"
+    label: "Use PubMed-friendly queries"
+    description: "Combine distinct concepts with AND and synonyms with OR to keep MeSH mapping effective."
+
+context_parameters:
+  - id: "query"
+    label: "Search query"
+    kind: "string"
+    required: false
+  - id: "pmid"
+    label: "PMID"
+    kind: "string"
+    required: false
+  - id: "start_year"
+    label: "Start year"
+    kind: "integer"
+    required: false
+  - id: "end_year"
+    label: "End year"
+    kind: "integer"
+    required: false
+
+quick_starts:
+  - id: "search_papers"
+    title: "Search papers"
+    description: "Find candidate PMIDs for a biomedical topic."
+    tool_id: "search"
+    args:
+      query: "CRISPR off-target"
+      limit: 5
+      response_format: "concise"
+      output_format: "normalized_v1"
+  - id: "fetch_paper"
+    title: "Fetch paper by PMID"
+    description: "Get the abstract and metadata for a known paper."
+    tool_id: "get"
+    args:
+      pmid: "34762503"
+      response_format: "concise"
+      output_format: "normalized_v1"
+
+result_handling:
+  tools:
+    search:
+      human_view:
+        renderer: "table"
+        rows_path: "items[]"
+        columns:
+          - key: "title"
+            label: "Title"
+          - key: "canonical_url"
+            label: "PubMed URL"
+      llm_view:
+        include:
+          - "items[].title"
+          - "items[].canonical_url"
+          - "items[].metadata.pmid"
+        max_items: 10
+      index_view:
+        mode: "records"
+        records_path: "items[]"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          source_url: "canonical_url"
+          published_at: "created_at"
+        bm25_text:
+          template: "{{title}}"
+        embedding_text:
+          template: "{{title}}"
+      debug_view:
+        mode: "raw_json"
+    get:
+      human_view:
+        renderer: "summary"
+        document_path: "item"
+        title_field: "title"
+        body_field: "blocks[].text"
+      llm_view:
+        include:
+          - "item.title"
+          - "item.canonical_url"
+          - "item.metadata.pmid"
+          - "item.blocks[].text"
+      index_view:
+        mode: "document"
+        document_path: "item"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          body_text: "blocks[].text"
+          source_url: "canonical_url"
+          published_at: "created_at"
+        bm25_text:
+          template: "{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+
+x_runtime:
+  connector_namespace: "pubmed"
+  notes:
+    - "This system id matches the current runtime connector namespace."

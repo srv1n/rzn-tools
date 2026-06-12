@@ -1,0 +1,38 @@
+[
+  {
+    "id": "search_videos",
+    "title": "Search videos",
+    "system_id": "youtube_transcripts",
+    "runtime_tool": "youtube_transcripts/search",
+    "args": {
+      "query": "rust async tutorial",
+      "search_type": "video",
+      "limit": 5,
+      "output_format": "normalized_v1"
+    }
+  },
+  {
+    "id": "fetch_transcript",
+    "title": "Fetch transcript",
+    "system_id": "youtube_transcripts",
+    "runtime_tool": "youtube_transcripts/get",
+    "args": {
+      "video_id": "dQw4w9WgXcQ",
+      "response_format": "concise",
+      "output_format": "normalized_v1"
+    }
+  },
+  {
+    "id": "recent_channel_uploads",
+    "title": "List recent uploads",
+    "system_id": "youtube_transcripts",
+    "runtime_tool": "youtube_transcripts/list",
+    "args": {
+      "source": "channel",
+      "channel": "@openai",
+      "limit": 5,
+      "published_within_days": 30,
+      "output_format": "normalized_v1"
+    }
+  }
+]

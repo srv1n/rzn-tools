@@ -1,0 +1,27 @@
+[
+  {
+    "id": "grounded_answer",
+    "title": "Grounded answer",
+    "system_id": "openai_web_search",
+    "runtime_tool": "openai-search/search",
+    "args": {
+      "query": "What changed in OpenAI web search APIs this year?",
+      "limit": 5,
+      "response_format": "concise"
+    }
+  },
+  {
+    "id": "domain_limited_search",
+    "title": "Domain-limited search",
+    "system_id": "openai_web_search",
+    "runtime_tool": "openai-search/search",
+    "args": {
+      "query": "Responses API web search",
+      "include_domains": [
+        "platform.openai.com"
+      ],
+      "limit": 5,
+      "response_format": "concise"
+    }
+  }
+]

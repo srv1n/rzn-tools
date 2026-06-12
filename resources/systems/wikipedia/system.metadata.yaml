@@ -1,0 +1,159 @@
+version: 1
+
+system:
+  id: "wikipedia"
+  display_name: "Wikipedia"
+  what_it_does: "Search Wikipedia, find relevant titles, and fetch concise or detailed article content."
+  use_cases:
+    - "Find canonical reference pages for a concept or person."
+    - "Fetch a short summary before pulling full article content."
+    - "Browse location-linked articles with geo search."
+
+capability_groups:
+  - id: "reference_lookup"
+    name: "Reference lookup"
+    description: "Search titles, fetch article content, and browse nearby articles."
+    tool_patterns: ["search", "get", "geosearch"]
+
+setup_steps:
+  - id: "connectivity"
+    kind: "connectivity"
+    label: "Verify public Wikipedia access"
+    description: "No account is required. Confirm outbound HTTPS access to Wikipedia APIs."
+  - id: "language"
+    kind: "config"
+    label: "Choose a default language"
+    description: "Optionally set the connector language when you want a non-English Wikipedia edition."
+
+context_parameters:
+  - id: "query"
+    label: "Search query"
+    kind: "string"
+    required: false
+  - id: "title"
+    label: "Article title"
+    kind: "string"
+    required: false
+  - id: "language"
+    label: "Wikipedia language"
+    kind: "string"
+    required: false
+    default: "en"
+
+quick_starts:
+  - id: "search_article"
+    title: "Search article"
+    description: "Find candidate titles for a topic."
+    tool_id: "search"
+    args:
+      query: "Rust programming language"
+      limit: 5
+      response_format: "concise"
+      output_format: "normalized_v1"
+  - id: "fetch_summary"
+    title: "Fetch summary"
+    description: "Pull the concise summary for a known article title."
+    tool_id: "get"
+    args:
+      title: "Rust (programming language)"
+      response_format: "concise"
+      output_format: "normalized_v1"
+  - id: "geo_lookup"
+    title: "Search nearby articles"
+    description: "Find Wikipedia pages associated with a location."
+    tool_id: "geosearch"
+    args:
+      latitude: 37.7749
+      longitude: -122.4194
+      radius: 1000
+      output_format: "normalized_v1"
+
+result_handling:
+  tools:
+    search:
+      human_view:
+        renderer: "table"
+        rows_path: "items[]"
+        columns:
+          - key: "title"
+            label: "Title"
+          - key: "canonical_url"
+            label: "URL"
+      llm_view:
+        include:
+          - "items[].title"
+          - "items[].canonical_url"
+        max_items: 8
+      index_view:
+        mode: "records"
+        records_path: "items[]"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          source_url: "canonical_url"
+        bm25_text:
+          template: "{{title}}"
+        embedding_text:
+          template: "{{title}}"
+      debug_view:
+        mode: "raw_json"
+    get:
+      human_view:
+        renderer: "summary"
+        document_path: "item"
+        title_field: "title"
+        body_field: "blocks[].text"
+      llm_view:
+        include:
+          - "item.title"
+          - "item.canonical_url"
+          - "item.blocks[].text"
+      index_view:
+        mode: "document"
+        document_path: "item"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          body_text: "blocks[].text"
+          source_url: "canonical_url"
+        bm25_text:
+          template: "{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+    geosearch:
+      human_view:
+        renderer: "table"
+        rows_path: "items[]"
+        columns:
+          - key: "title"
+            label: "Title"
+          - key: "canonical_url"
+            label: "URL"
+      llm_view:
+        include:
+          - "items[].title"
+          - "items[].canonical_url"
+        max_items: 8
+      index_view:
+        mode: "records"
+        records_path: "items[]"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          source_url: "canonical_url"
+        bm25_text:
+          template: "{{title}}"
+        embedding_text:
+          template: "{{title}}"
+      debug_view:
+        mode: "raw_json"
+
+x_runtime:
+  connector_namespace: "wikipedia"
+  notes:
+    - "This system id matches the current runtime connector namespace."

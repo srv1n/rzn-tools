@@ -1,0 +1,21 @@
+# Cross-compilation configuration for rzn-tools
+# Uses standard cross-rs images (no custom Dockerfile)
+
+[build]
+default-target = "x86_64-unknown-linux-gnu"
+
+[build.env]
+passthrough = [
+    "RUST_LOG",
+    "CARGO_BUILD_TARGET_DIR",
+]
+
+[target.x86_64-unknown-linux-gnu]
+
+[target.x86_64-unknown-linux-musl]
+
+[target.aarch64-unknown-linux-gnu]
+
+[target.aarch64-unknown-linux-musl]
+
+[target.armv7-unknown-linux-gnueabihf]

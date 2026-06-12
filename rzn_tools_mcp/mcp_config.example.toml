@@ -1,0 +1,49 @@
+# MCP Server Configuration for rzn-tools
+# This file demonstrates how to configure the MCP server with various connectors
+
+[server]
+name = "rzn-tools"
+version = "0.1.0"
+protocol_version = "0.1.0"
+
+# Connectors that don't require authentication
+[connectors.hackernews]
+enabled = true
+
+[connectors.wikipedia]
+enabled = true
+
+[connectors.polymarket]
+enabled = true
+
+# Connectors that require API keys (set via environment variables)
+[connectors.reddit]
+enabled = false  # Set to true and provide env vars to enable
+# Required env vars: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET
+
+# Note: Google/Brave search connectors have been removed
+
+# Connectors that require authentication via other methods
+[connectors.x]
+enabled = false  # Requires manual auth setup via browser cookies or credentials
+
+[connectors.youtube]
+enabled = false  # May require auth for some features
+
+# Academic connectors
+[connectors.arxiv]
+enabled = true  # No auth required
+
+[connectors.pubmed]
+enabled = true  # No auth required
+
+[connectors.semantic_scholar]
+enabled = true  # No auth required
+
+# Note: Google Scholar connector has been removed
+
+# Web scraping connectors
+[connectors.web]
+enabled = true  # Basic web scraping
+
+# Note: WebView-based scraper has been removed

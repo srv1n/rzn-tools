@@ -1,0 +1,39 @@
+[
+  {
+    "id": "top_posts",
+    "title": "Top posts in a subreddit",
+    "system_id": "reddit",
+    "runtime_tool": "reddit/list",
+    "args": {
+      "subreddit": "rust",
+      "sort": "top",
+      "time": "week",
+      "limit": 10,
+      "output_format": "normalized_v1"
+    }
+  },
+  {
+    "id": "search_posts",
+    "title": "Search discussions",
+    "system_id": "reddit",
+    "runtime_tool": "reddit/search",
+    "args": {
+      "query": "async await",
+      "subreddit": "rust",
+      "limit": 10,
+      "output_format": "normalized_v1"
+    }
+  },
+  {
+    "id": "fetch_thread",
+    "title": "Fetch thread with comments",
+    "system_id": "reddit",
+    "runtime_tool": "reddit/get",
+    "args": {
+      "post_url": "https://www.reddit.com/r/rust/comments/8v1i5t/why_is_rust_so_hard_to_learn/",
+      "comment_limit": 20,
+      "comment_sort": "best",
+      "output_format": "normalized_v1"
+    }
+  }
+]

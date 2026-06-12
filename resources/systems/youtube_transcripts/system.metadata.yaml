@@ -1,0 +1,173 @@
+version: 1
+
+system:
+  id: "youtube_transcripts"
+  display_name: "YouTube Transcripts"
+  what_it_does: "Search YouTube videos and channels, resolve a concrete video, and fetch transcript-rich video details."
+  use_cases:
+    - "Find a relevant video before reading its transcript."
+    - "Extract transcript text and chapter structure for a known video."
+    - "Track recent uploads from a channel or playlist."
+
+capability_groups:
+  - id: "video_discovery"
+    name: "Video discovery"
+    description: "Search videos, channels, and playlists, then resolve stable channels."
+    tool_patterns: ["search", "list", "resolve_channel"]
+  - id: "transcript_fetch"
+    name: "Transcript fetch"
+    description: "Fetch a single video with transcript, chapters, and supporting metadata."
+    tool_patterns: ["get"]
+
+setup_steps:
+  - id: "connectivity"
+    kind: "connectivity"
+    label: "Verify YouTube access"
+    description: "No account is required for the default public-read flow. Confirm outbound HTTPS access."
+  - id: "channel_resolution"
+    kind: "usage"
+    label: "Resolve ambiguous channels first"
+    description: "Use channel resolution before list/get when a handle or brand name is ambiguous."
+
+context_parameters:
+  - id: "query"
+    label: "Search query"
+    kind: "string"
+    required: false
+  - id: "video_id"
+    label: "Video ID"
+    kind: "string"
+    required: false
+  - id: "url"
+    label: "Video URL"
+    kind: "string"
+    required: false
+  - id: "channel"
+    label: "Channel handle or URL"
+    kind: "string"
+    required: false
+
+quick_starts:
+  - id: "search_videos"
+    title: "Search videos"
+    description: "Find candidate videos before pulling a transcript."
+    tool_id: "search"
+    args:
+      query: "rust async tutorial"
+      search_type: "video"
+      limit: 5
+      output_format: "normalized_v1"
+  - id: "fetch_transcript"
+    title: "Fetch transcript"
+    description: "Get a single video's metadata and transcript."
+    tool_id: "get"
+    args:
+      video_id: "dQw4w9WgXcQ"
+      response_format: "concise"
+      output_format: "normalized_v1"
+  - id: "recent_channel_uploads"
+    title: "List recent uploads"
+    description: "List recent channel videos before selecting one for transcript fetch."
+    tool_id: "list"
+    args:
+      source: "channel"
+      channel: "@openai"
+      limit: 5
+      published_within_days: 30
+      output_format: "normalized_v1"
+
+result_handling:
+  tools:
+    search:
+      human_view:
+        renderer: "table"
+        rows_path: "items[]"
+        columns:
+          - key: "title"
+            label: "Title"
+          - key: "canonical_url"
+            label: "URL"
+      llm_view:
+        include:
+          - "items[].title"
+          - "items[].canonical_url"
+          - "items[].metadata.channel_name"
+        max_items: 8
+      index_view:
+        mode: "records"
+        records_path: "items[]"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          source_url: "canonical_url"
+          author: "metadata.channel_name"
+        bm25_text:
+          template: "{{title}}"
+        embedding_text:
+          template: "{{title}}"
+      debug_view:
+        mode: "raw_json"
+    get:
+      human_view:
+        renderer: "summary"
+        document_path: "item"
+        title_field: "title"
+        body_field: "blocks[].text"
+      llm_view:
+        include:
+          - "item.title"
+          - "item.canonical_url"
+          - "item.metadata.channel_name"
+          - "item.blocks[].text"
+      index_view:
+        mode: "document"
+        document_path: "item"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          body_text: "blocks[].text"
+          source_url: "canonical_url"
+          author: "metadata.channel_name"
+        bm25_text:
+          template: "{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+    list:
+      human_view:
+        renderer: "table"
+        rows_path: "items[]"
+        columns:
+          - key: "title"
+            label: "Video"
+          - key: "canonical_url"
+            label: "URL"
+      llm_view:
+        include:
+          - "items[].title"
+          - "items[].canonical_url"
+        max_items: 10
+      index_view:
+        mode: "records"
+        records_path: "items[]"
+        fields:
+          record_type: "kind"
+          external_id: "item_ref"
+          title: "title"
+          source_url: "canonical_url"
+        bm25_text:
+          template: "{{title}}"
+        embedding_text:
+          template: "{{title}}"
+      debug_view:
+        mode: "raw_json"
+
+x_runtime:
+  connector_namespace: "youtube"
+  runtime_tool_namespace: "youtube_transcripts/*"
+  underlying_tool_namespace: "youtube/*"
+  notes:
+    - "The MCP surface exposes `youtube_transcripts/*` aliases that route to the existing YouTube connector."

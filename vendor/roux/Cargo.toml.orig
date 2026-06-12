@@ -1,0 +1,30 @@
+[package]
+name = "roux"
+version = "2.2.15"
+authors = ["Justin Duch <justin@duch.me>"]
+edition = "2021"
+license = "MIT"
+description = "Simple and (a)synchronous Reddit API wrapper"
+readme = "README.md"
+documentation = "https://docs.rs/roux"
+repository = "https://github.com/halcyonnouveau/roux"
+keywords = ["reddit", "api", "async"]
+categories = ["authentication", "api-bindings", "network-programming"]
+exclude = [".github/*", ".gitignore", "assets/"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+maybe-async = "0.2"
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+
+[dev-dependencies]
+dotenv = "0.15"
+tokio = { version = "1.8", features = ["rt-multi-thread", "macros"] }
+tokio-test = "0.4"
+
+[features]
+default = ["native-tls"]
+rustls = ["reqwest/rustls-tls"]
+native-tls = ["reqwest/native-tls"]
+blocking = ["maybe-async/is_sync", "reqwest/blocking"]

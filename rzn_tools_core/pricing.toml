@@ -1,0 +1,146 @@
+# rzn-tools pricing catalog
+# Update entries and bump version when provider pricing changes.
+version = "2025-12-19"
+
+[defaults]
+currency = "USD"
+category = "auth_only"
+
+# OpenAI (o4-mini + web search tool)
+[[entries]]
+pattern = "openai-search.*"
+category = "metered"
+pricing_model = "per_token_plus_request"
+model = "o4-mini"
+input_cost_usd = 0.0000011
+output_cost_usd = 0.0000044
+request_cost_usd = 0.01
+
+# Anthropic (Claude 3.7 Sonnet)
+[[entries]]
+pattern = "anthropic-search.*"
+category = "metered"
+pricing_model = "per_token"
+model = "claude-3-7-sonnet-latest"
+input_cost_usd = 0.000003
+output_cost_usd = 0.000015
+
+# Google Gemini (2.5 Pro)
+[[entries]]
+pattern = "gemini-search.*"
+category = "metered"
+pricing_model = "per_token"
+model = "gemini-2.5-pro"
+input_cost_usd = 0.00000125
+output_cost_usd = 0.00001
+
+# Perplexity Sonar Pro
+[[entries]]
+pattern = "perplexity-search.*"
+category = "metered"
+pricing_model = "per_token_plus_request"
+model = "sonar-pro"
+input_cost_usd = 0.000003
+output_cost_usd = 0.000015
+request_cost_usd = 0.005
+
+# xAI Grok 4 Fast + web search tool fee
+[[entries]]
+pattern = "xai-search.*"
+category = "metered"
+pricing_model = "per_token_plus_request"
+model = "grok-4-fast"
+input_cost_usd = 0.0000002
+output_cost_usd = 0.0000005
+request_cost_usd = 0.005
+
+# Exa Search
+[[entries]]
+pattern = "exa.search"
+category = "metered"
+pricing_model = "per_request"
+unit_cost_usd = 0.005
+
+[[entries]]
+pattern = "exa.find_similar"
+category = "metered"
+pricing_model = "per_request"
+unit_cost_usd = 0.005
+
+[[entries]]
+pattern = "exa.answer"
+category = "metered"
+pricing_model = "per_request"
+unit_cost_usd = 0.005
+
+[[entries]]
+pattern = "exa.get_contents"
+category = "metered"
+pricing_model = "per_result"
+unit_cost_usd = 0.001
+
+[[entries]]
+pattern = "exa.research"
+category = "metered"
+pricing_model = "provider_reported"
+
+# Parallel
+[[entries]]
+pattern = "parallel-search.search"
+category = "metered"
+pricing_model = "per_request_plus_results"
+base_cost_usd = 0.005
+included_results = 10
+per_result_usd = 0.001
+
+[[entries]]
+pattern = "parallel-search.create_monitor"
+category = "metered"
+pricing_model = "per_request"
+unit_cost_usd = 0.01
+
+[[entries]]
+pattern = "parallel-search.get_monitor_events"
+category = "metered"
+pricing_model = "per_result"
+unit_cost_usd = 0.005
+
+[[entries]]
+pattern = "parallel-search.list_monitors"
+category = "metered"
+pricing_model = "per_request"
+unit_cost_usd = 0.0
+
+[[entries]]
+pattern = "parallel-search.cancel_monitor"
+category = "metered"
+pricing_model = "per_request"
+unit_cost_usd = 0.0
+
+# Firecrawl (credits)
+[[entries]]
+pattern = "firecrawl-search.*"
+category = "metered"
+pricing_model = "per_result"
+unit_cost_usd = 0.00083
+
+# Tavily (Growth plan per-search)
+[[entries]]
+pattern = "tavily-search.*"
+category = "metered"
+pricing_model = "per_request"
+unit_cost_usd = 0.00078
+
+# Serper (Pro plan per-search)
+[[entries]]
+pattern = "serper-search.*"
+category = "metered"
+pricing_model = "per_request"
+unit_cost_usd = 0.02
+
+# SerpApi (Standard plan per-search)
+[[entries]]
+pattern = "serpapi-search.*"
+category = "metered"
+pricing_model = "per_request"
+unit_cost_usd = 0.01

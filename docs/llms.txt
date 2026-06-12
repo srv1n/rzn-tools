@@ -1,0 +1,232 @@
+RZN TOOLS MCP - LLM QUICK SHEET (minimal, task-first)
+
+Reddit (connector: "reddit")
+Tasks -> Tools
+- Subreddit feed (hot/new/top) -> reddit/list (requires subreddit)
+- Keyword search -> reddit/search (requires query)
+- Post + comments -> reddit/get (requires post_url)
+- Post media URLs -> reddit/media (requires id, item_ref, or url)
+- User profile metadata -> reddit/user (requires username)
+
+Notes
+- There is no global "top posts" tool; always specify a subreddit.
+- Use reddit/list for subreddit feeds (hot/new/top), not reddit/search.
+- For reddit/get, prefer post_url or item_ref. For reddit/media, a post ID, item_ref, or URL is fine.
+
+Minimal JSON-RPC examples
+1) Subreddit top posts (via list)
+{"jsonrpc":"2.0","method":"tools/call","params":{"name":"reddit/list","arguments":{"subreddit":"rust","sort":"top","time":"week","limit":10}},"id":1}
+
+2) Keyword search
+{"jsonrpc":"2.0","method":"tools/call","params":{"name":"reddit/search","arguments":{"query":"rust async","subreddit":"programming","sort":"relevance","time":"all","limit":5}},"id":2}
+
+3) Post + comments
+{"jsonrpc":"2.0","method":"tools/call","params":{"name":"reddit/get","arguments":{"post_url":"https://www.reddit.com/r/rust/comments/abc123/example_post","comment_limit":25,"comment_sort":"best"}},"id":3}
+
+4) User profile metadata
+{"jsonrpc":"2.0","method":"tools/call","params":{"name":"reddit/user","arguments":{"username":"spez","output_format":"display_v1"}},"id":4}
+
+Play Store (connector: "play-store")
+Tasks -> Tools
+- App metadata (best-effort) -> play-store/app (requires id; optional hl/gl)
+
+Minimal JSON-RPC example
+{"jsonrpc":"2.0","method":"tools/call","params":{"name":"play-store/app","arguments":{"id":"com.whatsapp","hl":"en","gl":"US","output_format":"normalized_v1"}},"id":5}
+
+YouTube (connector: "youtube")
+Tasks -> Tools
+- Video details + transcript -> youtube/get
+- Search videos/playlists/channels -> youtube/search
+- List recent uploads (channel/playlist) -> youtube/list
+- Resolve channel name/handle -> youtube/resolve_channel
+
+X / Twitter (connector: "x")
+Tasks -> Tools
+- Auth diagnostics -> x/get_auth_status, x/whoami
+- Recent keyword search (token pagination) -> x/search_recent_tweets
+- Full-archive keyword search -> x/search_all_tweets
+- Tweet details -> x/get_tweet
+- Profile lookup (by username) -> x/get_profile (alias) / x/get_user_by_username
+- User tweets (token pagination) -> x/get_user_tweets
+- User tweets (by username) -> x/get_user_tweets_by_username
+- Recent thread snapshot (token pagination) -> x/get_thread
+- Mentions -> x/get_mentions
+- Home timeline -> x/get_home_timeline
+- Post / like / repost / follow / bookmark -> x/create_post, x/like_post, x/repost_post, x/follow_user, x/add_bookmark
+- Lists / DMs / media -> x/create_list, x/create_dm_conversation, x/initialize_media_upload
+- Raw official operation fallback -> x/raw_operation
+
+Auth guidance
+- bearer token for public reads
+- OAuth 2.0 for user-context reads/writes
+- OAuth 1.0a only for fallback/import
+- `xai-search` is separate; do not use `XAI_API_KEY` for connector `x`
+
+X / Twitter Browser Cookies (connector: "x-browser")
+Tasks -> Tools
+- User profile -> x-browser/get_profile
+- Keyword search (cursor pagination) -> x-browser/search_tweets
+- Tweet details -> x-browser/get_tweet
+- Thread/conversation -> x-browser/get_thread
+- Home timeline -> x-browser/get_home_timeline
+- User tweets + replies -> x-browser/fetch_tweets_and_replies
+- User tweets (no replies) -> x-browser/get_user_tweets
+- Search profiles -> x-browser/search_profiles
+- Followers -> x-browser/get_followers
+- DM conversations -> x-browser/get_direct_message_conversations
+- Send DM -> x-browser/send_direct_message
+
+Hacker News (connector: "hackernews")
+Tasks -> Tools
+- Top/new/best/ask/show/job -> hackernews/list_threads (feed)
+- Keyword search -> hackernews/search
+- Recent search -> hackernews/search_recent
+- Story + comments -> hackernews/get_thread
+
+arXiv (connector: "arxiv")
+Tasks -> Tools
+- Search papers -> arxiv/search
+- Paper details -> arxiv/get
+
+PubMed (connector: "pubmed")
+Tasks -> Tools
+- Search -> pubmed/search
+- Abstract -> pubmed/get
+
+Semantic Scholar (connector: "semantic_scholar")
+Tasks -> Tools
+- Search papers -> semantic_scholar/search_papers
+- Paper details -> semantic_scholar/get_paper_details
+- Related papers -> semantic_scholar/get_related_papers
+
+SciHub (connector: "scihub")
+Tasks -> Tools
+- Paper by DOI -> scihub/get
+
+bioRxiv / medRxiv (connector: "biorxiv")
+Tasks -> Tools
+- Recent preprints -> biorxiv/get_recent_preprints
+- Date range -> biorxiv/get_preprints_by_date
+- DOI lookup -> biorxiv/get_preprint_by_doi
+
+Google Scholar (connector: "google_scholar")
+Tasks -> Tools
+- Search papers -> google_scholar/search_papers
+
+Web scraping (connector: "web")
+Tasks -> Tools
+- Extract text from URL -> web/scrape_url
+- Custom selectors -> web/scrape_with_config
+
+Wikipedia (connector: "wikipedia")
+Tasks -> Tools
+- Keyword search -> wikipedia/search
+- Article content -> wikipedia/get_article
+- Geo search -> wikipedia/geosearch
+
+Search APIs
+- serper-search/search
+- serpapi-search/search
+- tavily-search/search
+- firecrawl-search/search
+- exa-search/search (semantic)
+- exa-search/get_contents, exa-search/find_similar, exa-search/answer, exa-search/research
+
+Parallel Search (connector: "parallel_search")
+Tasks -> Tools
+- Parallel search -> parallel_search/search
+- Create monitor -> parallel_search/create_monitor
+- List monitors -> parallel_search/list_monitors
+- Monitor events -> parallel_search/get_monitor_events
+- Cancel monitor -> parallel_search/cancel_monitor
+
+AI Search
+- openai-search/search
+- anthropic-search/search
+
+WhatsApp (connector: "whatsapp")
+Tasks -> Tools
+- Connect / QR -> whatsapp/connect
+- Status -> whatsapp/status
+- Send text -> whatsapp/send_text
+- Read local history -> whatsapp/get_messages (requires history enabled)
+
+Telegram (connector: "telegram")
+Tasks -> Tools
+- Send login code -> telegram/start_login
+- Complete login -> telegram/complete_login
+- List dialogs -> telegram/list_dialogs
+- Read messages -> telegram/get_messages
+- gemini-search/search
+- perplexity-search/search
+- xai-search/search (`source=web|x`; supports handle/domain/date filters)
+
+Slack (connector: "slack")
+Tasks -> Tools
+- List channels -> slack/list_channels
+- Channel messages -> slack/list_messages
+- Thread replies -> slack/get_thread
+- Search messages -> slack/search_messages
+- List files -> slack/list_files
+- Thread from permalink -> slack/get_thread_by_permalink
+
+GitHub (connector: "github")
+Tasks -> Tools
+- Issues -> github/list_issues, github/get_issue
+- Pull requests -> github/list_pull_requests, github/get_pull_request, github/get_pull_diff
+- Code search -> github/code_search
+- File contents -> github/get_file
+
+Atlassian (connector: "atlassian")
+Tasks -> Tools
+- Jira search -> atlassian/jira_search_issues
+- Jira issue -> atlassian/jira_get_issue
+- Confluence search -> atlassian/conf_search_pages
+- Confluence page -> atlassian/conf_get_page
+
+Google Workspace (requires explicit user permission)
+- Gmail: google-gmail/list_messages, google-gmail/get_message, google-gmail/get_thread, google-gmail/decode_message_raw
+- Calendar: google-calendar/list_events, google-calendar/create_event, google-calendar/update_event, google-calendar/delete_event, google-calendar/sync_events
+- Drive: google-drive/list_files, google-drive/get_file, google-drive/download_file, google-drive/export_file, google-drive/upload_file, google-drive/upload_file_resumable, google-drive/find_and_export
+- Contacts: google-people/list_connections, google-people/get_person
+
+Microsoft 365 (requires explicit user permission)
+- microsoft/list_messages, microsoft/get_message, microsoft/list_events
+- microsoft/send_mail, microsoft/create_draft, microsoft/upload_attachment_large, microsoft/upload_attachment_large_from_path, microsoft/send_draft
+
+Discord (connector: "discord")
+Tasks -> Tools
+- List servers -> discord/list_servers
+- Server info -> discord/get_server_info
+- List channels -> discord/list_channels
+- Read messages -> discord/read_messages
+- Search messages -> discord/search_messages
+- Send message -> discord/send_message
+
+RSS (connector: "rss")
+Tasks -> Tools
+- Fetch feed -> rss/get_feed
+- List entries -> rss/list_entries
+- Search entries -> rss/search_feed
+- Discover feeds -> rss/discover_feeds
+
+Local Files (connector: "localfs")
+Tasks -> Tools
+- List files -> localfs/list_files
+- File metadata -> localfs/get_file_info
+- Extract text -> localfs/extract_text
+- Document structure -> localfs/get_structure
+- Get section -> localfs/get_section
+- Search content -> localfs/search_content
+
+Spotlight (connector: "spotlight")
+Tasks -> Tools
+- Full-text search -> spotlight/search_content
+- Search by name -> spotlight/search_by_name
+- Search by kind -> spotlight/search_by_kind
+- Recent files -> spotlight/search_recent
+- File metadata -> spotlight/get_metadata
+- Raw query -> spotlight/raw_query
+
+Personal data connectors (explicit user permission required):
+- apple_mail, apple_messages, apple_notes, apple_reminders, apple_contacts, imap
