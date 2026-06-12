@@ -1225,7 +1225,7 @@ impl HackerNewsConnector {
         let response = self.fetch_algolia_search(url).await?;
         let mut items = self.hits_to_items(response.hits.unwrap_or_default());
         // Sort by points descending for "best"
-        items.sort_by(|a, b| b.points.unwrap_or(0).cmp(&a.points.unwrap_or(0)));
+        items.sort_by_key(|item| std::cmp::Reverse(item.points.unwrap_or(0)));
         Ok(items)
     }
 

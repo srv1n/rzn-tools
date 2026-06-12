@@ -353,7 +353,7 @@ impl ImapConnector {
             }
 
             // Sort messages by UID descending (newest first)
-            messages.sort_by(|a, b| b.uid.cmp(&a.uid));
+            messages.sort_by_key(|message| std::cmp::Reverse(message.uid));
 
             let returned = messages.len();
             let has_more = start_idx > 0;

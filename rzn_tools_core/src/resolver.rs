@@ -800,7 +800,7 @@ fn build_default_patterns() -> Vec<InputPattern> {
     ];
 
     // Sort by priority (highest first)
-    patterns.sort_by(|a, b| b.priority.cmp(&a.priority));
+    patterns.sort_by_key(|pattern| std::cmp::Reverse(pattern.priority));
     patterns
 }
 

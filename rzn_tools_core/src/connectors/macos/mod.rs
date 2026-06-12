@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use rmcp::model::*;
 use serde_json::json;
 use std::borrow::Cow;
+#[cfg(target_os = "macos")]
 use std::process::Stdio;
 use std::sync::Arc;
 

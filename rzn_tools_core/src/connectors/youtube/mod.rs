@@ -1989,7 +1989,7 @@ async fn list_videos_call_result(input: ListVideosInput) -> Result<CallToolResul
     }
 
     let text = serde_json::to_string(&out)?;
-    Ok(structured_result_with_text(&out, Some(text))?)
+    structured_result_with_text(&out, Some(text))
 }
 
 async fn list_videos_output(input: ListVideosInput) -> Result<ListVideosOutput, ConnectorError> {
@@ -2100,10 +2100,8 @@ fn finalize_list_entries(
             video.channel = video.channel_title.clone();
         }
 
-        if source == ListSource::Channel {
-            if video.channel_id.is_none() {
-                video.channel_id = channel_id.map(ToString::to_string);
-            }
+        if source == ListSource::Channel && video.channel_id.is_none() {
+            video.channel_id = channel_id.map(ToString::to_string);
         }
 
         if source == ListSource::Playlist {
