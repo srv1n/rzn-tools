@@ -81,7 +81,7 @@ fn filter_ambiguous_matches(mut actions: Vec<ResolvedAction>) -> Vec<ResolvedAct
     }
 
     // Sort by priority descending
-    actions.sort_by(|a, b| b.priority.cmp(&a.priority));
+    actions.sort_by_key(|action| std::cmp::Reverse(action.priority));
 
     let highest_priority = actions[0].priority;
 
