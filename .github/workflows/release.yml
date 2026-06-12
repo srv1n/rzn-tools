@@ -33,11 +33,11 @@ jobs:
             target: x86_64-pc-windows-msvc
             binary: rzn-tools.exe
             archive_kind: zip
-          - runner: macos-15-intel
+          - runner: macos-26-intel
             target: x86_64-apple-darwin
             binary: rzn-tools
             archive_kind: tar.gz
-          - runner: macos-14
+          - runner: macos-26
             target: aarch64-apple-darwin
             binary: rzn-tools
             archive_kind: tar.gz
