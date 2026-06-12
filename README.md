@@ -37,75 +37,9 @@ smart routing + auth + output shaping
 YouTube | GitHub | Slack | PubMed | Reddit | GSC | X | local files | ...
 ```
 
-## Why Install This
+## Systems & Connector Coverage
 
-| If you do this today | What usually sucks | What `rzn-tools` changes |
-|----------------------|--------------------|--------------------------|
-| Copy transcripts, docs, issues, or threads into an LLM by hand | Slow, lossy, and impossible to repeat cleanly | `fetch` and connector commands pull clean content directly from URLs, IDs, and APIs |
-| Write one script per provider | You rebuild auth, pagination, and response shaping every time | Connectors share one tool model across CLI, MCP, and library use |
-| Install one MCP server per source | Setup sprawl, uneven quality, and inconsistent tool naming | One MCP runtime exposes a broad, curated connector catalog |
-| Feed raw provider payloads into agents or ingestion jobs | Massive responses, weird schemas, cleanup hell | `response_format`, `output_format=normalized_v1`, and `display_v1` shape results for the job |
-
-## Best Fit
-
-- Use it if you want the same integration surface for shell workflows, agent tool-calling, and app code.
-- Use it if your work spans more than one source and you are sick of rebuilding the same glue.
-- Use it if you care about structured or normalized output, not just raw HTML and ad hoc JSON.
-- Skip it if you only need one provider and that provider's SDK already solves the whole problem.
-- Skip it if you want a managed cloud product; this repo is the runtime, not the service.
-
-## Quick Start
-
-```bash
-# Install the CLI + bundled starter assets
-curl -fsSL https://raw.githubusercontent.com/srv1n/rzn-tools/main/packaging/scripts/install.sh | bash
-
-# Smart fetch: paste a link or ID
-rzn-tools fetch https://arxiv.org/abs/2301.07041
-rzn-tools fetch https://github.com/rust-lang/rust/issues/12345
-rzn-tools fetch PMID:12345678
-
-# Federated research across multiple sources
-rzn-tools search "CRISPR gene therapy" --profile research
-
-# Give the same connector surface to an MCP client
-rzn-tools serve --local-only
-
-# Install the repo skill for agent clients in this project
-rzn-tools skills install --scope project
-```
-
-## Agent Skills
-
-`rzn-tools` ships a bundled Agent Skill for working on this repo. It can symlink that skill into
-Claude Code, Gemini, generic `.agents/skills`, and Codex skill directories.
-
-```bash
-# Show target paths and current link status
-rzn-tools skills status --scope project
-
-# Project install: .claude/skills, .gemini/skills, .agents/skills
-rzn-tools skills install --scope project --clients all
-
-# Global install: ~/.claude/skills, ~/.gemini/skills, ~/.agents/skills, ~/.codex/skills
-rzn-tools skills install --scope global --clients claude,gemini,agent,codex
-
-# Refresh managed release-copy installs or relink repo-checkout installs
-rzn-tools skills update --scope global --clients all
-
-# Remove symlinks created by the installer
-rzn-tools skills remove --scope global --clients all
-```
-
-When run from a repo checkout, the installer links directly to `.agents/skills/rzn-tools`, so skill
-updates from git are picked up immediately. When run from an installed release binary outside a
-checkout, it writes the release-versioned embedded skill into the managed `rzn-tools` data directory
-and links clients to that copy.
-
-## Connector Coverage
-
-Connector breadth is proof, not the pitch. The pitch is that all of these sources show up through
-one consistent interface.
+This is the reason to keep reading: all of these sources show up through one consistent interface.
 
 Connector SVGs are bundled under `resources/icons/connectors/`, indexed by
 `resources/icons/connectors/manifest.json`, and surfaced in MCP metadata via
@@ -194,6 +128,71 @@ These connectors query AI-powered or traditional search APIs.
 |-----------|-------------|
 | <img src="resources/icons/connectors/macos.svg" width="16" height="16" /> macOS Automation | Control Mail, Calendar, Safari via JXA (requires permissions) |
 | <img src="resources/icons/connectors/spotlight.svg" width="16" height="16" /> Spotlight | Search files by content, name, type, or metadata (macOS only) |
+
+## Why Install This
+
+| If you do this today | What usually sucks | What `rzn-tools` changes |
+|----------------------|--------------------|--------------------------|
+| Copy transcripts, docs, issues, or threads into an LLM by hand | Slow, lossy, and impossible to repeat cleanly | `fetch` and connector commands pull clean content directly from URLs, IDs, and APIs |
+| Write one script per provider | You rebuild auth, pagination, and response shaping every time | Connectors share one tool model across CLI, MCP, and library use |
+| Install one MCP server per source | Setup sprawl, uneven quality, and inconsistent tool naming | One MCP runtime exposes a broad, curated connector catalog |
+| Feed raw provider payloads into agents or ingestion jobs | Massive responses, weird schemas, cleanup hell | `response_format`, `output_format=normalized_v1`, and `display_v1` shape results for the job |
+
+## Best Fit
+
+- Use it if you want the same integration surface for shell workflows, agent tool-calling, and app code.
+- Use it if your work spans more than one source and you are sick of rebuilding the same glue.
+- Use it if you care about structured or normalized output, not just raw HTML and ad hoc JSON.
+- Skip it if you only need one provider and that provider's SDK already solves the whole problem.
+- Skip it if you want a managed cloud product; this repo is the runtime, not the service.
+
+## Quick Start
+
+```bash
+# Install the CLI + bundled starter assets
+curl -fsSL https://raw.githubusercontent.com/srv1n/rzn-tools/main/packaging/scripts/install.sh | bash
+
+# Smart fetch: paste a link or ID
+rzn-tools fetch https://arxiv.org/abs/2301.07041
+rzn-tools fetch https://github.com/rust-lang/rust/issues/12345
+rzn-tools fetch PMID:12345678
+
+# Federated research across multiple sources
+rzn-tools search "CRISPR gene therapy" --profile research
+
+# Give the same connector surface to an MCP client
+rzn-tools serve --local-only
+
+# Install the repo skill for agent clients in this project
+rzn-tools skills install --scope project
+```
+
+## Agent Skills
+
+`rzn-tools` ships a bundled Agent Skill for working on this repo. It can symlink that skill into
+Claude Code, Gemini, generic `.agents/skills`, and Codex skill directories.
+
+```bash
+# Show target paths and current link status
+rzn-tools skills status --scope project
+
+# Project install: .claude/skills, .gemini/skills, .agents/skills
+rzn-tools skills install --scope project --clients all
+
+# Global install: ~/.claude/skills, ~/.gemini/skills, ~/.agents/skills, ~/.codex/skills
+rzn-tools skills install --scope global --clients claude,gemini,agent,codex
+
+# Refresh managed release-copy installs or relink repo-checkout installs
+rzn-tools skills update --scope global --clients all
+
+# Remove symlinks created by the installer
+rzn-tools skills remove --scope global --clients all
+```
+
+When run from a repo checkout, the installer links directly to `.agents/skills/rzn-tools`, so skill
+updates from git are picked up immediately. When run from an installed release binary outside a
+checkout, it writes the release-versioned embedded skill into the managed `rzn-tools` data directory
+and links clients to that copy.
 
 ## Smart Resolver
 
