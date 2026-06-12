@@ -125,7 +125,7 @@ jobs:
                   lines.append(f"{sha256(path.read_bytes()).hexdigest()}  {path.name}")
           (dist / "checksums.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: rzn-tools ${{ env.RELEASE_TAG }}
