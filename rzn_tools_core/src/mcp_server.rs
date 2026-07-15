@@ -224,7 +224,7 @@ impl McpServer {
         let mut capabilities = ServerCapabilities::default();
 
         // Check if any connector supports tools
-        for (_name, connector) in registry.providers.iter() {
+        for connector in registry.providers.values() {
             let conn = connector.lock().await;
             let conn_caps = conn.capabilities().await;
             if conn_caps.tools.is_some() {
@@ -271,7 +271,7 @@ impl McpServer {
         let mut all_resources = Vec::new();
 
         // Collect resources from all connectors
-        for (_name, connector) in registry.providers.iter() {
+        for connector in registry.providers.values() {
             let c = connector.lock().await;
             match c.list_resources(request.clone()).await {
                 Ok(response) => {
@@ -297,7 +297,7 @@ impl McpServer {
         let registry = self.registry.lock().await;
 
         // Try each connector until one handles the resource
-        for (_name, connector) in registry.providers.iter() {
+        for connector in registry.providers.values() {
             let c = connector.lock().await;
             match c.read_resource(request.clone()).await {
                 Ok(contents) => return Ok(contents),

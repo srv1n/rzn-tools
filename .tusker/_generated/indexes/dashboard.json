@@ -1,0 +1,12 @@
+{
+  "active_runs": 0,
+  "agent_ready": 1,
+  "done_open_gates": 0,
+  "generatedAt": "2026-07-10T04:28:28Z",
+  "human_actions": 4,
+  "human_wait": 2,
+  "review_queue": 0,
+  "schema": "tusker.dashboard-index/v1",
+  "source": "v7",
+  "stale_leases": 0
+}

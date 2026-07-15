@@ -1,0 +1,35 @@
+{
+  "actor": "agent:sarav",
+  "at": "2026-07-10T04:19:21Z",
+  "event_kind": "updated",
+  "id": "01KX540RYSMJP17DJDEY4YERSC",
+  "object": "ADS-T-0003",
+  "object_kind": "task",
+  "payload": {
+    "changes": {
+      "next_action": {
+        "from": "Execute the task contract and satisfy proof mode.",
+        "to": "Apply for a Google Ads developer token (Basic access), create an OAuth client, and mint a refresh token for the test/MCC account; place GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_OAUTH_CLIENT_ID, GOOGLE_ADS_OAUTH_CLIENT_SECRET, GOOGLE_ADS_REFRESH_TOKEN in .env."
+      },
+      "next_owner": {
+        "from": "agent",
+        "to": "human:sarav"
+      },
+      "next_ref": {
+        "from": "ADS-T-0003",
+        "to": "ADS-G-0002"
+      },
+      "next_source": {
+        "from": "task",
+        "to": "gate"
+      },
+      "readiness": {
+        "from": "ready",
+        "to": "blocked_by_gate"
+      }
+    },
+    "source": "gate:ADS-G-0002"
+  },
+  "project": "rzn-tools",
+  "schema": "tusker.event/v1"
+}

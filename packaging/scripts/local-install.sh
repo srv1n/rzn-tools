@@ -54,15 +54,15 @@ say "Building ${BINARY_NAME} (features: ${FEATURES})..."
 cd "$ROOT_DIR"
 
 if [[ "$FEATURES" == "full" ]]; then
-  cargo build --release -p rzn_tools_cli --features full
+  make build-release CARGO_ARGS="-p rzn_tools_cli --features full"
 else
-  cargo build --release -p rzn_tools_cli --features "$FEATURES"
+  make build-release CARGO_ARGS="-p rzn_tools_cli --features $FEATURES"
 fi
 
 if [[ "$BUILD_EXAMPLES" == "1" ]]; then
   say "Compiling example binaries and validating bundled workflows..."
-  cargo build --release -p rzn_tools_core --features "examples,full" --examples
-  cargo test -p rzn_tools_core --test system_metadata_conformance
+  make build-release CARGO_ARGS="-p rzn_tools_core --features examples,full --examples"
+  make test CARGO_ARGS="-p rzn_tools_core --test system_metadata_conformance"
 fi
 
 BIN_PATH="$ROOT_DIR/target/release/$BINARY_NAME"

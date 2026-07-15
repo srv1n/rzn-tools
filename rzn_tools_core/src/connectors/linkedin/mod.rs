@@ -755,7 +755,7 @@ impl LinkedInConnector {
         let headers = response.headers().clone();
         let body_text = response.text().await.map_err(ConnectorError::HttpRequest)?;
         let body_json =
-            serde_json::from_str::<Value>(&body_text).unwrap_or_else(|_| Value::String(body_text));
+            serde_json::from_str::<Value>(&body_text).unwrap_or(Value::String(body_text));
 
         if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
             return Err(Self::reauth_required(format!(

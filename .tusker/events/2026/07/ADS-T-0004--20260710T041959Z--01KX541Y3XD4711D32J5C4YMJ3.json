@@ -1,0 +1,16 @@
+{
+  "actor": "tusker:reconcile",
+  "at": "2026-07-10T04:19:59Z",
+  "event_kind": "updated",
+  "id": "01KX541Y3XD4711D32J5C4YMJ3",
+  "object": "ADS-T-0004",
+  "object_kind": "task",
+  "payload": {
+    "path": "work/tasks/ADS-T-0004.md",
+    "previous_state_rev": "sha256:cf80bfa0be6407b35e10d5801efbf3e3f1fb5b96e5cc28b42b7b59cb7eb22801",
+    "source": "state_rev_repair",
+    "state_rev": "sha256:48d338c23861060a95269f764bce64eed857fc16f2f0a5512d38a4072f220995"
+  },
+  "project": "rzn-tools",
+  "schema": "tusker.event/v1"
+}

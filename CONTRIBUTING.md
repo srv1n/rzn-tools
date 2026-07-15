@@ -12,6 +12,7 @@ By participating in this project, you agree to maintain a respectful and inclusi
 
 - Rust 1.75+ (MSRV) - install via [rustup.rs](https://rustup.rs)
 - Git
+- `sccache` - install with `cargo install sccache --locked`
 
 ### Optional Tools
 
@@ -31,13 +32,13 @@ git clone https://github.com/srv1n/rzn-tools.git
 cd rzn-tools
 
 # Build the project
-cargo build
+make build
 
 # Run tests
-cargo test
+make test
 
 # Run the CLI
-cargo run -p rzn_tools_cli -- list
+make run CARGO_ARGS="-p rzn_tools_cli -- list"
 ```
 
 ## Development Workflow
@@ -48,16 +49,16 @@ Run all checks locally before pushing:
 
 ```bash
 # Format code
-cargo fmt --all
+make fmt
 
 # Run linter (must pass with no warnings)
-cargo clippy --all-targets --all-features -- -D warnings
+make clippy CARGO_ARGS="--all-targets --all-features -- -D warnings"
 
 # Run tests
-cargo test --workspace
+make test CARGO_ARGS="--workspace"
 
 # Check documentation builds
-cargo doc --no-deps --workspace
+make doc CARGO_ARGS="--workspace"
 
 # (Optional) Security audit
 cargo audit
@@ -110,7 +111,7 @@ We use `rustfmt` with custom settings in `rustfmt.toml`:
 - Imports grouped by: std, external, crate
 
 ```bash
-cargo fmt --all
+make fmt
 ```
 
 ### Linting
@@ -118,7 +119,7 @@ cargo fmt --all
 We use `clippy` with pedantic lints. The CI will fail on any warnings.
 
 ```bash
-cargo clippy --all-targets --all-features -- -D warnings
+make clippy CARGO_ARGS="--all-targets --all-features -- -D warnings"
 ```
 
 Configuration is in `clippy.toml` and `Cargo.toml` under `[workspace.lints.clippy]`.
@@ -145,7 +146,7 @@ ci: add MSRV check to workflow
 - Ensure all tests pass before submitting PR
 
 ```bash
-cargo test --workspace
+make test CARGO_ARGS="--workspace"
 ```
 
 ### Documentation
@@ -158,7 +159,7 @@ cargo test --workspace
 Doc comments should build without warnings:
 
 ```bash
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+RUSTDOCFLAGS="-D warnings" make doc CARGO_ARGS="--workspace"
 ```
 
 ## Adding New Connectors

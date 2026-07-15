@@ -48,8 +48,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --target ${{ matrix.target }} -p rzn_tools_cli --features full
+      - run: make build-release CARGO_ARGS="--target ${{ matrix.target }} -p rzn_tools_cli --features full"
       - if: matrix.archive_kind == 'tar.gz'
         run: |
           mkdir -p dist
@@ -77,9 +78,10 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p rzn_tools_core --features "examples,full" --examples
-      - run: cargo test -p rzn_tools_core --test system_metadata_conformance
+      - run: make build-release CARGO_ARGS="-p rzn_tools_core --features examples,full --examples"
+      - run: make test CARGO_ARGS="-p rzn_tools_core --test system_metadata_conformance"
       - run: |
           mkdir -p dist/share/rzn-tools
           cp -R resources dist/share/rzn-tools/

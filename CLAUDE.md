@@ -19,16 +19,33 @@ When testing connectors that access personal data:
 
 ## Build Commands
 
+Every Rust compilation, including in a worktree, must use a `make` target. The
+targets require `sccache`, whose user-level cache is shared between worktrees.
+Install it once if needed: `cargo install sccache --locked`.
+
 ```bash
 # Build with common features
-cargo build --release --package rzn_tools_cli --features "exa-search,imap"
+make build-release CARGO_ARGS='--package rzn_tools_cli --features "exa-search,imap"'
 
 # Build with all connectors
-cargo build --release --package rzn_tools_cli --features "full"
+make build-release CARGO_ARGS='--package rzn_tools_cli --features full'
 
 # Release builds: ALWAYS ship with all features enabled.
 # (Connectors are compile-time feature-gated; releases built without `full` will appear "missing".)
 
 # Build with Apple ecosystem (macOS only)
-cargo build --release --package rzn_tools_cli --features "apple-ecosystem"
+make build-release CARGO_ARGS='--package rzn_tools_cli --features apple-ecosystem'
 ```
+
+<!-- tusker:epic-index:begin -->
+## Tusker
+
+Use Tusker for tracked repo work.
+
+- Task mechanics live in the installed `tusker` skill.
+- Project knowledge starts at `.tusker/SKILL.md`.
+- Start runnable work with `tusker next`; inspect named work with `tusker show <TASK-ID> --capsule`.
+- Do not read `.tusker/events`, `_generated`, `attempts`, `evidence`, `Attachments`, raw logs, or full task files unless the task explicitly requires it.
+- Keep proof compact: use capsules, path-scoped status/search, and command + PASS/FAIL summaries; put noisy logs in `.tusker/scratch/<TASK-ID>/`.
+- Record concise Tusker/product friction with `tusker feedback add`; skip routine progress reports.
+<!-- tusker:epic-index:end -->

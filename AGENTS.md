@@ -8,13 +8,13 @@
 - `vendor/` contains vendored dependencies; config lives in `Cargo.toml`, `.cargo/config.toml`, `clippy.toml`, and `rustfmt.toml`.
 
 ## Build, Test, and Development Commands
-- `cargo build` / `cargo build --release -p rzn_tools_cli` for debug/release builds.
-- Feature-scoped builds: `cargo build --release -p rzn_tools_cli --features "youtube,hackernews"`.
-- Release builds: ALWAYS build with all features enabled: `cargo build --release -p rzn_tools_cli --features full`.
-- Run CLI: `cargo run -p rzn_tools_cli -- list`.
-- Run MCP server: `cargo run -p rzn_tools_mcp`.
-- Lint and format: `cargo fmt --all`, `cargo clippy --all-targets --all-features -- -D warnings`.
-- Full test suite: `cargo test --workspace`.
+- All Rust compilation, from the main checkout or any worktree, MUST use a `make` target. Do not invoke `cargo build`, `cargo test`, `cargo check`, `cargo clippy`, `cargo doc`, or `cargo run` directly.
+- Make targets require `sccache`; its shared user-level cache lets independent worktrees reuse compiled artifacts. Install it once with `cargo install sccache --locked`.
+- Debug/release builds: `make build CARGO_ARGS="-p rzn_tools_cli"` / `make build-release CARGO_ARGS="-p rzn_tools_cli --features full"`.
+- Feature-scoped release build: `make build-release CARGO_ARGS="-p rzn_tools_cli --features youtube,hackernews"`.
+- Run CLI/MCP: `make run CARGO_ARGS="-p rzn_tools_cli -- list"` / `make run CARGO_ARGS="-p rzn_tools_mcp"`.
+- Lint and format: `make fmt`, `make clippy CARGO_ARGS="--all-targets --all-features -- -D warnings"`.
+- Full test suite: `make test CARGO_ARGS="--workspace"`.
 
 ## Coding Style & Naming Conventions
 - Rust formatting is enforced by `rustfmt` with 100-char line width and grouped imports (std/external/crate).
@@ -24,7 +24,7 @@
 ## Testing Guidelines
 - Add unit tests for new logic; integration tests where applicable.
 - Mock external API calls in tests; avoid real network calls in CI.
-- Ensure docs build cleanly: `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps`.
+- Ensure docs build cleanly: `RUSTDOCFLAGS="-D warnings" make doc CARGO_ARGS="--workspace"`.
 
 ## Commit & Pull Request Guidelines
 - Recent history uses short, imperative summaries (e.g., “Add …”, “Fix …”) and release messages (“Release v0.2.7”).
@@ -53,3 +53,16 @@ For plugin release work:
 - Publish to local `http://localhost:8082` first, then cloud `https://cloud.rzn.ai`, unless the user explicitly says otherwise.
 - The release script supports `cloud` directly and retains `prod` as a legacy alias.
 - If local or cloud publish fails at any stage, stop and report exactly what failed.
+
+<!-- tusker:epic-index:begin -->
+## Tusker
+
+Use Tusker for tracked repo work.
+
+- Task mechanics live in the installed `tusker` skill.
+- Project knowledge starts at `.tusker/SKILL.md`.
+- Start runnable work with `tusker next`; inspect named work with `tusker show <TASK-ID> --capsule`.
+- Do not read `.tusker/events`, `_generated`, `attempts`, `evidence`, `Attachments`, raw logs, or full task files unless the task explicitly requires it.
+- Keep proof compact: use capsules, path-scoped status/search, and command + PASS/FAIL summaries; put noisy logs in `.tusker/scratch/<TASK-ID>/`.
+- Record concise Tusker/product friction with `tusker feedback add`; skip routine progress reports.
+<!-- tusker:epic-index:end -->

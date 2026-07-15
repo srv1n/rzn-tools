@@ -1,0 +1,20 @@
+{
+  "actor": "tusker:reconcile",
+  "at": "2026-07-10T04:18:26Z",
+  "event_kind": "updated",
+  "id": "01KX53Z2RC7SKFB4X6CYT3113D",
+  "object": "ADS-T-0003",
+  "object_kind": "task",
+  "payload": {
+    "changes": {
+      "readiness": {
+        "from": "held",
+        "to": "ready"
+      }
+    },
+    "source": "projection",
+    "state_rev": "sha256:d826a31e4a1fa52a5a66ce22b7deb4c1d011c2e01720e14437cf6901344c191a"
+  },
+  "project": "rzn-tools",
+  "schema": "tusker.event/v1"
+}

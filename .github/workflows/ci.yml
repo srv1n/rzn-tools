@@ -29,8 +29,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: make clippy CARGO_ARGS="--all-targets --all-features -- -D warnings"
 
   check:
     name: Check
@@ -38,8 +39,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --workspace --all-targets --all-features
+      - run: make check CARGO_ARGS="--workspace --all-targets --all-features"
 
   test:
     name: Test (${{ matrix.os }})
@@ -51,8 +53,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace
+      - run: make test CARGO_ARGS="--workspace"
 
   test-minimal:
     name: Test (minimal features)
@@ -60,9 +63,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test -p rzn_tools_core --no-default-features
-      - run: cargo test -p rzn_tools_cli --no-default-features
+      - run: make test CARGO_ARGS="-p rzn_tools_core --no-default-features"
+      - run: make test CARGO_ARGS="-p rzn_tools_cli --no-default-features"
 
   build-cli:
     name: Build CLI
@@ -70,8 +74,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p rzn_tools_cli --features full
+      - run: make build-release CARGO_ARGS="-p rzn_tools_cli --features full"
       - run: ./target/release/rzn-tools --version
 
   build-cli-macos:
@@ -90,8 +95,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --target ${{ matrix.target }} -p rzn_tools_cli --features full
+      - run: make build-release CARGO_ARGS="--target ${{ matrix.target }} -p rzn_tools_cli --features full"
 
   workflow-assets:
     name: Validate Workflow Assets
@@ -99,9 +105,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p rzn_tools_core --features "examples,full" --examples
-      - run: cargo test -p rzn_tools_core --test system_metadata_conformance
+      - run: make build-release CARGO_ARGS="-p rzn_tools_core --features examples,full --examples"
+      - run: make test CARGO_ARGS="-p rzn_tools_core --test system_metadata_conformance"
 
   docs:
     name: Documentation
@@ -109,8 +116,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: cargo doc --no-deps --workspace
+      - run: make doc CARGO_ARGS="--workspace"
         env:
           RUSTDOCFLAGS: -D warnings
 

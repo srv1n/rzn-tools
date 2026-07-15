@@ -1,4 +1,54 @@
-.PHONY: install release release-dry-run release-prepare release-retitle-legacy release-retitle-legacy-dry-run plugins-keygen plugins-build-rzn-tools-macos-arm64 plugins-verify plugins-validate-system-metadata
+.PHONY: help ensure-sccache build build-release test check clippy fmt fmt-check doc run install release release-dry-run release-prepare release-retitle-legacy release-retitle-legacy-dry-run plugins-keygen plugins-build-rzn-tools-macos-arm64 plugins-verify plugins-validate-system-metadata
+
+# Rust entrypoint policy
+#
+# Use these targets from every checkout, including Tusker worktrees. sccache's
+# user-level cache is outside the repository, so worktrees share it.
+SCCACHE ?= sccache
+export RUSTC_WRAPPER := $(SCCACHE)
+CARGO_ARGS ?=
+
+help:
+	@printf '%s\n' \
+		'Rust commands (all require sccache):' \
+		'  make build CARGO_ARGS="-p rzn_tools_cli --features full"' \
+		'  make build-release CARGO_ARGS="-p rzn_tools_cli --features full"' \
+		'  make test CARGO_ARGS="-p rzn_tools_core"' \
+		'  make check | make clippy | make fmt | make fmt-check | make doc' \
+		'  make run CARGO_ARGS="-p rzn_tools_cli -- list"'
+
+ensure-sccache:
+	@command -v "$(SCCACHE)" >/dev/null 2>&1 || { \
+		echo "sccache is required. Install it with: cargo install sccache --locked" >&2; \
+		exit 1; \
+	}
+
+build: ensure-sccache
+	cargo build $(CARGO_ARGS)
+
+build-release: ensure-sccache
+	cargo build --release $(CARGO_ARGS)
+
+test: ensure-sccache
+	cargo test $(CARGO_ARGS)
+
+check: ensure-sccache
+	cargo check $(CARGO_ARGS)
+
+clippy: ensure-sccache
+	cargo clippy $(CARGO_ARGS)
+
+fmt:
+	cargo fmt --all $(CARGO_ARGS)
+
+fmt-check:
+	cargo fmt --all -- --check
+
+doc: ensure-sccache
+	cargo doc --no-deps $(CARGO_ARGS)
+
+run: ensure-sccache
+	cargo run $(CARGO_ARGS)
 
 # -----------------------------------------------------------------------------
 # RZN Desktop Extension Bundle (plugin.json + plugin.sig + payload ZIP)

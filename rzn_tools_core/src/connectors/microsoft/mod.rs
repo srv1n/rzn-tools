@@ -337,7 +337,7 @@ impl Connector for GraphConnector {
                                 })?;
                             let tmp_path = std::env::temp_dir().join(format!(
                                 "rzn_ms_att_{}_{}.bin",
-                                &name,
+                                name,
                                 (chrono::Utc::now()
                                     .timestamp_nanos_opt()
                                     .unwrap_or(chrono::Utc::now().timestamp_millis() * 1_000_000))
