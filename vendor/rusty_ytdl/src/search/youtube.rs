@@ -2,6 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use once_cell::sync::Lazy;
 use regex::Regex;
+use reqwest::header::{HeaderMap, HeaderValue, COOKIE};
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use urlencoding::encode;
@@ -24,6 +25,13 @@ static PLAYLIST_ID: Lazy<Regex> =
 
 static ALBUM_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(RDC|O)LAK5uy_[a-zA-Z0-9-_]{33}").unwrap());
+
+fn cookie_headers(cookie: &str) -> Result<HeaderMap, VideoError> {
+    let mut headers = HeaderMap::new();
+    let value = HeaderValue::try_from(cookie).map_err(|_| VideoError::CookieError)?;
+    headers.insert(COOKIE, value);
+    Ok(headers)
+}
 
 #[derive(Clone, derive_more::Display, derivative::Derivative)]
 #[display("YouTube()")]
@@ -69,12 +77,7 @@ impl YouTube {
             }
 
             if let Some(cookie) = request_options.cookies.as_ref() {
-                let host = "https://youtube.com".parse::<url::Url>().unwrap();
-
-                let jar = reqwest::cookie::Jar::default();
-                jar.add_cookie_str(cookie, &host);
-
-                client = client.cookie_provider(Arc::new(jar));
+                client = client.default_headers(cookie_headers(cookie)?);
             }
 
             client.build().map_err(VideoError::Reqwest)?
@@ -550,12 +553,7 @@ impl Playlist {
                 .cookies
                 .as_ref()
                 .unwrap();
-            let host = "https://youtube.com".parse::<url::Url>().unwrap();
-
-            let jar = reqwest::cookie::Jar::default();
-            jar.add_cookie_str(cookie.as_str(), &host);
-
-            client = client.cookie_provider(Arc::new(jar));
+            client = client.default_headers(cookie_headers(cookie)?);
         }
 
         let client = client.build().map_err(VideoError::Reqwest)?;

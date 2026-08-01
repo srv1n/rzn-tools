@@ -3,7 +3,11 @@
 Use `x` for the official X platform API itself: reads, timelines, posting, likes, reposts, follows,
 bookmarks, and authenticated user-context operations.
 
-If you need cookie-based scraping or richer public thread reconstruction, use `x-browser` instead.
+`x` is the portable X route for server and default distributions. If you need a normal signed-in
+browser-session workflow, use `rzn-browser`. `x-browser` remains an optional advanced/legacy
+connector for scraping and richer public thread reconstruction; it can accept explicit cookie
+material, while automatic browser-profile extraction requires the local
+`browser-cookie-import` feature.
 
 ## Auth
 

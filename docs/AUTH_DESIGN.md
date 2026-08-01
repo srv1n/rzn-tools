@@ -170,14 +170,17 @@ MCP flow:
 - Validate with `x/get_auth_status`.
 - Validate user-context grants with `x/whoami`.
 
-### Browser Cookie Connectors
+### Advanced Browser Cookie Import
 
-These extract session cookies from browsers. Primarily for services without official APIs.
+For normal individual signed-in browser-session workflows, use `rzn-browser`. The optional
+`x-browser` connector accepts explicit cookie material for advanced/legacy scraping. Automatic
+extraction from an installed browser profile is local-only and requires the
+`browser-cookie-import` feature (`browser-cookies` remains a compatibility alias).
 
 #### X (Browser Cookies) (`x-browser`)
 | Field | Description |
 |-------|-------------|
-| `browser` | Browser to extract from: `chrome`, `firefox`, `safari`, `brave` |
+| `browser` | Browser profile to import from when `browser-cookie-import` is enabled: `chrome`, `firefox`, `safari`, `brave` |
 
 Alternative (manual credentials):
 | Field | Description |

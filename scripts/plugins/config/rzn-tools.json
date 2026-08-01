@@ -1,6 +1,6 @@
 {
   "id": "rzn-tools",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "name": "rzn-tools",
   "description": "Connector pack (rzn-tools MCP server)",
   "mcp_protocol_version": "2025-06-18",

@@ -1,6 +1,6 @@
 [package]
 name = "rzn_tools_mcp"
-version = "0.2.17"
+version = "0.2.18"
 edition = "2021"
 description = "MCP server for rzn-tools - Model Context Protocol compliant server"
 license = "AGPL-3.0-only"
@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Core library with feature forwarding
-rzn_tools_core = { package = "rzn_tools_core", path = "../rzn_tools_core", default-features = false }
+rzn_tools_core = { package = "rzn_tools_core", version = "0.2.18", path = "../rzn_tools_core", default-features = false }
 
 # MCP and async
 axum = "0.8.6"
@@ -30,8 +30,13 @@ tracing-subscriber = { version = "0.3.20", default-features = false, features = 
 
 [features]
 default = []
-full = ["all-connectors"]
-all-connectors = ["rzn_tools_core/all-connectors"]
+# `full` remains the portable/server-safe distribution profile.
+full = ["server-full"]
+server-full = ["rzn_tools_core/server-full"]
+desktop-full = ["server-full", "browser-cookie-import", "x-browser"]
+all-connectors = ["server-full"]
+browser-cookie-import = ["rzn_tools_core/browser-cookie-import"]
+browser-cookies = ["browser-cookie-import"]
 
 # Fine-grained pass-through
 reddit = ["rzn_tools_core/reddit"]
@@ -52,7 +57,7 @@ web = ["rzn_tools_core/web"]
 web-lite = ["rzn_tools_core/web-lite"]
 x-twitter = ["rzn_tools_core/x-twitter"]
 x-browser = ["x-twitter"]
-x = ["x-twitter"]
+x = ["rzn_tools_core/x"]
 youtube = ["rzn_tools_core/youtube"]
 hackernews = ["rzn_tools_core/hackernews"]
 weather = ["rzn_tools_core/weather"]

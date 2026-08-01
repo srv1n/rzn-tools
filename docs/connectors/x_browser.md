@@ -1,11 +1,13 @@
-# X (Twitter) browser-cookies connector (`x-browser`)
+# X (Twitter) advanced browser connector (`x-browser`)
 
 This document is written for **LLM tool-calling** (MCP) and **CLI** usage. It focuses on the
 practical details a model (or a human) needs: **how to call each tool**, **how pagination works**,
 and **how to pass time filters correctly**.
 
-If you have X API access and want the **official X API v2** tools, use connector `x` and see
-`docs/connectors/x.md`.
+`x-browser` is optional and advanced/legacy. For portable server/default distributions, use the
+official X API connector `x` (see `docs/connectors/x.md`). For normal individual signed-in
+browser-session workflows, use `rzn-browser` instead. rzn-tools does not take a code dependency
+on rzn-browser.
 
 ## Quick reference
 
@@ -28,7 +30,9 @@ Account-level tools (require explicit permission):
 
 ## Authentication
 
-Recommended: browser-cookie auth.
+Preferred: explicitly supplied cookie material. Automatic extraction from an installed browser
+profile is a local opt-in and requires the `browser-cookie-import` feature (the old
+`browser-cookies` name remains a compatibility alias).
 
 ```bash
 rzn-tools setup x-browser

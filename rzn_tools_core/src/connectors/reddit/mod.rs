@@ -1,12 +1,10 @@
 use async_trait::async_trait;
-use roux::subreddit::response::AccountsActive;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use chrono;
 use reqwest;
-use roux::{Reddit, Subreddit, User};
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
@@ -28,14 +26,16 @@ use crate::{URLParamExtraction, URLPatternSpec};
 use rmcp::model::*;
 
 pub struct RedditConnector {
-    client: Option<Reddit>,
     http_client: reqwest::Client,
     api_base_url: String,
+    access_token: Option<String>,
 }
 
 const REDDIT_USER_AGENT: &str = "rzn-tools/0.1.0";
 const REDDIT_CANONICAL_BASE_URL: &str = "https://www.reddit.com";
 const REDDIT_OLD_BASE_URL: &str = "https://old.reddit.com";
+const REDDIT_OAUTH_API_BASE_URL: &str = "https://oauth.reddit.com";
+const REDDIT_OAUTH_TOKEN_BASE_URL: &str = REDDIT_CANONICAL_BASE_URL;
 const DEFAULT_COMMENT_LIMIT: u32 = 25;
 // Soft limit to prevent runaway fetches when callers pass extremely large values.
 const MAX_COMMENT_LIMIT: u32 = 5_000;
@@ -70,9 +70,9 @@ impl RedditConnector {
     pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
         let http_client = Self::reqwest_client(None, REDDIT_USER_AGENT)?;
         let mut connector = RedditConnector {
-            client: None,
             http_client,
             api_base_url: REDDIT_CANONICAL_BASE_URL.to_string(),
+            access_token: None,
         };
         connector.set_auth_details(auth).await?;
 
@@ -94,6 +94,76 @@ impl RedditConnector {
             .build()
             .map_err(|e| ConnectorError::Other(format!("Failed to build HTTP client: {}", e)))
     }
+
+    fn resolve_oauth_token_base_url(details: &AuthDetails) -> Result<String, ConnectorError> {
+        let configured = details
+            .get("oauth_token_base_url")
+            // Keep the original override as a compatibility spelling. It
+            // controls token acquisition, not the OAuth API request base.
+            .or_else(|| details.get("oauth_base_url"))
+            .cloned()
+            .or_else(|| env::var("RZN_REDDIT_OAUTH_TOKEN_BASE_URL").ok())
+            .or_else(|| env::var("RZN_REDDIT_OAUTH_BASE_URL").ok())
+            .unwrap_or_else(|| REDDIT_OAUTH_TOKEN_BASE_URL.to_string());
+        Self::normalize_api_base_url(&configured)
+    }
+
+    fn oauth_token_url(token_base_url: &str) -> String {
+        Self::reddit_url(token_base_url, "/api/v1/access_token")
+    }
+
+    async fn password_grant_access_token(
+        &self,
+        token_base_url: &str,
+        client_id: &str,
+        client_secret: &str,
+        username: &str,
+        password: &str,
+    ) -> Result<String, ConnectorError> {
+        #[derive(Deserialize)]
+        struct TokenResponse {
+            access_token: Option<String>,
+        }
+
+        let url = Self::oauth_token_url(token_base_url);
+        let response = self
+            .http_client
+            .post(&url)
+            .basic_auth(client_id, Some(client_secret))
+            .form(&[
+                ("grant_type", "password"),
+                ("username", username),
+                ("password", password),
+            ])
+            .send()
+            .await
+            .map_err(|error| {
+                ConnectorError::Other(format!("Failed to request Reddit OAuth token: {error}"))
+            })?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(ConnectorError::Authentication(format!(
+                "Reddit OAuth token request returned HTTP {status}"
+            )));
+        }
+
+        let token = response
+            .json::<TokenResponse>()
+            .await
+            .map_err(|error| {
+                ConnectorError::Other(format!("Failed to parse Reddit OAuth response: {error}"))
+            })?
+            .access_token
+            .filter(|token| !token.trim().is_empty())
+            .ok_or_else(|| {
+                ConnectorError::Authentication(
+                    "Reddit OAuth response did not include an access token".to_string(),
+                )
+            })?;
+
+        Ok(token)
+    }
 }
 
 #[async_trait]
@@ -103,7 +173,7 @@ impl Connector for RedditConnector {
     }
 
     fn description(&self) -> &'static str {
-        "A connector for interacting with Reddit using the roux crate."
+        "A connector for Reddit's public JSON and OAuth APIs."
     }
 
     fn display_name(&self) -> &'static str {
@@ -162,47 +232,57 @@ impl Connector for RedditConnector {
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
         let proxy_url = details.get("proxy_url").map(String::as_str);
         self.api_base_url = Self::resolve_api_base_url(&details)?;
+        self.access_token = None;
 
-        // Check if we have credentials
-        if let (Some(username), Some(password), Some(client_id), Some(client_secret)) = (
-            details.get("username"),
-            details.get("password"),
-            details.get("client_id"),
-            details.get("client_secret"),
-        ) {
+        let username = details.get("username");
+        let password = details.get("password");
+        let client_id = details.get("client_id");
+        let client_secret = details.get("client_secret");
+
+        if let Some(access_token) = details
+            .get("access_token")
+            .or_else(|| details.get("oauth_token"))
+            .or_else(|| details.get("token"))
+            .filter(|token| !token.trim().is_empty())
+        {
+            self.http_client = Self::reqwest_client(proxy_url, REDDIT_USER_AGENT)?;
+            self.access_token = Some(access_token.to_string());
+            if details.get("api_base_url").is_none() && env::var("RZN_REDDIT_API_BASE_URL").is_err()
+            {
+                self.api_base_url = REDDIT_OAUTH_API_BASE_URL.to_string();
+            }
+        } else if let (Some(username), Some(password), Some(client_id), Some(client_secret)) =
+            (username, password, client_id, client_secret)
+        {
             let ua = format!("{} (by /u/{})", REDDIT_USER_AGENT, username);
             self.http_client = Self::reqwest_client(proxy_url, &ua)?;
-
-            // Authenticated client
-            let client_builder = Reddit::new(&ua, client_id, client_secret)
-                .username(username)
-                .password(password);
-
-            // We'll store the client builder, not the authenticated client
-            self.client = Some(client_builder.clone());
-
-            // Test the authentication
-            let me = client_builder
-                .login()
-                .await
-                .map_err(|e| ConnectorError::Other(format!("Failed to authenticate: {}", e)))?;
-
-            // Just to verify it works, we don't need to store the result
-            match me.me().await {
-                Ok(user) => tracing::debug!(user = %user.id, "Reddit authentication succeeded"),
-                Err(e) => tracing::warn!(error = %e, "Reddit authentication verification failed"),
-            }
-        } else {
-            // Anonymous client - no login needed
-            let ua = format!("{} (anonymous)", REDDIT_USER_AGENT);
-            self.http_client = Self::reqwest_client(proxy_url, &ua)?;
-            let client = Reddit::new(
-                &ua,
-                "CLIENT_ID_NOT_NEEDED_FOR_ANONYMOUS",
-                "CLIENT_SECRET_NOT_NEEDED_FOR_ANONYMOUS",
+            let oauth_token_base_url = Self::resolve_oauth_token_base_url(&details)?;
+            self.access_token = Some(
+                self.password_grant_access_token(
+                    &oauth_token_base_url,
+                    client_id,
+                    client_secret,
+                    username,
+                    password,
+                )
+                .await?,
             );
 
-            self.client = Some(client);
+            if details.get("api_base_url").is_none() && env::var("RZN_REDDIT_API_BASE_URL").is_err()
+            {
+                self.api_base_url = REDDIT_OAUTH_API_BASE_URL.to_string();
+            }
+        } else if username.is_some()
+            || password.is_some()
+            || client_id.is_some()
+            || client_secret.is_some()
+        {
+            return Err(ConnectorError::InvalidInput(
+                "Reddit OAuth password grant requires username, password, client_id, and client_secret; alternatively supply access_token".to_string(),
+            ));
+        } else {
+            let ua = format!("{} (anonymous)", REDDIT_USER_AGENT);
+            self.http_client = Self::reqwest_client(proxy_url, &ua)?;
         }
 
         Ok(())
@@ -218,6 +298,16 @@ impl Connector for RedditConnector {
     fn config_schema(&self) -> ConnectorConfigSchema {
         ConnectorConfigSchema {
             fields: vec![
+                Field {
+                    name: "access_token".to_string(),
+                    field_type: FieldType::Secret,
+                    description: Some(
+                        "Reddit OAuth bearer token. Prefer this for server execution; public reads remain available without it.".to_string(),
+                    ),
+                    required: false,
+                    label: "OAuth Access Token".to_string(),
+                    options: None,
+                },
                 Field {
                     name: "username".to_string(),
                     field_type: FieldType::Text,
@@ -278,6 +368,16 @@ impl Connector for RedditConnector {
                     ),
                     required: false,
                     label: "API Base URL".to_string(),
+                    options: None,
+                },
+                Field {
+                    name: "oauth_token_base_url".to_string(),
+                    field_type: FieldType::Text,
+                    description: Some(
+                        "Optional OAuth token endpoint base URL. Intended for private test/development endpoints; production defaults to https://www.reddit.com. Bearer API traffic uses oauth.reddit.com.".to_string(),
+                    ),
+                    required: false,
+                    label: "OAuth Base URL".to_string(),
                     options: None,
                 },
             ],
@@ -859,22 +959,22 @@ impl Connector for RedditConnector {
                     .or_else(|| username.strip_prefix("u/"))
                     .unwrap_or(username);
 
-                let user = User::new(username);
-                let about = user
-                    .about(None)
-                    .await
-                    .map_err(|e| ConnectorError::Other(format!("Failed to fetch user: {}", e)))?;
-
-                let data = &about.data;
+                let about = self.fetch_user_about_json(username).await?;
+                let data = about
+                    .get("data")
+                    .and_then(Value::as_object)
+                    .ok_or_else(|| {
+                        ConnectorError::Other("Unexpected Reddit user response".to_string())
+                    })?;
                 let result = json!({
-                    "name": data.name,
-                    "id": data.id,
-                    "link_karma": data.link_karma,
-                    "comment_karma": data.comment_karma,
-                    "created_utc": data.created_utc,
-                    "is_gold": data.is_gold,
-                    "is_mod": data.is_mod,
-                    "verified": data.verified,
+                    "name": data.get("name").cloned().unwrap_or(Value::Null),
+                    "id": data.get("id").cloned().unwrap_or(Value::Null),
+                    "link_karma": data.get("link_karma").cloned().unwrap_or(Value::Null),
+                    "comment_karma": data.get("comment_karma").cloned().unwrap_or(Value::Null),
+                    "created_utc": data.get("created_utc").cloned().unwrap_or(Value::Null),
+                    "is_gold": data.get("is_gold").cloned().unwrap_or(Value::Null),
+                    "is_mod": data.get("is_mod").cloned().unwrap_or(Value::Null),
+                    "verified": data.get("verified").cloned().unwrap_or(Value::Null),
                 });
 
                 let text = serde_json::to_string(&result)?;
@@ -914,21 +1014,24 @@ impl Connector for RedditConnector {
                 // Strip "r/" prefix if present
                 let subreddit_name = subreddit_name.strip_prefix("r/").unwrap_or(subreddit_name);
 
-                let subreddit = Subreddit::new(subreddit_name);
-                let about = subreddit.about().await.map_err(|e| {
-                    ConnectorError::Other(format!("Failed to fetch subreddit info: {}", e))
-                })?;
-
-                let data = &about;
+                let about = self
+                    .fetch_reddit_json(&format!("/r/{subreddit_name}/about.json"), &[], false)
+                    .await?;
+                let data = about
+                    .get("data")
+                    .and_then(Value::as_object)
+                    .ok_or_else(|| {
+                        ConnectorError::Other("Unexpected Reddit subreddit response".to_string())
+                    })?;
                 let result = json!({
-                    "display_name": data.display_name,
-                    "title": data.title,
-                    "description": data.public_description,
-                    "subscribers": data.subscribers,
-                    "active_users": format!("{:#?}", data.active_user_count.as_ref().unwrap_or(&AccountsActive::Number(0))),
-                    "url": data.url.as_ref().map_or("".to_string(), |url| format!("https://www.reddit.com{}", url)),
-                    "created_utc": data.created_utc,
-                    "over18": data.over18,
+                    "display_name": data.get("display_name").cloned().unwrap_or(Value::Null),
+                    "title": data.get("title").cloned().unwrap_or(Value::Null),
+                    "description": data.get("public_description").cloned().unwrap_or(Value::Null),
+                    "subscribers": data.get("subscribers").cloned().unwrap_or(Value::Null),
+                    "active_users": data.get("active_user_count").cloned().unwrap_or(Value::Null),
+                    "url": data.get("url").cloned().unwrap_or(Value::Null),
+                    "created_utc": data.get("created_utc").cloned().unwrap_or(Value::Null),
+                    "over18": data.get("over18").cloned().unwrap_or(Value::Null),
                 });
 
                 let text = serde_json::to_string(&result)?;
@@ -1559,6 +1662,9 @@ impl RedditConnector {
     }
 
     fn reddit_base_url_candidates(&self) -> Vec<&str> {
+        if self.access_token.is_some() {
+            return vec![self.api_base_url.as_str()];
+        }
         if self.api_base_url == REDDIT_CANONICAL_BASE_URL {
             vec![self.api_base_url.as_str(), REDDIT_OLD_BASE_URL]
         } else {
@@ -1574,6 +1680,18 @@ impl RedditConnector {
         )
     }
 
+    fn reddit_get_request(
+        &self,
+        url: &str,
+        params: &[(String, String)],
+    ) -> reqwest::RequestBuilder {
+        let mut request = self.http_client.get(url).query(params);
+        if let Some(access_token) = &self.access_token {
+            request = request.bearer_auth(access_token);
+        }
+        request
+    }
+
     async fn fetch_reddit_json(
         &self,
         path: &str,
@@ -1584,7 +1702,7 @@ impl RedditConnector {
 
         for base_url in self.reddit_base_url_candidates() {
             let url = Self::reddit_url(base_url, path);
-            let mut request = self.http_client.get(&url).query(params);
+            let mut request = self.reddit_get_request(&url, params);
             if include_over_18 {
                 request = request.header(reqwest::header::COOKIE, "over18=1");
             }
@@ -2740,6 +2858,75 @@ mod tests {
             ConnectorError::InvalidParams(_) => {}
             other => panic!("expected InvalidParams, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn password_grant_uses_reddit_public_token_endpoint_by_default() {
+        let token_base_url = RedditConnector::resolve_oauth_token_base_url(&AuthDetails::new())
+            .expect("default token endpoint base");
+
+        assert_eq!(token_base_url, REDDIT_CANONICAL_BASE_URL);
+        assert_eq!(
+            RedditConnector::oauth_token_url(&token_base_url),
+            "https://www.reddit.com/api/v1/access_token"
+        );
+    }
+
+    #[test]
+    fn oauth_access_token_is_applied_to_tool_requests() {
+        let connector = RedditConnector {
+            http_client: reqwest::Client::new(),
+            api_base_url: REDDIT_OAUTH_API_BASE_URL.to_string(),
+            access_token: Some("test-bearer-token".to_string()),
+        };
+
+        let request = connector
+            .reddit_get_request("https://oauth.reddit.com/r/rust/hot.json", &[])
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            request
+                .headers()
+                .get(reqwest::header::AUTHORIZATION)
+                .unwrap(),
+            "Bearer test-bearer-token"
+        );
+    }
+
+    #[test]
+    fn anonymous_requests_do_not_send_an_authorization_header() {
+        let connector = RedditConnector {
+            http_client: reqwest::Client::new(),
+            api_base_url: REDDIT_CANONICAL_BASE_URL.to_string(),
+            access_token: None,
+        };
+
+        let request = connector
+            .reddit_get_request("https://www.reddit.com/r/rust/hot.json", &[])
+            .build()
+            .unwrap();
+
+        assert!(request
+            .headers()
+            .get(reqwest::header::AUTHORIZATION)
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn incomplete_oauth_details_fail_without_echoing_secrets() {
+        let mut connector = RedditConnector::new(AuthDetails::new()).await.unwrap();
+        let mut details = AuthDetails::new();
+        details.insert("client_secret".to_string(), "do-not-log-me".to_string());
+
+        let error = connector
+            .set_auth_details(details)
+            .await
+            .unwrap_err()
+            .to_string();
+
+        assert!(!error.contains("do-not-log-me"));
+        assert!(error.contains("requires username, password, client_id, and client_secret"));
     }
 
     #[test]

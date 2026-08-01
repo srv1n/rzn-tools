@@ -1,6 +1,6 @@
 [package]
 name = "rzn_tools_core"
-version = "0.2.17"
+version = "0.2.18"
 edition = "2021"
 description = "Core library for rzn-tools - unified data source connectors"
 license = "AGPL-3.0-only"
@@ -18,7 +18,7 @@ serde_yaml = "0.9"
 toml = "0.9.10"
 tokio = { version = "1.47.1", default-features = false, features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "io-std", "process"] }
 thiserror = "1.0.69"
-reqwest = { version = "0.12.24", default-features = false, features = ["json", "cookies", "rustls-tls"] }
+reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
 reqwest011 = { package = "reqwest", version = "0.11.27", default-features = false, optional = true }
 rayon = "1.10"
 tracing = { version = "0.1.41", default-features = false, features = ["std"] }
@@ -29,8 +29,7 @@ rmcp = "0.8.0"
 
 # Data source specific (mark connector deps optional)
 # Using forked rookie with rusqlite compatible with libsqlite3-sys v0.30 (for sqlx compatibility)
-rookie = { git = "https://github.com/srv1n/rookie", branch = "main", optional = true }
-roux = { version = "2.2.15", optional = true }
+rookie = { git = "https://github.com/srv1n/rookie", rev = "2bfc235991692bc2e72f2c684b2137146e91b375", optional = true }
 agent-twitter-client = { version = "0.1.2", optional = true }
 yt-transcript-rs = { version = "0.1.8", optional = true }
 rusty_ytdl = { version = "0.7.4", optional = true }
@@ -79,16 +78,20 @@ hyper-rustls = { version = "0.24.2", optional = true }
 dirs = { version = "5.0.1" }
 
 # Local dependencies
-scrapable_derive = { path = "../scrapable_derive" }
+scrapable_derive = { path = "../scrapable_derive", version = "0.1.0" }
 
 [features]
 default = []
 examples = []
-full = ["all-connectors"]
+# `full` is deliberately portable: server consumers must not accidentally pull
+# local browser profile access into their dependency graph.
+full = ["server-full"]
+server-full = ["all-connectors"]
+desktop-full = ["server-full", "browser-cookie-import", "x-browser"]
 all-connectors = [
     "youtube", "reddit", "hackernews", "wikipedia", "arxiv", "pubmed", "play-store", "app-store",
     "app-store-connect", "apple-search-ads",
-    "semantic-scholar", "web", "x-twitter", "x-api", "scihub", "imap", "smtp", "caldav",
+    "semantic-scholar", "web", "x-api", "scihub", "imap", "smtp", "caldav",
     "microsoft-graph", "google-drive", "google-gmail", "google-calendar", "google-people",
     "google-search-console", "bing-webmaster-tools", "linkedin",
     "slack", "github", "atlassian",
@@ -111,7 +114,7 @@ kalshi = []
 discord = ["dep:serenity"]
 google-scholar = ["dep:scraper"]
 youtube = ["dep:yt-transcript-rs", "dep:rusty_ytdl", "dep:quick-xml"]
-reddit = ["dep:roux"]
+reddit = []
 play-store = []
 app-store = []
 app-store-connect = ["dep:flate2", "dep:jsonwebtoken"]
@@ -122,8 +125,8 @@ arxiv = ["dep:quick-xml"]
 pubmed = ["dep:quick-xml", "dep:scraper"]
 semantic-scholar = []
 semantic_scholar = ["semantic-scholar"]
-web = ["dep:scraper", "dep:htmd", "dep:meta_fetcher", "browser-cookies"]
-x-twitter = ["dep:agent-twitter-client", "dep:reqwest011", "browser-cookies"]
+web = ["dep:scraper", "dep:htmd", "dep:meta_fetcher"]
+x-twitter = ["dep:agent-twitter-client", "dep:reqwest011"]
 x-browser = ["x-twitter"]
 x = ["x-api"]
 x-api = []
@@ -131,7 +134,8 @@ scihub = []
 
 # iOS-friendly variants (no desktop-only dependencies like browser cookie extraction)
 # Use these on platforms without desktop browsers (iOS, etc.)
-web-lite = ["dep:scraper", "dep:htmd", "dep:meta_fetcher"]
+# Compatibility name for the now-portable canonical web connector.
+web-lite = ["web"]
 x-lite = ["dep:agent-twitter-client"]
 imap = ["dep:imap", "dep:imap-proto", "dep:mailparse"]
 smtp = ["dep:lettre"]
@@ -177,8 +181,11 @@ linkedin = ["dep:jsonwebtoken"]
 # Local filesystem connector
 localfs = ["dep:lopdf", "dep:zip", "dep:quick-xml", "dep:scraper", "dep:htmd"]
 
-# Browser cookie extraction
-browser-cookies = ["dep:rookie", "dep:publicsuffix"]
+# Local-only browser profile import. This is never enabled by connector
+# features so server and default builds remain portable.
+browser-cookie-import = ["dep:rookie", "dep:publicsuffix"]
+# Backwards-compatible spelling for callers that opted into the old feature.
+browser-cookies = ["browser-cookie-import"]
 
 # Apple Ecosystem connectors (macOS only)
 # These use AppleScript to interact with native macOS apps
@@ -236,7 +243,7 @@ required-features = ["examples"]
 
 [[example]]
 name = "web"
-required-features = ["examples", "web"]
+required-features = ["examples", "web", "browser-cookie-import"]
 
 [[example]]
 name = "wikipedia_example"

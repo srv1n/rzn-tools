@@ -1197,17 +1197,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cookie"
-version = "0.18.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ddef33a339a91ea89fb53151bd0a4689cfce27055c291dfa69945475d22c747"
-dependencies = [
- "percent-encoding 2.3.2",
- "time",
- "version_check",
-]
-
-[[package]]
 name = "cookie_store"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1215,24 +1204,6 @@ checksum = "387461abbc748185c3a6e1673d826918b450b87ff22639429c694619a83b6cf6"
 dependencies = [
  "cookie 0.17.0",
  "idna 0.3.0",
- "log",
- "publicsuffix",
- "serde",
- "serde_derive",
- "serde_json",
- "time",
- "url 2.5.7",
-]
-
-[[package]]
-name = "cookie_store"
-version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2eac901828f88a5241ee0600950ab981148a18f2f756900ffba1b125ca6a3ef9"
-dependencies = [
- "cookie 0.18.1",
- "document-features",
- "idna 1.1.0",
  "log",
  "publicsuffix",
  "serde",
@@ -4003,17 +3974,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
-name = "maybe-async"
-version = "0.2.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cf92c10c7e361d6b99666ec1c6f9805b0bea2c3bd8c78dc6fe98ac5bd78db11"
-dependencies = [
- "proc-macro2 1.0.103",
- "quote 1.0.42",
- "syn 2.0.111",
-]
-
-[[package]]
 name = "md-5"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5633,7 +5593,7 @@ dependencies = [
  "base64 0.21.7",
  "bytes",
  "cookie 0.17.0",
- "cookie_store 0.20.0",
+ "cookie_store",
  "encoding_rs",
  "futures-core",
  "futures-util",
@@ -5681,8 +5641,6 @@ checksum = "b6eff9328d40131d43bd911d42d79eb6a47312002a4daefc9e37f17e74a7701a"
 dependencies = [
  "base64 0.22.1",
  "bytes",
- "cookie 0.18.1",
- "cookie_store 0.21.1",
  "encoding_rs",
  "futures-channel",
  "futures-core",
@@ -5832,7 +5790,7 @@ dependencies = [
 [[package]]
 name = "rookie"
 version = "0.5.6"
-source = "git+https://github.com/srv1n/rookie?branch=main#2bfc235991692bc2e72f2c684b2137146e91b375"
+source = "git+https://github.com/srv1n/rookie?rev=2bfc235991692bc2e72f2c684b2137146e91b375#2bfc235991692bc2e72f2c684b2137146e91b375"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5860,16 +5818,6 @@ dependencies = [
  "windows",
  "zbus",
  "zvariant",
-]
-
-[[package]]
-name = "roux"
-version = "2.2.15"
-dependencies = [
- "maybe-async",
- "reqwest 0.12.25",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -6154,7 +6102,7 @@ checksum = "dd29631678d6fb0903b69223673e122c32e9ae559d0960a38d574695ebc0ea15"
 
 [[package]]
 name = "rzn_tools_cli"
-version = "0.2.17"
+version = "0.2.18"
 dependencies = [
  "arboard",
  "clap",
@@ -6182,7 +6130,7 @@ dependencies = [
 
 [[package]]
 name = "rzn_tools_core"
-version = "0.2.17"
+version = "0.2.18"
 dependencies = [
  "agent-twitter-client",
  "async-trait",
@@ -6227,7 +6175,6 @@ dependencies = [
  "reqwest 0.12.25",
  "rmcp",
  "rookie",
- "roux",
  "rusty_ytdl",
  "schemars 0.8.22",
  "scrapable_derive",
@@ -6253,7 +6200,7 @@ dependencies = [
 
 [[package]]
 name = "rzn_tools_mcp"
-version = "0.2.17"
+version = "0.2.18"
 dependencies = [
  "axum",
  "futures",
@@ -8751,8 +8698,6 @@ dependencies = [
 [[package]]
 name = "yt-transcript-rs"
 version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c1ec85aba5d7ad28b99f5b4baae0dbdf3e6b1703b1054dac04f43125bbc5fa5"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

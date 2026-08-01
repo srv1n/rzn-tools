@@ -99,7 +99,7 @@ rzn-tools workflows sync --remote
 Use the repo entrypoint, not ad-hoc `git tag` muscle memory:
 
 ```bash
-make release VERSION=0.2.17
+make release VERSION=0.2.18
 ```
 
 What it does:
@@ -113,7 +113,7 @@ What it does:
 Preview it without touching git:
 
 ```bash
-make release-dry-run VERSION=0.2.17 ALLOW_DIRTY=1 SKIP_REMOTE_CHECK=1
+make release-dry-run VERSION=0.2.18 ALLOW_DIRTY=1 SKIP_REMOTE_CHECK=1
 ```
 
 Normalize historical GitHub release titles that still use the legacy brand:

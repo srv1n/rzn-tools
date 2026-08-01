@@ -68,7 +68,11 @@ Connectors are organized in `src/connectors/` with each having its own module:
 
 ## Utility Components
 
-**Cookie Management** (`src/utils.rs`): Browser cookie extraction using `rookie` crate with support for Chrome, Firefox, Safari, Brave.
+**Portable versus browser-session access**: The default/server connector profiles use portable
+HTTP and official APIs; they do not read local browser profiles. `browser-cookie-import` is an
+explicit advanced local feature that uses Rookie and publicsuffix for browser-profile extraction.
+For normal individual signed-in browser workflows (Web, X, Reddit, and YouTube), use
+`rzn-browser` as a separate CLI/MCP surface; rzn-tools does not take a code dependency on it.
 
 **Derive Macros** (`scrapable_derive/`): `#[derive(Scrapable)]` for automatic HTML parsing with CSS selector-based field extraction.
 
@@ -106,7 +110,8 @@ Connectors are organized in `src/connectors/` with each having its own module:
 - **Core**: `async-trait`, `serde`, `tokio`, `reqwest`
 - **MCP**: `rmcp` for protocol compliance
 - **Error Handling**: `thiserror`
-- **Authentication**: `rookie` for cookie management (optional, behind `browser-cookies` feature)
+- **Authentication**: connector OAuth/API credentials; optional local browser-profile import via
+  Rookie behind `browser-cookie-import` (`browser-cookies` remains a compatibility alias)
 - **Web Scraping**: `scraper`, `htmd` for HTML parsing
 
 ## MCP Server
@@ -132,7 +137,7 @@ The server aggregates all connectors and exposes them through:
 ### Environment Configuration
 
 Set environment variables to enable authenticated connectors:
-- `REDDIT_CLIENT_ID` & `REDDIT_CLIENT_SECRET` for Reddit
+- `REDDIT_CLIENT_ID` & `REDDIT_CLIENT_SECRET` for Reddit OAuth; anonymous HTTP remains available
 - `GITHUB_TOKEN` for GitHub
 - `SLACK_BOT_TOKEN` for Slack
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc. for LLM search connectors

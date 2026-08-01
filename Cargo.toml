@@ -31,8 +31,8 @@ missing_errors_doc = "allow"
 module_name_repetitions = "allow"
 
 [patch.crates-io]
+yt-transcript-rs = { path = "vendor/yt-transcript-rs" }
 rusty_ytdl = { path = "vendor/rusty_ytdl" }
-roux = { path = "vendor/roux" }
 grammers-session = { path = "vendor/grammers-session" }
 agent-twitter-client = { path = "vendor/agent-twitter-client" }
 

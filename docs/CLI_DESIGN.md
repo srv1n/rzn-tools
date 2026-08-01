@@ -17,7 +17,7 @@ rzn-tools/
 │   │   ├── error.rs         # Centralized error handling
 │   │   ├── auth.rs          # Authentication management
 │   │   ├── mcp_server.rs    # MCP protocol implementation
-│   │   └── utils.rs         # Cookie extraction & utilities
+│   │   └── utils.rs         # Shared utilities; optional browser-cookie import
 │   └── Cargo.toml
 ├── rzn_tools_cli/      # CLI binary crate
 │   ├── src/
@@ -305,7 +305,9 @@ panic = "abort"     # Smaller binary size
 ### Credential Handling
 - Environment variables only (no files)
 - No credentials logged or displayed
-- Secure cookie extraction via `rookie` crate
+- Optional local browser-profile cookie import via Rookie behind `browser-cookie-import`; normal
+  signed-in browser-session workflows use `rzn-browser`, and portable flows use explicit cookie
+  material or official OAuth/API credentials
 - Authentication validation before usage
 
 ### Input Validation

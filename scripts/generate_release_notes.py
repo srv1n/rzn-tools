@@ -303,7 +303,7 @@ def build_release_body(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate GitHub release notes.")
-    parser.add_argument("--tag", required=True, help="Release tag, e.g. v0.2.17")
+    parser.add_argument("--tag", required=True, help="Release tag, e.g. v0.2.18")
     parser.add_argument(
         "--output",
         required=True,

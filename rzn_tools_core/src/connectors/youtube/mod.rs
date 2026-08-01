@@ -6,9 +6,9 @@ use crate::ingest::{
     self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
     Partial, Relationship, Source,
 };
-use crate::utils::{
-    clean_html_entities, get_cookies, match_browser, structured_result, structured_result_with_text,
-};
+use crate::utils::{clean_html_entities, structured_result, structured_result_with_text};
+#[cfg(feature = "browser-cookie-import")]
+use crate::utils::{get_cookies, match_browser};
 use crate::{auth::AuthDetails, Connector, URLParamExtraction, URLPatternSpec};
 use async_trait::async_trait;
 use chrono::TimeZone;
@@ -927,22 +927,43 @@ impl Connector for YouTubeConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
-        if let Some(browser) = details.get("browser") {
-            let browser = match_browser(browser.to_string())
-                .await
-                .map_err(|e| ConnectorError::Other(e.to_string()))?;
-            let cookies = get_cookies(browser, "youtube.com".to_string())
-                .await
-                .map_err(|e| ConnectorError::Other(e.to_string()))?;
-
+        if let Some(cookie_header) = details.get("cookie").or_else(|| details.get("cookies")) {
             self.video_options = VideoOptions {
                 request_options: RequestOptions {
-                    cookies: Some(cookies),
+                    cookies: Some(cookie_header.to_string()),
                     ..Default::default()
                 },
                 ..Default::default()
             };
             return Ok(());
+        }
+
+        if let Some(browser) = details.get("browser") {
+            #[cfg(feature = "browser-cookie-import")]
+            {
+                let browser = match_browser(browser.to_string())
+                    .await
+                    .map_err(|e| ConnectorError::Other(e.to_string()))?;
+                let cookies = get_cookies(browser, "youtube.com".to_string())
+                    .await
+                    .map_err(|e| ConnectorError::Other(e.to_string()))?;
+
+                self.video_options = VideoOptions {
+                    request_options: RequestOptions {
+                        cookies: Some(cookies),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                return Ok(());
+            }
+
+            #[cfg(not(feature = "browser-cookie-import"))]
+            {
+                return Err(ConnectorError::InvalidInput(format!(
+                    "Automatic browser cookie import for '{browser}' requires the browser-cookie-import feature; supply a raw cookie header or use rzn-browser instead"
+                )));
+            }
         }
 
         Ok(()) // No auth

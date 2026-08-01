@@ -2032,6 +2032,15 @@ pub struct JsonRpcHandler {
     server: McpServer,
 }
 
+fn redacted_jsonrpc_request_for_log(request: &Value) -> Value {
+    // JSON-RPC params can carry credentials (notably `secrets/set`) and tool
+    // arguments. Log only protocol routing metadata at every verbosity level.
+    json!({
+        "method": request.get("method").and_then(Value::as_str),
+        "has_id": request.get("id").is_some(),
+    })
+}
+
 fn jsonrpc_error_with_flow_failure_draft(
     request: &CallToolRequestParam,
     error: &ConnectorError,
@@ -2072,7 +2081,7 @@ impl JsonRpcHandler {
 
     /// Process a JSON-RPC request and return a response
     pub async fn handle_request(&self, request: Value) -> Value {
-        debug!("Handling JSON-RPC request: {:?}", request);
+        debug!(request = ?redacted_jsonrpc_request_for_log(&request), "Handling JSON-RPC request");
 
         let id = request.get("id").cloned();
         let method = request.get("method").and_then(|m| m.as_str()).unwrap_or("");
@@ -2328,5 +2337,35 @@ impl JsonRpcHandler {
                 "id": id,
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod request_logging_tests {
+    use super::*;
+
+    #[test]
+    fn secret_payloads_are_absent_from_request_log_fields() {
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": "tenant-request-1",
+            "method": "secrets/set",
+            "params": {
+                "provider": "reddit",
+                "secrets": {
+                    "client_secret": "adversarial-client-secret",
+                    "password": "adversarial-password",
+                    "access_token": "adversarial-access-token"
+                }
+            }
+        });
+
+        let logged = redacted_jsonrpc_request_for_log(&request).to_string();
+
+        assert!(logged.contains("secrets/set"));
+        assert!(!logged.contains("tenant-request-1"));
+        assert!(!logged.contains("adversarial-client-secret"));
+        assert!(!logged.contains("adversarial-password"));
+        assert!(!logged.contains("adversarial-access-token"));
     }
 }

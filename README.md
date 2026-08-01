@@ -102,7 +102,7 @@ These connectors work without credentials but offer additional functionality whe
 | <img src="resources/icons/connectors/imap.svg" width="16" height="16" /> IMAP | Server credentials | Email retrieval |
 | <img src="resources/icons/connectors/mailgun.svg" width="16" height="16" /> SMTP | Server credentials | Outbound email sending |
 | <img src="resources/icons/connectors/x.svg" width="16" height="16" /> X (Twitter) API | Bearer token | Official X API v2: tweets, profiles, recent search |
-| <img src="resources/icons/connectors/x.svg" width="16" height="16" /> X (Twitter) Browser Cookies | Browser cookies | Threads, profiles, search (scraper-based) |
+| <img src="resources/icons/connectors/x.svg" width="16" height="16" /> X (Twitter) Browser | Explicit cookie material or optional local browser import | Advanced/legacy scraper-based threads, profiles, search |
 
 ### Search Providers
 
@@ -678,15 +678,22 @@ Then call `whatsapp/connect` and scan the QR code in your WhatsApp mobile app.
 
 See `docs/connectors/whatsapp.md`.
 
-### Browser Cookie Extraction
+### Optional Browser Cookie Import
 
-For services like X (Twitter), rzn-tools can extract session cookies directly from your browser:
+The default and server distributions do not read browser profiles. For normal individual
+signed-in browser-session workflows (Web, X, Reddit, or YouTube), use `rzn-browser` as a separate
+CLI/MCP surface. rzn-tools does not take a code dependency on it.
+
+When an advanced local integration specifically needs to import a browser profile, build with
+`browser-cookie-import` (or the `desktop-full` profile) and then use the relevant setup flow:
 
 ```bash
 rzn-tools setup x-browser
 ```
 
-The wizard will prompt you to select your browser (Chrome, Firefox, Safari, or Brave) and automatically extract cookies after you confirm you're logged in.
+The wizard prompts for a browser profile and imports cookies after confirmation. This feature uses
+Rookie and is intentionally not part of portable/server profiles. Prefer explicit credential
+material or an official API/OAuth route where available.
 
 ### X Official API Setup
 
@@ -731,7 +738,7 @@ You'll receive a code to enter at a URL in your browser. Once authorized, tokens
 
 ```toml
 [dependencies]
-rzn_tools_core = { version = "0.1", features = ["arxiv", "pubmed"] }
+rzn_tools_core = { version = "0.2.18", features = ["arxiv", "pubmed"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 serde_json = "1"
 ```
@@ -762,8 +769,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 rzn-tools includes a [Model Context Protocol](https://modelcontextprotocol.io/) server for integration with MCP-compatible clients like Claude Desktop.
 
 ```bash
-cargo build --release -p rzn_tools_mcp --features full
+make build-release CARGO_ARGS="-p rzn_tools_mcp --features server-full"
 ./target/release/rzn-tools-mcp
+
+# Narrow a stdio child to the connector(s) assigned to one tenant.
+./target/release/rzn-tools-mcp --connectors reddit
 
 # Native HTTP transport for tunnels / Workers / remote proxies
 ./target/release/rzn-tools-mcp http --bind 127.0.0.1:8000
@@ -818,20 +828,37 @@ Enable only the connectors you need to reduce binary size:
 
 ```toml
 # Research
-rzn_tools_core = { version = "0.1", features = ["arxiv", "pubmed", "semantic-scholar"] }
+rzn_tools_core = { version = "0.2.18", features = ["arxiv", "pubmed", "semantic-scholar"] }
 
 # Social
-rzn_tools_core = { version = "0.1", features = ["reddit", "hackernews", "youtube"] }
+rzn_tools_core = { version = "0.2.18", features = ["reddit", "hackernews", "youtube"] }
 
 # Chat
-rzn_tools_core = { version = "0.1", features = ["telegram", "whatsapp"] }
+rzn_tools_core = { version = "0.2.18", features = ["telegram", "whatsapp"] }
 
 # Enterprise
-rzn_tools_core = { version = "0.1", features = ["slack", "github", "atlassian"] }
+rzn_tools_core = { version = "0.2.18", features = ["slack", "github", "atlassian"] }
 
-# Everything
-rzn_tools_core = { version = "0.1", features = ["full"] }
+# Portable/default connector profile (`full` remains a compatibility alias)
+rzn_tools_core = { version = "0.2.18", features = ["full"] }
+
+# Explicit desktop profile with local browser-cookie import
+rzn_tools_core = { version = "0.2.18", features = ["desktop-full"] }
 ```
+
+### Backend Git source
+
+For a backend that launches `rzn-tools-mcp` as a separate process, pin the Git commit rather
+than using a sibling path dependency. `server-full` is the portable profile; it excludes
+Rookie, publicsuffix, browser-cookie import, and `x-browser`.
+
+```toml
+rzn_tools_mcp = { git = "https://github.com/srv1n/rzn-tools.git", rev = "<full-commit-sha>", features = ["server-full"] }
+```
+
+`rev` must be the full release commit SHA. This is Git-source consumption, not a crates.io
+publication claim; version fallbacks on the workspace's internal path dependencies preserve a
+future packaged-crate route without changing this contract.
 
 ## Architecture
 
@@ -893,12 +920,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 ## Maintainer Release Process
 
 ```bash
-make release VERSION=0.2.17
+make release VERSION=0.2.18
 ```
 
 That command is intentionally strict. It refuses to cut a release from a dirty tree, from the wrong
 branch, or from a local commit that is not already the exact `origin/main` tip. When it passes, it
-creates and pushes `v0.2.17`; GitHub Actions then builds Linux, Windows, macOS Intel, macOS Apple
+creates and pushes `v0.2.18`; GitHub Actions then builds Linux, Windows, macOS Intel, macOS Apple
 Silicon, generates release notes from the delta since the previous tag, and publishes the GitHub Release.
 
 To clean up old GitHub release titles that still use the legacy brand:
@@ -919,7 +946,7 @@ rzn-tools is built on the shoulders of excellent open-source crates:
 | [yt-transcript-rs](https://crates.io/crates/yt-transcript-rs) | YouTube transcript extraction |
 | [rusty_ytdl](https://crates.io/crates/rusty_ytdl) | YouTube video metadata |
 | [agent-twitter-client](https://crates.io/crates/agent-twitter-client) | X (Twitter) client |
-| [rookie](https://crates.io/crates/rookie) | Browser cookie extraction |
+| [rookie](https://crates.io/crates/rookie) | Optional advanced local browser-profile cookie import |
 | [graph-rs-sdk](https://crates.io/crates/graph-rs-sdk) | Microsoft Graph API |
 | [google-drive3](https://crates.io/crates/google-drive3) | Google Drive API |
 | [google-gmail1](https://crates.io/crates/google-gmail1) | Gmail API |

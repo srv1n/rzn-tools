@@ -3,9 +3,9 @@ use crate::error::ConnectorError;
 use crate::ingest::{
     self, Author, ContentBlock, ContentItem, NormalizedItemV1, OutputFormat, Partial, Source,
 };
-use crate::utils::{
-    get_cookies, get_domain, get_user_agent, match_browser, strip_multiple_newlines, Browser,
-};
+#[cfg(feature = "browser-cookie-import")]
+use crate::utils::get_cookies;
+use crate::utils::{get_domain, get_user_agent, match_browser, strip_multiple_newlines, Browser};
 use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -283,8 +283,8 @@ impl WebConnector {
 
     async fn cookies_for_request(
         &self,
-        browser: &Browser,
-        domain: &str,
+        _browser: &Browser,
+        _domain: &str,
         use_cookies: bool,
     ) -> Result<Option<String>, ConnectorError> {
         if !use_cookies {
@@ -300,57 +300,67 @@ impl WebConnector {
             return Ok(Some(explicit_cookie));
         }
 
-        let cache_key = format!("{}|{}", browser_identifier(browser), domain);
-        if let Some(cached) = {
-            let cache = self.cookie_cache.lock().await;
-            cache.get(&cache_key).cloned()
-        } {
-            return Ok(Some(cached));
-        }
-
-        let t0 = std::time::Instant::now();
-        // Guard rookie cookie extraction with a short timeout; fall back to no cookies
-        let cookies_res = tokio::time::timeout(
-            Duration::from_millis(500),
-            get_cookies(browser.clone(), domain.to_string()),
-        )
-        .await;
-
-        let cookies = match cookies_res {
-            Ok(Ok(c)) => c,
-            Ok(Err(e)) => {
-                debug!(
-                    target: "connector.web",
-                    domain = %domain,
-                    error = %e,
-                    "cookie extraction failed; continuing without cookies"
-                );
-                return Ok(None);
-            }
-            Err(_) => {
-                debug!(
-                    target: "connector.web",
-                    domain = %domain,
-                    "cookie extraction timed out; continuing without cookies"
-                );
-                return Ok(None);
-            }
-        };
-        let t1 = std::time::Instant::now();
-
-        debug!(
-            target: "connector.web",
-            domain = %domain,
-            ms = %((t1 - t0).as_millis()),
-            "retrieved cookies from browser store"
-        );
-
+        #[cfg(not(feature = "browser-cookie-import"))]
         {
-            let mut cache = self.cookie_cache.lock().await;
-            cache.insert(cache_key, cookies.clone());
+            Err(ConnectorError::InvalidInput(
+                "Automatic browser cookie import requires the browser-cookie-import feature; supply a Cookie header or use rzn-browser instead".to_string(),
+            ))
         }
 
-        Ok(Some(cookies))
+        #[cfg(feature = "browser-cookie-import")]
+        {
+            let cache_key = format!("{}|{}", browser_identifier(_browser), _domain);
+            if let Some(cached) = {
+                let cache = self.cookie_cache.lock().await;
+                cache.get(&cache_key).cloned()
+            } {
+                return Ok(Some(cached));
+            }
+
+            let t0 = std::time::Instant::now();
+            // Guard rookie cookie extraction with a short timeout; fall back to no cookies
+            let cookies_res = tokio::time::timeout(
+                Duration::from_millis(500),
+                get_cookies(_browser.clone(), _domain.to_string()),
+            )
+            .await;
+
+            let cookies = match cookies_res {
+                Ok(Ok(c)) => c,
+                Ok(Err(e)) => {
+                    debug!(
+                        target: "connector.web",
+                    domain = %_domain,
+                        error = %e,
+                        "cookie extraction failed; continuing without cookies"
+                    );
+                    return Ok(None);
+                }
+                Err(_) => {
+                    debug!(
+                        target: "connector.web",
+                    domain = %_domain,
+                        "cookie extraction timed out; continuing without cookies"
+                    );
+                    return Ok(None);
+                }
+            };
+            let t1 = std::time::Instant::now();
+
+            debug!(
+                target: "connector.web",
+            domain = %_domain,
+                ms = %((t1 - t0).as_millis()),
+                "retrieved cookies from browser store"
+            );
+
+            {
+                let mut cache = self.cookie_cache.lock().await;
+                cache.insert(cache_key, cookies.clone());
+            }
+
+            Ok(Some(cookies))
+        }
     }
 
     fn extract_metadata(&self, document: &scraper::Html) -> Result<WebMetadata, ConnectorError> {
@@ -594,7 +604,7 @@ impl Connector for WebConnector {
                     },
                     required: false,
                     description: Some(
-                        "Which browser profile to use when extracting cookies via Rookie.".into(),
+                        "Which browser profile to import cookies from when browser-cookie-import is enabled.".into(),
                     ),
                     options: Some(browser_options),
                 },
@@ -646,12 +656,12 @@ the main page content (not structured scraping). Example: url=\"https://example.
                             },
                             "use_cookies": {
                                 "type": "boolean",
-                                "description": "Whether to use browser cookies (defaults to false to avoid OS Keychain prompts and slowdowns)",
+                                "description": "Whether to use an explicitly configured Cookie header. Automatic browser import requires browser-cookie-import.",
                                 "default": false
                             },
                         "browser": {
                             "type": "string",
-                            "description": "Override the browser profile used to resolve cookies and user agent",
+                            "description": "Override the browser identity used for user-agent selection; automatic cookie import requires browser-cookie-import.",
                             "enum": ["firefox", "chrome", "edge", "safari", "brave"],
                             "default": "firefox"
                         },
@@ -693,12 +703,12 @@ the main page content (not structured scraping). Example: url=\"https://example.
                             },
                             "use_cookies": {
                                 "type": "boolean",
-                                "description": "Whether to use browser cookies (defaults to false to avoid OS Keychain prompts and slowdowns)",
+                                "description": "Whether to use an explicitly configured Cookie header. Automatic browser import requires browser-cookie-import.",
                                 "default": false
                             },
                             "browser": {
                                 "type": "string",
-                                "description": "Override the browser profile used to resolve cookies and user agent",
+                            "description": "Override the browser identity used for user-agent selection; automatic cookie import requires browser-cookie-import.",
                                 "enum": ["firefox", "chrome", "edge", "safari", "brave"],
                                 "default": "firefox"
                             },
@@ -784,12 +794,12 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
                             },
                             "use_cookies": {
                                 "type": "boolean",
-                                "description": "Whether to use browser cookies (defaults to false to avoid OS Keychain prompts and slowdowns)",
+                                "description": "Whether to use an explicitly configured Cookie header. Automatic browser import requires browser-cookie-import.",
                                 "default": false
                             },
                             "browser": {
                                 "type": "string",
-                                "description": "Override the browser profile used to resolve cookies and user agent",
+                            "description": "Override the browser identity used for user-agent selection; automatic cookie import requires browser-cookie-import.",
                                 "enum": ["firefox", "chrome", "edge", "safari", "brave"]
                             }
                         },
@@ -1145,4 +1155,36 @@ pub fn html_to_markdown(html: &str) -> String {
         ])
         .build();
     converter.convert(html).unwrap_or_else(|_| html.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn explicit_cookie_header_is_used_without_browser_import() {
+        let auth = AuthDetails::from_iter([("cookie".to_string(), "session=portable".to_string())]);
+        let connector = WebConnector::new(auth).await.unwrap();
+
+        let cookies = connector
+            .cookies_for_request(&Browser::Firefox, "example.com", true)
+            .await
+            .unwrap();
+
+        assert_eq!(cookies.as_deref(), Some("session=portable"));
+    }
+
+    #[cfg(not(feature = "browser-cookie-import"))]
+    #[tokio::test]
+    async fn automatic_cookie_import_is_rejected_when_not_compiled() {
+        let connector = WebConnector::new(AuthDetails::new()).await.unwrap();
+
+        let error = connector
+            .cookies_for_request(&Browser::Firefox, "example.com", true)
+            .await
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("browser-cookie-import"));
+    }
 }

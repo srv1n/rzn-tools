@@ -192,7 +192,9 @@ Note: playlist/channel URL resolution is not currently implemented in the resolv
 
 Notes:
 - The resolver routes X URLs to connector `x` (official API). This requires a bearer token.
-- If you only have browser-cookie access, call `x-browser/get_tweet` or `x-browser/get_profile` directly.
+- For the advanced `x-browser` connector, supply explicit cookie material. Automatic installed-browser
+  profile import requires `browser-cookie-import`; use `rzn-browser` for normal individual signed-in
+  browser-session workflows.
 
 ### Wikipedia
 

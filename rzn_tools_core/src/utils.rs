@@ -1,11 +1,11 @@
 use crate::error::ConnectorError;
 use chrono::{Datelike, Duration, Utc};
-#[cfg(feature = "browser-cookies")]
+#[cfg(feature = "browser-cookie-import")]
 use publicsuffix::{List, Psl};
 use rmcp::model::{CallToolResult, Content};
-#[cfg(all(feature = "browser-cookies", target_os = "macos"))]
+#[cfg(all(feature = "browser-cookie-import", target_os = "macos"))]
 use rookie::safari;
-#[cfg(feature = "browser-cookies")]
+#[cfg(feature = "browser-cookie-import")]
 use rookie::{brave, chrome, common::enums::CookieToString, edge, firefox};
 use serde::Serialize;
 use serde_json::{Map as JsonMap, Value as JsonValue};
@@ -26,17 +26,6 @@ pub fn build_reqwest_client(
     }
 }
 
-#[cfg(feature = "browser-cookies")]
-#[derive(Debug, Clone)]
-pub enum Browser {
-    Firefox,
-    Chrome,
-    Edge,
-    Safari,
-    Brave,
-}
-
-#[cfg(not(feature = "browser-cookies"))]
 #[derive(Debug, Clone)]
 pub enum Browser {
     Firefox,
@@ -59,7 +48,7 @@ impl std::fmt::Display for ScraperError {
     }
 }
 
-#[cfg(feature = "browser-cookies")]
+#[cfg(feature = "browser-cookie-import")]
 pub async fn get_cookies(browser: Browser, domain: String) -> Result<String, ScraperError> {
     // Check if domain has a scheme, if not add https://
     let domain_with_scheme = if !domain.starts_with("http://") && !domain.starts_with("https://") {
@@ -85,33 +74,37 @@ pub async fn get_cookies(browser: Browser, domain: String) -> Result<String, Scr
     let domain_str = String::from_utf8_lossy(domain.as_bytes()).to_string();
     //    println!("Domain: {}", domain_str);
 
-    let cookies = match browser {
-        Browser::Firefox => firefox(Some(vec![domain_str.to_string()])),
-        Browser::Chrome => chrome(Some(vec![domain_str.to_string()])),
-        Browser::Edge => edge(Some(vec![domain_str.to_string()])),
-        #[cfg(target_os = "macos")]
-        Browser::Safari => safari(Some(vec![domain_str.to_string()])),
-        #[cfg(not(target_os = "macos"))]
-        Browser::Safari => {
-            return Err(ScraperError::CookieError(
-                "Safari cookies are only available on macOS".to_string(),
-            ))
+    tokio::task::spawn_blocking(move || {
+        let cookies = match browser {
+            Browser::Firefox => firefox(Some(vec![domain_str.to_string()])),
+            Browser::Chrome => chrome(Some(vec![domain_str.to_string()])),
+            Browser::Edge => edge(Some(vec![domain_str.to_string()])),
+            #[cfg(target_os = "macos")]
+            Browser::Safari => safari(Some(vec![domain_str.to_string()])),
+            #[cfg(not(target_os = "macos"))]
+            Browser::Safari => {
+                return Err(ScraperError::CookieError(
+                    "Safari cookies are only available on macOS".to_string(),
+                ))
+            }
+            Browser::Brave => brave(Some(vec![domain_str.to_string()])),
         }
-        Browser::Brave => brave(Some(vec![domain_str.to_string()])),
-    }
-    .map_err(|e| ScraperError::CookieError(e.to_string()))?;
-    //   println!("Cookies: {:?}", cookies);
-    Ok(cookies.to_string())
+        .map_err(|e| ScraperError::CookieError(e.to_string()))?;
+        Ok(cookies.to_string())
+    })
+    .await
+    .map_err(|error| {
+        ScraperError::CookieError(format!("browser cookie import task failed: {error}"))
+    })?
 }
 
-#[cfg(not(feature = "browser-cookies"))]
+#[cfg(not(feature = "browser-cookie-import"))]
 pub async fn get_cookies(_browser: Browser, _domain: String) -> Result<String, ScraperError> {
     Err(ScraperError::CookieError(
-        "browser-cookies feature not enabled".to_string(),
+        "browser cookie import is unavailable; enable browser-cookie-import or supply a Cookie header".to_string(),
     ))
 }
 
-#[cfg(feature = "browser-cookies")]
 pub async fn match_browser(browser: String) -> Result<Browser, ConnectorError> {
     match browser.as_str() {
         "firefox" => Ok(Browser::Firefox),
@@ -126,22 +119,7 @@ pub async fn match_browser(browser: String) -> Result<Browser, ConnectorError> {
     }
 }
 
-#[cfg(not(feature = "browser-cookies"))]
-pub async fn match_browser(browser: String) -> Result<Browser, ConnectorError> {
-    match browser.as_str() {
-        "firefox" => Ok(Browser::Firefox),
-        "chrome" => Ok(Browser::Chrome),
-        "edge" => Ok(Browser::Edge),
-        "safari" => Ok(Browser::Safari),
-        "brave" => Ok(Browser::Brave),
-        _ => Err(ConnectorError::Other(format!(
-            "Invalid browser: {}",
-            browser
-        ))),
-    }
-}
-
-#[cfg(feature = "browser-cookies")]
+#[cfg(feature = "browser-cookie-import")]
 pub fn get_domain(url: &str) -> Result<String, ConnectorError> {
     let url_with_scheme = if !url.starts_with("http://") && !url.starts_with("https://") {
         format!("https://{}", url)
@@ -168,7 +146,7 @@ pub fn get_domain(url: &str) -> Result<String, ConnectorError> {
     Ok(domain_str)
 }
 
-#[cfg(not(feature = "browser-cookies"))]
+#[cfg(not(feature = "browser-cookie-import"))]
 pub fn get_domain(url: &str) -> Result<String, ConnectorError> {
     let url_with_scheme = if !url.starts_with("http://") && !url.starts_with("https://") {
         format!("https://{}", url)
@@ -186,7 +164,6 @@ pub fn get_domain(url: &str) -> Result<String, ConnectorError> {
     Ok(domain.to_string())
 }
 
-#[cfg(feature = "browser-cookies")]
 pub fn get_user_agent(browser: Browser) -> String {
     match browser {
         Browser::Firefox => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0".to_string(),
@@ -195,12 +172,6 @@ pub fn get_user_agent(browser: Browser) -> String {
         Browser::Safari => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15".to_string(),
         Browser::Brave => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36".to_string(),
     }
-}
-
-#[cfg(not(feature = "browser-cookies"))]
-pub fn get_user_agent(_browser: Browser) -> String {
-    // Return a generic UA; useful for minimal builds.
-    "Mozilla/5.0".to_string()
 }
 
 pub fn strip_multiple_newlines(text: &str) -> String {

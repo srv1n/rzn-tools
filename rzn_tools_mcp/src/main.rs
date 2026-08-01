@@ -13,6 +13,7 @@ enum TransportMode {
 struct Config {
     transport: TransportMode,
     http: HttpConfig,
+    exposed_connectors: Option<HashSet<String>>,
 }
 
 #[tokio::main]
@@ -26,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match config.transport {
         TransportMode::Stdio => {
             info!("MCP Server ready, listening on stdio");
-            if let Err(e) = run_stdio_server().await {
+            if let Err(e) = run_stdio_server(config.exposed_connectors).await {
                 error!("Transport error: {}", e);
                 return Err(e);
             }
@@ -109,8 +110,9 @@ impl Config {
             http: HttpConfig {
                 bind,
                 allowed_hosts,
-                exposed_connectors,
+                exposed_connectors: exposed_connectors.clone(),
             },
+            exposed_connectors,
         })
     }
 }

@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.18] - 2026-08-01
+
 ### Added
+- Distribution profiles: add portable `server-full` and `full` profiles plus `desktop-full` and explicit `browser-cookie-import` opt-in for local browser-profile cookie extraction; retain `browser-cookies` as a compatibility alias.
 - CLI: add `rzn-tools skills status|install|update|remove` to manage the bundled Agent Skill across project/global scopes and symlink it into Claude Code, Gemini, generic Agent Skills, and Codex skill directories.
 - CLI/Packaging: add `rzn-tools workflows list|sync` so installed users can inspect bundled starter workflows/examples, sync the local bundled copy into a managed asset dir, or pull the latest published workflow bundle from GitHub Releases.
 - Core/Packaging: bundle connector SVG icons under `resources/icons/connectors`, add a connector-to-icon manifest for downstream repos, and surface those shipped SVGs through `connectors/list.icon_url` and `tools/list.icons`.
@@ -40,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integrations: add bundle-shipped system metadata and starter quickstart assets for `wikipedia`, `youtube_transcripts`, `pubmed`, `reddit`, and `web_search`.
 
 ### Changed
+- Connectors: make portable API/HTTP access the default boundary—Web is cookie-free by default, Reddit uses anonymous HTTP plus OAuth, and official `x` is the portable X route. Document `rzn-browser` as the separate normal signed-in browser-session surface; keep `x-browser` advanced/legacy with automatic profile extraction opt-in.
 - YouTube: `youtube/get` now accepts playlist IDs/URLs and channel handles/URLs and returns ordered `entries[]`; `fetch` routes YouTube playlist/channel URLs to enumeration instead of generic web scraping.
 - YouTube: `youtube/list` now uses native YouTube page parsing plus Innertube continuation pagination for channel uploads and playlist videos; omitted `limit` means enumerate until continuations are exhausted.
 - CLI: `rzn-tools get <connector> <id> --field <name> --output text` prints scalar fields directly, so YouTube transcripts can be piped without `jq`.
@@ -60,6 +64,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SciHub connector now performs open-access lookup by DOI (Unpaywall/OpenAlex) and does not bypass paywalls.
 
 ### Fixed
+- MCP: apply `--connectors` / `RZN_TOOLS_MCP_CONNECTORS` to stdio children as well as HTTP,
+  so a backend can launch a narrow connector process per tenant.
+- MCP: never log JSON-RPC request parameters, preventing `secrets/set` credential values from
+  reaching debug or trace logs.
+- Distribution: keep the legacy `x-browser` connector out of `server-full`; it is now included
+  only by `desktop-full` alongside explicit browser-cookie import.
+- Reddit: use Reddit's public host for password-grant token acquisition and `oauth.reddit.com`
+  for bearer API calls.
 - Core: reject non-string `output_format` values instead of silently defaulting to raw output.
 - Core/MCP: allow scalar auth details (`string`/`number`/`boolean`/`null`) and coerce scalars to strings (with `null` treated as unset) so typed config fields like IMAP `port: 993` deserialize correctly.
 - YouTube: parse channel upload grids that YouTube now serves as `lockupViewModel` items, fixing handle/channel URL enumeration.

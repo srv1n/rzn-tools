@@ -1,13 +1,17 @@
 // src/connectors/x_browser/mod.rs
 
 use std::borrow::Cow;
+#[cfg(any(feature = "browser-cookie-import", test))]
 use std::collections::HashMap;
+#[cfg(feature = "browser-cookie-import")]
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
-use crate::utils::{get_cookies, match_browser, structured_result_with_text};
+use crate::utils::structured_result_with_text;
+#[cfg(feature = "browser-cookie-import")]
+use crate::utils::{get_cookies, match_browser};
 use crate::{auth::AuthDetails, Connector, URLParamExtraction, URLPatternSpec};
 use agent_twitter_client::api::endpoints::Endpoints;
 use agent_twitter_client::api::requests::request_api;
@@ -29,12 +33,14 @@ use agent_twitter_client::search::SearchMode;
 // use agent_twitter_client::error::Error as AgentError;
 
 use rmcp::model::*;
+#[cfg(feature = "browser-cookie-import")]
 use rookie::{any_browser, common::enums::CookieToString};
 
 pub struct XConnector {
     scraper: Scraper, // Directly use AgentScraper
 }
 
+#[cfg(feature = "browser-cookie-import")]
 const X_COOKIE_DOMAINS: [&str; 2] = ["x.com", "twitter.com"];
 const X_BROWSER_RELOGIN_HINT: &str = "Log into X in the selected browser, close the browser completely, and rerun `rzn-tools setup x-browser`.";
 
@@ -100,6 +106,7 @@ fn parse_search_mode(raw: Option<&str>) -> Result<SearchMode, ConnectorError> {
     }
 }
 
+#[cfg(any(feature = "browser-cookie-import", test))]
 fn parse_cookie_name_value(raw_cookie: &str) -> Option<(&str, &str)> {
     let (name, value) = raw_cookie.split_once('=')?;
     let name = name.trim();
@@ -110,6 +117,7 @@ fn parse_cookie_name_value(raw_cookie: &str) -> Option<(&str, &str)> {
     Some((name, value))
 }
 
+#[cfg(any(feature = "browser-cookie-import", test))]
 fn has_required_x_session_cookies(cookie_header: &str) -> bool {
     let mut has_ct0 = false;
     let mut has_auth_token = false;
@@ -131,6 +139,7 @@ fn has_required_x_session_cookies(cookie_header: &str) -> bool {
     false
 }
 
+#[cfg(any(feature = "browser-cookie-import", test))]
 fn merge_cookie_headers(cookie_headers: &[String]) -> String {
     let mut cookie_order = Vec::<String>::new();
     let mut cookie_values = HashMap::<String, String>::new();
@@ -157,6 +166,7 @@ fn merge_cookie_headers(cookie_headers: &[String]) -> String {
     merged.join("; ")
 }
 
+#[cfg(feature = "browser-cookie-import")]
 fn push_cookie_candidate(candidates: &mut Vec<String>, cookie_header: String) {
     if cookie_header.is_empty() || !has_required_x_session_cookies(&cookie_header) {
         return;
@@ -169,6 +179,7 @@ fn push_cookie_candidate(candidates: &mut Vec<String>, cookie_header: String) {
     }
 }
 
+#[cfg(feature = "browser-cookie-import")]
 fn build_cookie_candidates(domain_cookies: &HashMap<&'static str, String>) -> Vec<String> {
     let mut candidates = Vec::<String>::new();
     let x_cookie = domain_cookies.get("x.com").cloned();
@@ -195,6 +206,7 @@ fn build_cookie_candidates(domain_cookies: &HashMap<&'static str, String>) -> Ve
     candidates
 }
 
+#[cfg(feature = "browser-cookie-import")]
 fn load_cookie_header_from_db_path(
     cookie_db_path: &Path,
     domain: &str,
@@ -207,7 +219,7 @@ fn load_cookie_header_from_db_path(
     Ok(cookies.to_string())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(feature = "browser-cookie-import", target_os = "macos"))]
 fn browser_profile_cookie_db_paths(browser_name: &str) -> Vec<PathBuf> {
     let Some(home_dir) = dirs::home_dir() else {
         return Vec::new();
@@ -269,11 +281,12 @@ fn browser_profile_cookie_db_paths(browser_name: &str) -> Vec<PathBuf> {
     cookie_db_paths
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(feature = "browser-cookie-import", not(target_os = "macos")))]
 fn browser_profile_cookie_db_paths(_browser_name: &str) -> Vec<PathBuf> {
     Vec::new()
 }
 
+#[cfg(feature = "browser-cookie-import")]
 async fn load_x_browser_cookie_candidates(
     browser_name: &str,
 ) -> Result<Vec<String>, ConnectorError> {
@@ -714,36 +727,47 @@ impl Connector for XConnector {
             return Ok(());
         }
 
-        // Check for browser-based cookie extraction
+        // Browser-profile extraction is intentionally local-only. Portable
+        // builds accept injected cookie material but never inspect profiles.
         if let Some(browser) = details.get("browser") {
-            let cookie_candidates = load_x_browser_cookie_candidates(browser).await?;
-            let mut last_error: Option<ConnectorError> = None;
+            #[cfg(feature = "browser-cookie-import")]
+            {
+                let cookie_candidates = load_x_browser_cookie_candidates(browser).await?;
+                let mut last_error: Option<ConnectorError> = None;
 
-            for cookie_candidate in cookie_candidates {
-                match self
-                    .scraper
-                    .set_from_cookie_string(&cookie_candidate)
-                    .await
-                    .map_err(map_scraper_error)
-                {
-                    Ok(()) => {}
-                    Err(error) => {
-                        last_error = Some(error);
-                        continue;
+                for cookie_candidate in cookie_candidates {
+                    match self
+                        .scraper
+                        .set_from_cookie_string(&cookie_candidate)
+                        .await
+                        .map_err(map_scraper_error)
+                    {
+                        Ok(()) => {}
+                        Err(error) => {
+                            last_error = Some(error);
+                            continue;
+                        }
+                    }
+
+                    match self.verify_authenticated_session().await {
+                        Ok(()) => return Ok(()),
+                        Err(error) => last_error = Some(error),
                     }
                 }
 
-                match self.verify_authenticated_session().await {
-                    Ok(()) => return Ok(()),
-                    Err(error) => last_error = Some(error),
-                }
-            }
-
-            return Err(last_error.unwrap_or_else(|| {
+                return Err(last_error.unwrap_or_else(|| {
                 ConnectorError::Authentication(format!(
                     "Could not load a usable browser session for {browser}. {X_BROWSER_RELOGIN_HINT}"
                 ))
             }));
+            }
+
+            #[cfg(not(feature = "browser-cookie-import"))]
+            {
+                return Err(ConnectorError::InvalidInput(format!(
+                    "Automatic browser cookie import for '{browser}' requires the browser-cookie-import feature; supply a raw cookie header or use rzn-browser instead"
+                )));
+            }
         }
 
         // If no cookies, try credentials-based auth
@@ -778,6 +802,7 @@ impl Connector for XConnector {
     fn config_schema(&self) -> ConnectorConfigSchema {
         ConnectorConfigSchema {
             fields: vec![
+                #[cfg(feature = "browser-cookie-import")]
                 Field {
                     //Browser
                     name: "browser".to_string(),
@@ -793,7 +818,7 @@ impl Connector for XConnector {
                     },
                     required: false, // Only required if using cookie auth, handled by logic
                     description: Some(
-                        "Select the browser from which to extract cookies.".to_string(),
+                        "Select the browser from which to import cookies locally.".to_string(),
                     ),
                     options: None,
                 },
@@ -803,7 +828,7 @@ impl Connector for XConnector {
                     field_type: FieldType::Secret,
                     required: false,
                     description: Some(
-                        "Optional raw Cookie header containing at least `ct0` and `auth_token`. Use this to bypass browser extraction when needed.".to_string(),
+                        "Raw Cookie header containing at least `ct0` and `auth_token`. This is the portable authenticated path.".to_string(),
                     ),
                     options: None,
                 },

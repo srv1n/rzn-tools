@@ -1,6 +1,6 @@
 [package]
 name = "rzn_tools_cli"
-version = "0.2.17"
+version = "0.2.18"
 edition = "2021"
 description = "CLI interface for rzn-tools - unified data access tool"
 license = "AGPL-3.0-only"
@@ -15,8 +15,8 @@ path = "src/main.rs"
 
 [dependencies]
 # Core library (feature-forwarding from this crate)
-rzn_tools_core = { package = "rzn_tools_core", path = "../rzn_tools_core", default-features = false }
-rzn_tools_mcp = { package = "rzn_tools_mcp", path = "../rzn_tools_mcp", default-features = false }
+rzn_tools_core = { package = "rzn_tools_core", version = "0.2.18", path = "../rzn_tools_core", default-features = false }
+rzn_tools_mcp = { package = "rzn_tools_mcp", version = "0.2.18", path = "../rzn_tools_mcp", default-features = false }
 
 # CLI dependencies - optimized for binary size
 clap = { version = "4.5.4", default-features = false, features = ["std", "derive", "env", "help", "usage", "error-context"] }
@@ -67,12 +67,17 @@ default-connectors = [
     "exa-search",
     "weather",
     "semantic-scholar",
-    "web-lite",
+    "web",
     "wikipedia",
     "youtube",
 ]
-full = ["all-connectors"]
-all-connectors = ["rzn_tools_core/all-connectors"]
+# `full` remains the portable/server-safe distribution profile.
+full = ["server-full"]
+server-full = ["rzn_tools_core/server-full", "rzn_tools_mcp/server-full"]
+desktop-full = ["server-full", "browser-cookie-import", "x-browser"]
+all-connectors = ["server-full"]
+browser-cookie-import = ["rzn_tools_core/browser-cookie-import", "rzn_tools_mcp/browser-cookie-import"]
+browser-cookies = ["browser-cookie-import"]
 
 # Fine-grained pass-through features
 reddit = ["rzn_tools_core/reddit", "rzn_tools_mcp/reddit"]

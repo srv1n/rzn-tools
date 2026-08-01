@@ -352,8 +352,10 @@ For token import and field-by-field setup, see `docs/connectors/x.md`.
 
 ---
 
-### X (Browser Cookies)
-> Scraper-based X access via browser cookies (threads/conversation context)
+### X (Advanced Browser)
+> Advanced/legacy scraper-based X access for threads and conversation context. Prefer the
+> official `x` connector for portable API access and `rzn-browser` for normal individual
+> signed-in browser-session workflows.
 
 For detailed, LLM-friendly calling patterns (MCP + CLI), including **date/time filters** and
 **pagination cursor usage**, see `docs/connectors/x_browser.md`.
@@ -380,10 +382,13 @@ For detailed, LLM-friendly calling patterns (MCP + CLI), including **date/time f
 | Tweet details | `x-browser/get_tweet` |
 | Thread/conversation | `x-browser/get_thread` |
 
-**Authentication:** Required (browser cookies or credentials)
+**Authentication:** Required (explicit cookie material or credentials). Automatic installed-browser
+profile import is local-only and requires `browser-cookie-import` (`browser-cookies` remains a
+compatibility alias).
 
 ```bash
 rzn-tools setup x-browser
+# Requires `browser-cookie-import` / `desktop-full`:
 rzn-tools config set x-browser --browser chrome
 ```
 

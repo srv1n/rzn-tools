@@ -1,0 +1,67 @@
+[package]
+name = "yt-transcript-rs"
+version = "0.1.8"
+authors = ["Alexis Kinsella <akinsella@users.noreply.github.com>"]
+description = "A Rust library for fetching and working with YouTube video transcripts"
+license = "MIT"
+repository = "https://github.com/akinsella/yt-transcript-rs"
+documentation = "https://docs.rs/yt-transcript-rs"
+readme = "README.md"
+keywords = ["youtube", "transcript", "subtitles", "captions", "video"]
+categories = ["api-bindings", "web-programming", "multimedia"]
+edition = "2021"
+
+[dependencies]
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0.12"
+
+# HTTP client
+reqwest = { version = "0.12.15", features = ["json"] }
+
+# Async runtime
+tokio = { version = "1.45.0", features = ["full", "macros"] }
+
+# Serialization/Deserialization
+serde = { version = "1.0.219", features = ["alloc", "derive", "serde_derive"] }
+serde_json = "1.0.140"
+
+# Base64 encoding
+base64 = "0.22"
+
+# URL parsing
+url = "2.5"
+
+# Date and time
+chrono = { version = "0.4.41", features = ["serde"] }
+
+# Parsing and text processing
+regex = "1.10.2"
+quick-xml = { version = "0.37.5", features = ["serialize"] }
+cargo-husky = { version = "1.5.0", features = ["precommit-hook", "run-cargo-fmt", "run-cargo-clippy", "run-cargo-check"] }
+html2text = "0.14.4"
+html-escape = "0.2.13"
+scraper = "0.23.1"
+clap = { version = "4.5.1", features = ["env"] }
+
+
+[dev-dependencies]
+cargo-husky = "1.5.0"
+# Testing dependencies
+mockito = "1.7.0"
+tempfile = "3.19.1"
+dotenvy = "0.15.7"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+clap = { version = "4.5.1", features = ["derive"] }
+
+
+[features]
+default = []
+mock = []
+ci = ["mock"]
+
+# Documentation for optimized release build
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
