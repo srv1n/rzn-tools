@@ -32,6 +32,14 @@ build-release: ensure-sccache
 test: ensure-sccache
 	cargo test $(CARGO_ARGS)
 
+check-server-profile: ensure-sccache
+	cargo build -p rzn_tools_mcp --no-default-features --features server-full
+	@for dep in rookie publicsuffix rusqlite; do \
+		if cargo tree -p rzn_tools_mcp --no-default-features --features server-full -i $$dep >/dev/null 2>&1; then \
+			echo "server-full unexpectedly includes $$dep"; exit 1; \
+		fi; \
+	done
+
 check: ensure-sccache
 	cargo check $(CARGO_ARGS)
 

@@ -86,9 +86,12 @@ examples = []
 # `full` is deliberately portable: server consumers must not accidentally pull
 # local browser profile access into their dependency graph.
 full = ["server-full"]
-server-full = ["all-connectors"]
-desktop-full = ["server-full", "browser-cookie-import", "x-browser"]
-all-connectors = [
+server-full = ["server-connectors"]
+# Telegram remains available to local distributions, but its upstream MTProto
+# dependency chain cannot resolve from a fresh Cargo consumer because it pins a
+# yanked crate. Keep the backend profile independently consumable.
+desktop-full = ["all-connectors", "browser-cookie-import", "x-browser"]
+server-connectors = [
     "youtube", "reddit", "hackernews", "wikipedia", "arxiv", "pubmed", "play-store", "app-store",
     "app-store-connect", "apple-search-ads",
     "semantic-scholar", "web", "x-api", "scihub", "imap", "smtp", "caldav",
@@ -100,8 +103,9 @@ all-connectors = [
     "parallel-search",
     "macos-automation", "macos-spotlight",
     "biorxiv", "rss", "weather", "polymarket", "kalshi", "discord", "google-scholar", "localfs",
-    "whatsapp", "telegram"
+    "whatsapp"
 ]
+all-connectors = ["server-connectors", "telegram"]
 # NOTE: "apple-health" is excluded - HealthKit APIs exist on macOS 14+ but
 # isHealthDataAvailable() returns false (no Health app/data store on Mac yet)
 

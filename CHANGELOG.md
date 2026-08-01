@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reaching debug or trace logs.
 - Distribution: keep the legacy `x-browser` connector out of `server-full`; it is now included
   only by `desktop-full` alongside explicit browser-cookie import.
+- Distribution: keep `telegram` out of `server-full` while its upstream MTProto dependency chain
+  resolves through a yanked crate; retain it in `all-connectors` and `desktop-full`.
 - Reddit: use Reddit's public host for password-grant token acquisition and `oauth.reddit.com`
   for bearer API calls.
 - Core: reject non-string `output_format` values instead of silently defaulting to raw output.

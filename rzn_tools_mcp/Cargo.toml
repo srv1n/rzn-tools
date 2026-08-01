@@ -33,8 +33,8 @@ default = []
 # `full` remains the portable/server-safe distribution profile.
 full = ["server-full"]
 server-full = ["rzn_tools_core/server-full"]
-desktop-full = ["server-full", "browser-cookie-import", "x-browser"]
-all-connectors = ["server-full"]
+desktop-full = ["rzn_tools_core/desktop-full"]
+all-connectors = ["rzn_tools_core/all-connectors"]
 browser-cookie-import = ["rzn_tools_core/browser-cookie-import"]
 browser-cookies = ["browser-cookie-import"]
 
