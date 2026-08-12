@@ -17,8 +17,9 @@ Input:
 
 Examples:
 ```bash
-rzn-tools play-store app --id com.whatsapp
-rzn-tools play-store app --id com.whatsapp --output-format normalized_v1
+rzn-tools tools play-store
+rzn-tools call play-store app --args '{"id":"com.whatsapp"}'
+rzn-tools --output json call play-store app --args '{"id":"com.whatsapp"}'
 rzn-tools fetch "https://play.google.com/store/apps/details?id=com.whatsapp&hl=en&gl=US"
 rzn-tools fetch --output-format display_v1 "https://play.google.com/store/apps/details?id=com.whatsapp&hl=en&gl=US"
 ```

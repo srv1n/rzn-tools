@@ -112,22 +112,17 @@ Filter queries containing a keyword:
 ## CLI examples
 
 ```bash
-rzn-tools google-search-console list-sites
+rzn-tools call google-search-console list_sites --args '{}'
 ```
 
 ```bash
-rzn-tools google-search-console search-analytics \
-  --site-url sc-domain:example.com \
-  --start-date 2026-02-05 \
-  --end-date 2026-03-04 \
-  --dimensions query \
-  --row-limit 1000
+rzn-tools call google-search-console search_analytics \
+  --args '{"site_url":"sc-domain:example.com","start_date":"2026-02-05","end_date":"2026-03-04","dimensions":["query"],"row_limit":1000}'
 ```
 
 ```bash
-rzn-tools google-search-console inspect-url \
-  --site-url sc-domain:example.com \
-  --inspection-url https://example.com/blog/post
+rzn-tools call google-search-console inspect_url \
+  --args '{"site_url":"sc-domain:example.com","inspection_url":"https://example.com/blog/post"}'
 ```
 
 ## Troubleshooting

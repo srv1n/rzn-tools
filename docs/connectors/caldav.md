@@ -84,11 +84,11 @@ Optional:
 1. Configure credentials:
    - `rzn-tools setup caldav`
 2. Verify discovery:
-   - `rzn-tools caldav list-calendars`
+   - `rzn-tools call caldav list_calendars --args '{}'`
 3. (Optional) pin a calendar URL for default reads/writes:
    - set `calendar_url` in setup or export `CALDAV_CALENDAR_URL`
 4. Validate with an event read:
-   - `rzn-tools caldav list-events --limit 5`
+   - `rzn-tools call caldav list --args '{"limit":5}'`
 
 ## Provider Configuration Guide
 
@@ -109,7 +109,7 @@ These `base_url` values are the most common working defaults. Some self-hosted o
    - `username`: Apple ID email
    - `password`: app-specific password
 3. Discover calendars:
-   - `rzn-tools caldav list-calendars`
+   - `rzn-tools call caldav list_calendars --args '{}'`
 4. Pick one `url` from the response and store it as `calendar_url` for deterministic writes.
 
 Notes:
@@ -124,7 +124,7 @@ Notes:
    - `username`: Fastmail login/email
    - `password`: app password
 3. Verify:
-   - `rzn-tools caldav list-calendars`
+   - `rzn-tools call caldav list_calendars --args '{}'`
 
 Notes:
 - If your account has domain aliases, use the same login identity you use in Fastmail Web.
@@ -137,7 +137,7 @@ Notes:
    - `username`: Nextcloud username
    - `password`: app password
 3. Verify:
-   - `rzn-tools caldav list-calendars`
+   - `rzn-tools call caldav list_calendars --args '{}'`
 
 Notes:
 - Reverse proxies must allow `PROPFIND`, `REPORT`, `PUT`, and `DELETE`.
@@ -150,7 +150,7 @@ Notes:
    - `base_url`: your Radicale root URL
    - `username` / `password`: Radicale auth credentials
 3. Verify:
-   - `rzn-tools caldav list-calendars`
+   - `rzn-tools call caldav list_calendars --args '{}'`
 
 Notes:
 - Collection ACLs must allow read/write for the target user.
@@ -160,25 +160,22 @@ Notes:
 ### Read flow
 
 ```bash
-rzn-tools caldav list-calendars
-rzn-tools caldav list-events --limit 20 --output-format normalized_v1
-rzn-tools caldav get-event --item-ref "caldav:event:<base64url>"
+rzn-tools call caldav list_calendars --args '{}'
+rzn-tools call caldav list --args '{"limit":20,"output_format":"normalized_v1"}'
+rzn-tools call caldav get --args '{"item_ref":"caldav:event:<base64url>"}'
 ```
 
 ### Write flow
 
 ```bash
-rzn-tools caldav create-event \
-  --summary "Team Sync" \
-  --start "2026-02-21T15:00:00Z" \
-  --end "2026-02-21T15:30:00Z"
+rzn-tools call caldav create \
+  --args '{"summary":"Team Sync","start":"2026-02-21T15:00:00Z","end":"2026-02-21T15:30:00Z"}'
 
-rzn-tools caldav update-event \
-  --url "https://example.com/cal/event.ics" \
-  --summary "Updated title"
+rzn-tools call caldav update \
+  --args '{"url":"https://example.com/cal/event.ics","summary":"Updated title"}'
 
-rzn-tools caldav delete-event \
-  --item-ref "caldav:event:<base64url>"
+rzn-tools call caldav delete \
+  --args '{"item_ref":"caldav:event:<base64url>"}'
 ```
 
 ### Advanced write flow (`raw_ical`)
@@ -186,8 +183,8 @@ rzn-tools caldav delete-event \
 Use `raw_ical` for recurring events, alarms, attendees, or server-specific properties:
 
 ```bash
-rzn-tools caldav create-event --calendar-url "https://example.com/caldav/calendars/work/" --raw-ical "$(cat event.ics)"
-rzn-tools caldav update-event --url "https://example.com/caldav/calendars/work/event.ics" --if-match "\"etag-value\"" --raw-ical "$(cat updated.ics)"
+rzn-tools call caldav create --args '{"calendar_url":"https://example.com/caldav/calendars/work/","raw_ical":"<EVENT_ICS>"}'
+rzn-tools call caldav update --args '{"url":"https://example.com/caldav/calendars/work/event.ics","if_match":"<ETAG>","raw_ical":"<UPDATED_EVENT_ICS>"}'
 ```
 
 ## Troubleshooting

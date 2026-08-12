@@ -1,6 +1,5 @@
 use crate::api::client::TwitterClient;
 use crate::error::{Result, TwitterError};
-use chrono::{DateTime, Utc};
 use reqwest::header::HeaderMap;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -362,4 +361,4 @@ fn parse_timeline_status(timeline: Option<&Value>) -> Option<TimelineStatus> {
         status: t.get("status").and_then(|s| s.as_str()).unwrap_or("").to_string(),
         min_entry_id: t.get("min_entry_id").and_then(|m| m.as_str()).map(String::from),
     })
-} 
+}

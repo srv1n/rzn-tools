@@ -108,11 +108,12 @@ Recommended validation flow:
 
 ```bash
 rzn-tools setup x
-rzn-tools x auth-status
+rzn-tools tools x
+rzn-tools call x get_auth_status --args '{}'
 
 # Only for user-context auth
-rzn-tools x whoami
-rzn-tools x refresh-oauth2
+rzn-tools call x get_me --args '{}'
+rzn-tools call x refresh_access_token --args '{}'
 ```
 
 CLI setup examples:
@@ -192,9 +193,9 @@ environment or connector auth store, then validate with `x/get_auth_status` and 
 
 | Context | What to provide | How to validate |
 | --- | --- | --- |
-| CLI public reads | `bearer_token` or `X_BEARER_TOKEN` | `rzn-tools x auth-status`, `rzn-tools search x "rust"` |
-| CLI user-context | `oauth2_*` plus `client_id` when refresh is needed | `rzn-tools x auth-status`, `rzn-tools x whoami` |
-| CLI legacy fallback | `oauth1_*` | `rzn-tools x auth-status`, `rzn-tools x whoami` |
+| CLI public reads | `bearer_token` or `X_BEARER_TOKEN` | `rzn-tools call x get_auth_status --args '{}'`, `rzn-tools search x "rust"` |
+| CLI user-context | `oauth2_*` plus `client_id` when refresh is needed | `rzn-tools call x get_auth_status --args '{}'`, `rzn-tools call x get_me --args '{}'` |
+| CLI legacy fallback | `oauth1_*` | `rzn-tools call x get_auth_status --args '{}'`, `rzn-tools call x get_me --args '{}'` |
 | MCP public reads | same bearer fields in env/auth store | `x/get_auth_status` |
 | MCP user-context | same OAuth fields in env/auth store | `x/get_auth_status`, `x/whoami` |
 

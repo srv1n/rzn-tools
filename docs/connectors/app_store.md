@@ -19,8 +19,8 @@ Input:
 
 Examples:
 ```bash
-rzn-tools app-store search --query "habit tracker" --limit 10
 rzn-tools search app-store "habit tracker" --limit 10
+rzn-tools call app-store search --args '{"query":"habit tracker","limit":10}'
 ```
 
 ### `lookup`
@@ -33,9 +33,9 @@ Input:
 
 Examples:
 ```bash
-rzn-tools app-store lookup --track-id 310633997
 rzn-tools get app-store 310633997
 rzn-tools fetch https://apps.apple.com/us/app/id310633997
+rzn-tools call app-store lookup --args '{"track_id":310633997}'
 ```
 
 ### `reviews`
@@ -47,7 +47,7 @@ Input:
 
 Example:
 ```bash
-rzn-tools app-store reviews --track-id 310633997
+rzn-tools call app-store reviews --args '{"track_id":310633997}'
 ```
 
 ### `test_auth`
@@ -56,7 +56,7 @@ Smoke test API connectivity.
 
 Example:
 ```bash
-rzn-tools app-store test-auth
+rzn-tools config test app-store
 ```
 
 ## Notes

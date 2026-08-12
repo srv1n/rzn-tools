@@ -230,7 +230,13 @@ canonical name.
 
 ## CLI compatibility notes
 
-The CLI continues to expose human-friendly subcommands (e.g., `rzn-tools reddit top ...`) while mapping
-them to canonical tool calls internally.
+YouTube keeps its first-class CLI workflow. For every other connector, discover the current schema
+and call the canonical tool directly:
 
-Downstream teams should prefer MCP tools over parsing CLI output.
+```bash
+rzn-tools tools reddit
+rzn-tools call reddit list --args '{"subreddit":"rust","sort":"top","time":"week"}'
+```
+
+Downstream teams should prefer MCP tools or the generic `call` surface over parsing connector-specific
+CLI wrappers.

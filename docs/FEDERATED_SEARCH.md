@@ -67,11 +67,8 @@ These work immediately without any configuration:
 | `web` | perplexity, exa, tavily | AI-powered web search |
 
 ```bash
-# List available profiles
-rzn-tools profiles
-
-# Show profile details
-rzn-tools profiles show research
+# Use a built-in profile explicitly; the `web` profile is opt-in.
+rzn-tools search "machine learning" --profile research
 ```
 
 ## CLI Interface

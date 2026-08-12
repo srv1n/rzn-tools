@@ -156,7 +156,7 @@ Note: playlist/channel URL resolution is not currently implemented in the resolv
 | Bare DOI | `10.1038/nature12373` | `get_paper` |
 | Semantic Scholar URL | `https://www.semanticscholar.org/paper/.../abc123` | `get_paper` |
 
-> **Tip:** For open-access PDF lookup, use `rzn-tools scihub paper --doi "10.1038/nature12373"` instead. The SciHub connector queries OpenAlex/Unpaywall to find freely available versions.
+> **Tip:** For open-access PDF lookup, use `rzn-tools call scihub get --args '{"doi":"10.1038/nature12373"}'`. The SciHub connector queries OpenAlex/Unpaywall to find freely available versions.
 
 ### GitHub
 

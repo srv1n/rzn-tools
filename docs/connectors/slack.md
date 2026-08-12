@@ -75,25 +75,16 @@ Inputs follow our JSON Schema pattern; outputs include structured items with `te
 
 ## Quick Start (build + configure)
 
-- Build CLI with Slack enabled: `cargo build -p rzn_tools_cli --features slack`
+- Build CLI with Slack enabled: `make build CARGO_ARGS="-p rzn_tools_cli --features slack"`
 - Set token: `rzn-tools config set slack token xoxb-...` (bot or user token with read scopes)
 - Test: `rzn-tools config test slack` or call `rzn-tools tools slack`
 
 ### Examples
 
 ```bash
-# List channels
-rzn-tools slack channels --limit 100
-
-# Get channel messages
-rzn-tools slack messages --channel general --limit 50
-
-# Search messages
-rzn-tools slack search --query "project update" --limit 20
-
-# List users
-rzn-tools slack users --limit 100
-
-# Use --help for all options
-rzn-tools slack --help
+rzn-tools tools slack
+rzn-tools call slack list_channels --args '{"limit":100}'
+rzn-tools call slack list_messages --args '{"channel":"general","limit":50}'
+rzn-tools call slack search_messages --args '{"query":"project update","limit":20}'
+rzn-tools call slack list_users --args '{"limit":100}'
 ```

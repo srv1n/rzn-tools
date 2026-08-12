@@ -47,7 +47,7 @@ Notes
 - Inputs: base inputs + `model` (string), `max_output_tokens` (integer)
 - Output: `{ provider:"openai", model, query, limit_hint, answer, citations, raw? }`
 - Example (CLI):
-  - `rzn-tools openai-search search --query "What changed in SEC climate rules in 2025?" --max-results 4`
+  - `rzn-tools call openai-search search --args '{"query":"What changed in SEC climate rules in 2025?","max_results":4}'`
 - Example (JSON-RPC):
   - `{ "method":"tools/call", "params": { "name":"openai-search/search", "arguments": { "query":"…", "max_results":4 } } }`
 
@@ -129,18 +129,19 @@ Notes
 
 ## CLI Examples (copy/paste)
 
-- OpenAI concise answer:
-  - `rzn-tools openai-search search --query "What changed in SEC climate rules in 2025?" --max-results 4`
-- xAI live search across web+X:
-  - `rzn-tools xai-search search --query "Latest on OpenAI board changes" --max-results 6`
-- SerpAPI localized SERP:
-  - `rzn-tools serpapi-search search --query "best postgres connection pool settings" --max-results 10`
-- Exa neural search:
-  - `rzn-tools exa search --query "rust async runtime best practices" --num-results 8`
-- Perplexity search:
-  - `rzn-tools perplexity-search search --query "AI safety research 2025"`
+```bash
+rzn-tools tools openai-search
+rzn-tools call openai-search search \
+  --args '{"query":"What changed in SEC climate rules in 2025?","max_results":4}'
+rzn-tools call xai-search search \
+  --args '{"query":"Latest on OpenAI board changes","max_results":6,"source":"web"}'
+rzn-tools call exa search \
+  --args '{"query":"rust async runtime best practices","max_results":8}'
+rzn-tools call perplexity-search search \
+  --args '{"query":"AI safety research 2025"}'
+```
 
-Use `rzn-tools <connector> --help` for all available options.
+Use `rzn-tools tools <connector>` for the exact tool names and argument schema.
 
 ---
 

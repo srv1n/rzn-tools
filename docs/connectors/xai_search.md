@@ -49,8 +49,10 @@ rzn-tools config set xai-search --key api_key --value "<your_xai_api_key>"
 Validation:
 
 ```bash
-rzn-tools xai-search search --query "latest Rust release" --source web
-rzn-tools xai-search search --query "OpenAI" --source x
+rzn-tools tools xai-search
+rzn-tools call xai-search search \
+  --args '{"query":"latest Rust release","source":"web"}'
+rzn-tools call xai-search search --args '{"query":"OpenAI","source":"x"}'
 ```
 
 ## What it does

@@ -170,7 +170,7 @@ rzn-tools search youtube "rust programming" --limit 10
 - `list_tags`, `list_events`, `list_markets`, `list_series`, and `list_comments` expose cursors for pagination.
 - `order_book` and `price_history` automatically resolve CLOB token ids from market metadata.
 - `get_market_context` is the preferred analysis tool when an agent needs one market plus its linked event, price trajectory, and book state in a single response.
-- The CLI also exposes these richer flows directly via `rzn-tools polymarket ...` for list + analysis workflows.
+- Use `rzn-tools tools polymarket` followed by `rzn-tools call polymarket <tool> --args '<JSON_OBJECT>'` for list + analysis workflows.
 - `rzn-tools fetch https://polymarket.com/event/...` routes to `polymarket/get` via the smart resolver when the feature is enabled.
 - Use `output_format=normalized_v1` or `display_v1` when you want ingestion-friendly or UI-friendly results.
 
@@ -205,7 +205,7 @@ rzn-tools search youtube "rust programming" --limit 10
 - `list_series` uses client-side cursor pagination because the public series catalog is exposed as one list.
 - `list_events`, `list_markets`, and `list_trades` expose provider cursors for pagination.
 - `get_market_context` is the preferred analysis tool when an agent needs parent event + series context, recent trades, candles, and book state in a single response.
-- The CLI also exposes these richer flows directly via `rzn-tools kalshi ...`.
+- Use `rzn-tools tools kalshi` followed by `rzn-tools call kalshi <tool> --args '<JSON_OBJECT>'` for richer market-analysis workflows.
 - `rzn-tools fetch https://kalshi.com/markets/.../<event-ticker>` routes to `kalshi/get` via the smart resolver when the feature is enabled.
 - Use `output_format=normalized_v1` or `display_v1` when integrating with ingestion/UI pipelines.
 
@@ -344,8 +344,9 @@ and **pagination token usage**, see `docs/connectors/x.md`.
 
 ```bash
 rzn-tools setup x
-rzn-tools x auth-status
-rzn-tools x whoami
+rzn-tools tools x
+rzn-tools call x get_auth_status --args '{}'
+rzn-tools call x get_me --args '{}'
 ```
 
 For token import and field-by-field setup, see `docs/connectors/x.md`.
@@ -556,8 +557,9 @@ rzn-tools setup scihub
 
 **Example:**
 ```bash
-rzn-tools scihub paper --doi "10.1371/journal.pone.0000308"
-rzn-tools scihub paper --doi "10.1038/nature12373" --output json
+rzn-tools tools scihub
+rzn-tools call scihub get --args '{"doi":"10.1371/journal.pone.0000308"}'
+rzn-tools --output json call scihub get --args '{"doi":"10.1038/nature12373"}'
 ```
 
 **Response Fields:**
@@ -771,6 +773,7 @@ Common `xai-search/search` knobs:
 ```bash
 rzn-tools setup slack
 rzn-tools config set slack --value "xoxb-your-token"
+rzn-tools call slack list_channels --args '{"limit":20}'
 ```
 
 **Required Scopes:** `channels:read`, `channels:history`, `users:read`, `files:read`, `search:read`

@@ -117,30 +117,29 @@ The connector responds to these input patterns via `rzn-tools fetch`:
 
 ```bash
 # Search file contents
-rzn-tools spotlight search-content --query "quarterly report"
+rzn-tools call spotlight search --args '{"mode":"content","query":"quarterly report"}'
 
 # Search in specific directory
-rzn-tools spotlight search-content --query "TODO" --directory ~/Projects
+rzn-tools call spotlight search --args '{"mode":"content","query":"TODO","directory":"~/Projects"}'
 
 # Find files by name
-rzn-tools spotlight search-by-name --name "config.yaml"
+rzn-tools call spotlight search --args '{"mode":"name","query":"config.yaml"}'
 
 # Find all PDFs
-rzn-tools spotlight search-by-kind --kind pdf
+rzn-tools call spotlight search --args '{"mode":"kind","kind":"pdf"}'
 
 # Find recently modified code files
-rzn-tools spotlight search-recent --days 3 --kind code
+rzn-tools call spotlight search --args '{"mode":"recent","days":3,"kind":"code"}'
 
 # Get file metadata
-rzn-tools spotlight metadata --path /Users/me/report.pdf
+rzn-tools call spotlight get_metadata --args '{"path":"/Users/me/report.pdf"}'
 
 # Using smart resolver
 rzn-tools fetch ~/Documents/report.pdf
 rzn-tools fetch "spotlight:CRISPR gene therapy"
 
 # Use --help for all options
-rzn-tools spotlight --help
-rzn-tools spotlight search-content --help
+rzn-tools tools spotlight
 ```
 
 ## Testing Plan

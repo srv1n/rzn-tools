@@ -52,7 +52,7 @@ Input:
 
 Example:
 ```bash
-rzn-tools apple-search-ads keyword-recommendations --app-id 310633997 --storefront-countries US
+rzn-tools call apple-search-ads keyword_recommendations --args '{"app_id":310633997,"storefront_countries":["US"]}'
 ```
 
 ### Reporting tools
@@ -66,7 +66,7 @@ These tools accept **raw Apple Search Ads report request bodies** (JSON):
 
 Example:
 ```bash
-rzn-tools apple-search-ads report-keywords --body '{"startTime":"2026-03-01","endTime":"2026-03-03","selector":{"orderBy":[{"field":"taps","sortOrder":"DESCENDING"}]}}'
+rzn-tools call apple-search-ads report_keywords --args '{"body":{"startTime":"2026-03-01","endTime":"2026-03-03","selector":{"orderBy":[{"field":"taps","sortOrder":"DESCENDING"}]}}}'
 ```
 
 ## Notes

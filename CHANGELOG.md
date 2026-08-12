@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - YouTube: use watch-page player JSON and JSON3 timed text for metadata, transcripts, chapters, and search without `rusty_ytdl`, Boa, or `yt-transcript-rs` in default builds.
+- CLI: remove the drift-prone typed subcommands for individual connectors; use `tools <connector>` to inspect schemas and `call <connector> <tool> --args '<JSON object>'` for connector-specific operations. YouTube keeps its first-class workflow, while `search`, `get`, and `fetch` remain the generic routing surface.
+- Packaging: trim dead connectors, vendor trees, and default-profile dependencies; `web` and `rss` remain available as opt-in features rather than default CLI dependencies.
 
 ## [0.2.18] - 2026-08-01
 

@@ -47,8 +47,9 @@ rzn-tools search polymarket "bitcoin" --limit 10
 rzn-tools get polymarket 312712
 rzn-tools fetch https://polymarket.com/event/cbb-pur-arz-2026-03-28
 rzn-tools tools polymarket
-rzn-tools polymarket list-tags --limit 20
-rzn-tools polymarket market-context --slug cbb-pur-arz-2026-03-28 --include-positions
+rzn-tools call polymarket list_tags --args '{"limit":20}'
+rzn-tools call polymarket get_market_context \
+  --args '{"slug":"cbb-pur-arz-2026-03-28","include_positions":true}'
 ```
 
 ## Wrapped Tools
@@ -64,15 +65,17 @@ These tools intentionally wrap low-level Polymarket API details:
 
 ## CLI Workflows
 
-For the richer Polymarket-only flows, use the dedicated wrapper:
+For richer Polymarket-only flows, inspect the tool schema and call it directly:
 
 ```bash
-rzn-tools polymarket list-tags --limit 20
-rzn-tools polymarket list-events --tag-slug crypto --active --limit 10
-rzn-tools polymarket list-markets --event-slug cbb-pur-arz-2026-03-28 --limit 20
-rzn-tools polymarket order-book --slug cbb-pur-arz-2026-03-28 --depth 5
-rzn-tools polymarket price-history --slug cbb-pur-arz-2026-03-28 --interval 1d --fidelity 60
-rzn-tools polymarket market-context --slug cbb-pur-arz-2026-03-28 --include-positions
+rzn-tools tools polymarket
+rzn-tools call polymarket list_tags --args '{"limit":20}'
+rzn-tools call polymarket list_events --args '{"tag_slug":"crypto","active":true,"limit":10}'
+rzn-tools call polymarket list_markets --args '{"event_slug":"cbb-pur-arz-2026-03-28","limit":20}'
+rzn-tools call polymarket order_book --args '{"slug":"cbb-pur-arz-2026-03-28","depth":5}'
+rzn-tools call polymarket price_history --args '{"slug":"cbb-pur-arz-2026-03-28","interval":"1d","fidelity":60}'
+rzn-tools call polymarket get_market_context \
+  --args '{"slug":"cbb-pur-arz-2026-03-28","include_positions":true}'
 ```
 
 ## Example Calls
@@ -127,7 +130,7 @@ From MCP or launcher tool-calling, the most useful Polymarket calls usually look
   pages.
 - `list_tags`, `list_events`, `list_markets`, `list_series`, and `list_comments` expose opaque cursors for
   pagination.
-- `rzn-tools polymarket ...` exposes the non-generic list and analysis flows directly from the CLI.
+- `rzn-tools call polymarket <tool> --args '<JSON_OBJECT>'` exposes the non-generic list and analysis flows directly from the CLI.
 - `get` accepts frontend event URLs, event slugs, numeric ids, and normalized `item_ref` values like `polymarket:event:312712`.
 - `get_market` accepts market slugs, numeric ids, and normalized `item_ref` values like `polymarket:market:1739838`.
 - Generic `rzn-tools get polymarket polymarket:market:<id>` routes to `get_market`, while

@@ -125,19 +125,19 @@ Notes:
 ## CLI examples
 
 ```bash
-rzn-tools bing-webmaster-tools list-sites
+rzn-tools call bing-webmaster-tools list_sites --args '{}'
 ```
 
 ```bash
-rzn-tools bing-webmaster-tools get-query-stats --site-url https://example.com/
+rzn-tools call bing-webmaster-tools get_query_stats --args '{"site_url":"https://example.com/"}'
 ```
 
 ```bash
-rzn-tools bing-webmaster-tools submit-url --site-url https://example.com/ --url https://example.com/new-post
+rzn-tools call bing-webmaster-tools submit_url --args '{"site_url":"https://example.com/","url":"https://example.com/new-post"}'
 ```
 
 ```bash
-rzn-tools bing-webmaster-tools indexnow-submit-url --url https://example.com/new-post
+rzn-tools call bing-webmaster-tools indexnow_submit_url --args '{"url":"https://example.com/new-post"}'
 ```
 
 ## Troubleshooting

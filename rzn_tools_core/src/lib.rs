@@ -15,6 +15,7 @@ pub mod oauth_client;
 pub mod paths;
 pub mod resolver;
 pub mod system_metadata;
+pub mod transport;
 pub mod usage;
 pub mod usage_context;
 pub mod utils;
@@ -274,22 +275,30 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
 
     #[allow(unused_macros)]
     macro_rules! register_async {
-        ($connector:expr $(, $alias:literal)*) => {
+        ($connector:expr) => {
+            if let Ok(connector) = $connector {
+                registry.register_provider(Box::new(connector));
+            }
+        };
+        ($connector:expr, $($alias:literal),+ $(,)?) => {
             if let Ok(connector) = $connector {
                 let canonical = connector.name();
                 registry.register_provider(Box::new(connector));
-                $(registry.register_alias($alias, canonical);)*
+                $(registry.register_alias($alias, canonical);)+
             }
         };
     }
 
     #[allow(unused_macros)]
     macro_rules! register_sync {
-        ($connector:expr $(, $alias:literal)*) => {{
+        ($connector:expr) => {{
+            registry.register_provider(Box::new($connector));
+        }};
+        ($connector:expr, $($alias:literal),+ $(,)?) => {{
             let connector = $connector;
             let canonical = connector.name();
             registry.register_provider(Box::new(connector));
-            $(registry.register_alias($alias, canonical);)*
+            $(registry.register_alias($alias, canonical);)+
         }};
     }
 

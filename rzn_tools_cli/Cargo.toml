@@ -32,7 +32,7 @@ rpassword = "7.3"
 tokio = { version = "1.47.1", default-features = false, features = ["rt-multi-thread", "macros", "sync", "time"] }
 serde = { version = "1.0.228", default-features = false, features = ["derive", "std"] }
 serde_json = "1.0.145"
-thiserror = "1.0.69"
+thiserror = "2.0.17"
 tracing = { version = "0.1.41", default-features = false, features = ["std"] }
 tracing-subscriber = { version = "0.3.20", default-features = false, features = ["env-filter", "fmt", "std", "smallvec"] }
 reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
@@ -60,12 +60,10 @@ default-connectors = [
     "kalshi",
     "linkedin",
     "reddit",
-    "rss",
     "parallel-search",
     "exa-search",
     "weather",
     "semantic-scholar",
-    "web",
     "wikipedia",
     "youtube",
 ]

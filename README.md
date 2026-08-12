@@ -386,159 +386,24 @@ Completed in 1234ms
 
 ## CLI Usage
 
-### Connector Subcommands (Recommended)
-
-Each connector has its own subcommand with proper CLI flags:
+The CLI has one stable surface for every connector. YouTube keeps first-class transcript/video
+workflows; all other connector-specific operations go through `tools` + `call`.
 
 ```bash
-# Local filesystem - text extraction from PDF, EPUB, DOCX, HTML, code
-rzn-tools localfs list-files --path ~/Documents --recursive --extensions pdf,md
-rzn-tools localfs extract-text --path ~/paper.pdf
-rzn-tools localfs structure --path ~/book.epub
-rzn-tools localfs section --path ~/doc.pdf --section page:5
-rzn-tools localfs search --path ~/code.rs --query "async fn"
-
 # YouTube
 rzn-tools youtube search --query "rust programming" --limit 10
-rzn-tools youtube video --id dQw4w9WgXcQ
+rzn-tools youtube dQw4w9WgXcQ
 rzn-tools youtube transcript --id dQw4w9WgXcQ
 
-# Hacker News
-rzn-tools hackernews top --limit 20
-rzn-tools hackernews search --query "rust" --limit 10
-rzn-tools hackernews thread --id 38500000
-rzn-tools fetch "https://news.ycombinator.com/item?id=38500000"
-
-# arXiv
-rzn-tools arxiv search --query "transformer architecture" --limit 10
-rzn-tools arxiv paper --id 2301.07041
-
-# GitHub
-rzn-tools github search-repos --query "rust cli"
-rzn-tools github search-code --query "async fn" --repo tokio-rs/tokio
-rzn-tools github issues --repo rust-lang/rust --state open
-
-# Reddit
-rzn-tools reddit search --query "rust" --subreddit programming
-rzn-tools reddit hot --subreddit rust --limit 200 --output-format normalized_v1
-rzn-tools reddit media --id https://www.reddit.com/comments/abc123
-rzn-tools reddit user --username spez --output-format display_v1
-
-# Play Store (best-effort)
-rzn-tools play-store app --id com.whatsapp --output-format normalized_v1
-rzn-tools fetch --output-format display_v1 "https://play.google.com/store/apps/details?id=com.whatsapp&hl=en&gl=US"
-
-# AI-powered search
-rzn-tools perplexity-search search --query "best practices for rust async"
-rzn-tools exa search --query "rust async programming" --num-results 10
-rzn-tools openai-search search --query "machine learning"
-rzn-tools anthropic-search search --query "AI safety"
-
-# Google services (requires OAuth setup)
-rzn-tools google-calendar list-events
-rzn-tools google-drive list-files --query "project report"
-rzn-tools google-gmail search --query "from:boss@company.com"
-
-# Microsoft 365 (requires OAuth setup)
-rzn-tools microsoft-graph list-drive-items
-rzn-tools microsoft-graph list-mail --filter "isRead eq false"
-
-# SMTP (requires setup)
-rzn-tools smtp test-connection
-rzn-tools smtp send-mail --to user@example.com --subject "Hello" --body "Test"
-
-# Academic research
-rzn-tools pubmed search --query "CRISPR gene therapy" --limit 10
-rzn-tools semantic-scholar search --query "attention mechanism"
-rzn-tools biorxiv search --query "protein folding"
-rzn-tools scihub paper --doi "10.1038/nature12373"  # Open-access lookup
-rzn-tools scihub search --query "attention mechanism"  # Search papers
-rzn-tools scihub batch --dois "10.1038/nature12373,10.1371/journal.pone.0000308"
-
-# Use --help on any subcommand for all options
-rzn-tools localfs list-files --help
-rzn-tools hackernews --help
-```
-
-### Generic Commands
-
-```bash
-# List available connectors
-rzn-tools list
-
-# Show tools for a connector
-rzn-tools tools youtube
-rzn-tools tools pubmed
-
-# Smart fetch - auto-detects URL/ID type
-rzn-tools fetch https://arxiv.org/abs/2301.07041
-rzn-tools fetch https://news.ycombinator.com/item?id=38500000
-rzn-tools fetch hn:38500000
-rzn-tools fetch --output-format display_v1 https://www.reddit.com/user/spez/
-rzn-tools fetch --output-format display_v1 https://play.google.com/store/apps/details?id=com.whatsapp&hl=en&gl=US
-
-# Search (single connector)
+# Smart routing
 rzn-tools search arxiv "attention mechanism"
-rzn-tools search hackernews "rust" --limit 20
-
-# Get specific content
-rzn-tools get hackernews 12345678
 rzn-tools get youtube dQw4w9WgXcQ
+rzn-tools fetch https://news.ycombinator.com/item?id=38500000
 
-# Connector subcommands (recommended)
-rzn-tools github search-repos --query "language:rust stars:>1000" --limit 10
-rzn-tools slack channels --limit 100
-
-# Output formats
-rzn-tools --output json arxiv search --query "llm" | jq '.results[0]'
-
-# Copy output to clipboard
-rzn-tools --copy fetch hn:38500000
+# Discover and call any connector tool
+rzn-tools tools reddit
+rzn-tools call reddit <tool-from-tools> --args '<JSON_OBJECT_FROM_TOOLS>'
 ```
-
-### All Connector Subcommands
-
-| Connector | Aliases | Description |
-|-----------|---------|-------------|
-| `localfs` | `fs`, `file` | Local filesystem text extraction |
-| `youtube` | `yt` | Video metadata, transcripts, search |
-| `hackernews` | `hn` | Stories, comments, search |
-| `arxiv` | | Academic preprints |
-| `github` | `gh` | Repositories, issues, PRs, code |
-| `reddit` | | Posts, comments, subreddits |
-| `play-store` | `playstore` | Google Play Store app metadata (best-effort) |
-| `web` | | Web page scraping |
-| `wikipedia` | `wiki` | Article search and retrieval |
-| `pubmed` | | Medical literature |
-| `semantic-scholar` | `scholar` | Academic paper search |
-| `slack` | | Workspace messages, channels |
-| `discord` | | Servers, channels, messages |
-| `x` | `twitter` | Tweets, profiles, search |
-| `rss` | | RSS/Atom feed reader |
-| `biorxiv` | | Biology/medicine preprints |
-| `scihub` | | Open-access paper lookup by DOI |
-| `google-calendar` | | Calendar events |
-| `google-drive` | | File management |
-| `google-gmail` | | Email access |
-| `google-people` | | Contacts |
-| `google-scholar` | | Academic search |
-| `microsoft-graph` | | Microsoft 365 services |
-| `atlassian` | | Jira + Confluence |
-| `imap` | | Email retrieval |
-| `smtp` | `mailer` | Outbound email sending |
-| `macos` | | macOS automation |
-| `spotlight` | | File search (macOS) |
-| `openai-search` | | OpenAI web search |
-| `anthropic-search` | | Anthropic web search |
-| `gemini-search` | | Gemini web search |
-| `perplexity-search` | | Perplexity search |
-| `xai-search` | | xAI `web_search` + `x_search` |
-| `exa` | | Neural search |
-| `tavily-search` | | Tavily search |
-| `serper-search` | | Serper search |
-| `serpapi-search` | | SerpAPI search |
-| `firecrawl-search` | | Firecrawl scraping |
-| `parallel-search` | | Parallel AI search |
 
 ### Response Format
 
@@ -548,11 +413,9 @@ Most connectors support a `response_format` parameter to control output verbosit
 - **`detailed`**: Returns full metadata including all available fields
 
 ```bash
-# Concise output (default) - minimal fields, fewer tokens
-rzn-tools hackernews top --limit 5
-
-# Some connectors support a `--response-format` flag (e.g., `concise` or `detailed`)
-rzn-tools openai-search search --query "What is Rust?" --response-format detailed
+# YouTube's first-class workflow accepts concise/detailed transcript output.
+rzn-tools call youtube get \
+  --args '{"video_id":"dQw4w9WgXcQ","response_format":"detailed"}'
 ```
 
 This is particularly useful when integrating with AI agents where token usage matters. The concise format reduces response size while preserving the most important information.
@@ -720,7 +583,8 @@ For the official X connector:
 
 ```bash
 rzn-tools setup x
-rzn-tools x auth-status
+rzn-tools tools x
+rzn-tools call x <auth-status-tool-from-tools> --args '{}'
 ```
 
 Recommended auth order:
@@ -732,8 +596,8 @@ Recommended auth order:
 For user-context validation:
 
 ```bash
-rzn-tools x whoami
-rzn-tools x refresh-oauth2
+rzn-tools call x <whoami-tool-from-tools> --args '{}'
+rzn-tools call x <refresh-token-tool-from-tools> --args '{}'
 ```
 
 ### OAuth Setup
@@ -783,6 +647,9 @@ rzn-tools includes a [Model Context Protocol](https://modelcontextprotocol.io/) 
 ```bash
 make build-release CARGO_ARGS="-p rzn_tools_mcp --features server-full"
 ./target/release/rzn-tools-mcp
+
+# Faster local release iteration; shipping builds remain size-optimized.
+make build CARGO_ARGS="--profile release-fast -p rzn_tools_cli"
 
 # Narrow a stdio child to the connector(s) assigned to one tenant.
 ./target/release/rzn-tools-mcp --connectors reddit
@@ -851,7 +718,7 @@ rzn_tools_core = { version = "0.2.18", features = ["telegram", "whatsapp"] }
 # Enterprise
 rzn_tools_core = { version = "0.2.18", features = ["slack", "github", "atlassian"] }
 
-# Portable/default connector profile (`full` remains a compatibility alias)
+# Portable/default connector profile (`full` remains a compatibility alias; `web` and `rss` are opt-in)
 rzn_tools_core = { version = "0.2.18", features = ["full"] }
 
 # Explicit desktop profile with local browser-cookie import
@@ -861,7 +728,8 @@ rzn_tools_core = { version = "0.2.18", features = ["desktop-full"] }
 ### Backend Git source
 
 For a backend that launches `rzn-tools-mcp` as a separate process, pin the Git commit rather
-than using a sibling path dependency. `server-full` is the portable profile; it excludes
+than using a sibling path dependency. `server-full` is the portable profile; it keeps `web` and
+`rss` opt-in and excludes
 Rookie, publicsuffix, browser-cookie import, `x-browser`, `telegram`, Discord, and macOS-only
 connectors. Telegram remains in `all-connectors` and `desktop-full`; its upstream MTProto
 dependency chain currently resolves through a yanked crate, so it cannot be included in a fresh

@@ -50,8 +50,8 @@ rzn-tools search kalshi "elon mars" --limit 10
 rzn-tools get kalshi KXELONMARS
 rzn-tools fetch https://kalshi.com/markets/elon-mars/will-elon-musk-visit-mars-in-his-lifetime/kxelonmars-99
 rzn-tools tools kalshi
-rzn-tools kalshi get-event --ticker KXELONMARS-99
-rzn-tools kalshi market-context --ticker KXELONMARS-99
+rzn-tools call kalshi get_event_metadata --args '{"ticker":"KXELONMARS-99"}'
+rzn-tools call kalshi get_market_context --args '{"ticker":"KXELONMARS-99"}'
 ```
 
 ## Wrapped Tools
@@ -68,18 +68,18 @@ These tools intentionally hide some lower-level Kalshi protocol details:
 
 ## CLI Workflows
 
-For the richer Kalshi-only flows, use the dedicated wrapper:
+For richer Kalshi-only flows, inspect the tool schema and call it directly:
 
 ```bash
-rzn-tools kalshi search --query "fed rates" --limit 10
-rzn-tools kalshi list-series --limit 20
-rzn-tools kalshi list-events --series-ticker KXELONMARS --limit 10
-rzn-tools kalshi get-event --ticker KXELONMARS-99
-rzn-tools kalshi event-metadata --ticker KXELONMARS-99
-rzn-tools kalshi list-markets --event-ticker KXELONMARS-99 --limit 20
-rzn-tools kalshi order-book --ticker KXELONMARS-99 --depth 10
-rzn-tools kalshi list-trades --ticker KXELONMARS-99 --limit 20
-rzn-tools kalshi market-context --ticker KXELONMARS-99
+rzn-tools tools kalshi
+rzn-tools search kalshi "fed rates" --limit 10
+rzn-tools call kalshi list_series --args '{"limit":20}'
+rzn-tools call kalshi list_events --args '{"series_ticker":"KXELONMARS","limit":10}'
+rzn-tools call kalshi get_event_metadata --args '{"ticker":"KXELONMARS-99"}'
+rzn-tools call kalshi list_markets --args '{"event_ticker":"KXELONMARS-99","limit":20}'
+rzn-tools call kalshi order_book --args '{"ticker":"KXELONMARS-99","depth":10}'
+rzn-tools call kalshi list_trades --args '{"ticker":"KXELONMARS-99","limit":20}'
+rzn-tools call kalshi get_market_context --args '{"ticker":"KXELONMARS-99"}'
 ```
 
 ## Example Calls

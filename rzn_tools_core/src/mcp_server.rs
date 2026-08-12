@@ -1477,9 +1477,8 @@ mod tests {
     use crate::ingest::{ContentItem, NormalizedPageV1, OutputFormat, Partial, Source};
     use async_trait::async_trait;
     use rmcp::model::{
-        CallToolRequestParam, InitializeRequestParam, ListPromptsResult, ListResourcesResult,
-        ListToolsResult, PaginatedRequestParam, Prompt, ReadResourceRequestParam, ResourceContents,
-        Tool,
+        CallToolRequestParam, ListPromptsResult, ListResourcesResult, ListToolsResult,
+        PaginatedRequestParam, Prompt, ReadResourceRequestParam, ResourceContents, Tool,
     };
     use serde_json::json;
     use std::borrow::Cow;

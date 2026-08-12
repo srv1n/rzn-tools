@@ -398,9 +398,15 @@ async fn call_tool_raw(
     Ok((payload, meta_value))
 }
 
-fn parse_json_argument(name: &str, raw: &str) -> Result<Value> {
-    serde_json::from_str(raw).map_err(|err| {
-        crate::commands::CommandError::InvalidInput(format!("Invalid JSON for {name}: {err}"))
+fn parse_call_args(raw: &str) -> Result<Map<String, Value>> {
+    let value: Value = serde_json::from_str(raw).map_err(|err| {
+        crate::commands::CommandError::InvalidInput(format!("Invalid JSON for --args: {err}"))
+    })?;
+    value.as_object().cloned().ok_or_else(|| {
+        crate::commands::CommandError::InvalidInput(
+            "--args must be a JSON object; inspect `rzn-tools tools <connector>` for its shape"
+                .to_string(),
+        )
     })
 }
 
@@ -451,14 +457,7 @@ async fn call_tool(cli: &Cli, connector: &str, tool: &str, args: Map<String, Val
 
 /// Call a discovered connector tool without maintaining a second argument schema in the CLI.
 pub async fn call(cli: &Cli, connector: &str, tool: &str, raw_args: &str) -> Result<()> {
-    let args = parse_json_argument("--args", raw_args)?;
-    let args = args.as_object().cloned().ok_or_else(|| {
-        crate::commands::CommandError::InvalidInput(
-            "--args must be a JSON object; inspect `rzn-tools tools <connector>` for its shape"
-                .to_string(),
-        )
-    })?;
-    call_tool(cli, connector, tool, args).await
+    call_tool(cli, connector, tool, parse_call_args(raw_args)?).await
 }
 
 /// Handle youtube commands
@@ -585,5 +584,20 @@ pub async fn handle_youtube(cli: &Cli, args: YoutubeArgs) -> Result<()> {
                 meta_value.as_ref(),
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_call_args;
+
+    #[test]
+    fn call_args_require_a_json_object() {
+        assert_eq!(
+            parse_call_args(r#"{"query":"rust","limit":3}"#).unwrap()["limit"],
+            3
+        );
+        assert!(parse_call_args("[]").is_err());
+        assert!(parse_call_args("not-json").is_err());
     }
 }

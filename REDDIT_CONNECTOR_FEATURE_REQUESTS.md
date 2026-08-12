@@ -52,7 +52,7 @@ type tag (`image|animated|video|external`).
 ## 5. Anonymous path gets IP-blocked
 The `read-thread` browser workflow exists specifically to "bypass rzn-tools IP block". On the
 test machine, `old.reddit`/`www` `.json` both return **403** even with a browser User-Agent;
-`rzn-tools reddit top` fails the same way. Connector hardcodes UA `rzn-tools/0.1.0`
+`rzn-tools call reddit list --args '{"sort":"top"}'` fails the same way. Connector hardcodes UA `rzn-tools/0.1.0`
 (`mod.rs:34`).
 
 → Document/support the `old.reddit.com` `.json` route (often un-gated) and/or add a

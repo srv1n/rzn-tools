@@ -5,6 +5,12 @@ pub mod federated;
 #[cfg(feature = "localfs")]
 pub mod localfs;
 
+#[cfg(feature = "app-store")]
+pub mod app_store;
+#[cfg(feature = "app-store-connect")]
+pub mod app_store_connect;
+#[cfg(feature = "apple-search-ads")]
+pub mod apple_search_ads;
 #[cfg(feature = "arxiv")]
 pub mod arxiv;
 #[cfg(feature = "atlassian")]
@@ -27,16 +33,6 @@ pub mod kalshi;
 pub mod linkedin;
 #[cfg(feature = "macos-automation")]
 pub mod macos;
-#[cfg(feature = "smtp")]
-pub mod smtp;
-#[cfg(all(target_os = "macos", feature = "macos-spotlight"))]
-pub mod spotlight;
-#[cfg(feature = "app-store")]
-pub mod app_store;
-#[cfg(feature = "app-store-connect")]
-pub mod app_store_connect;
-#[cfg(feature = "apple-search-ads")]
-pub mod apple_search_ads;
 #[cfg(feature = "play-store")]
 pub mod play_store;
 #[cfg(feature = "polymarket")]
@@ -53,6 +49,10 @@ pub mod scihub;
 pub mod semantic_scholar;
 #[cfg(feature = "slack")]
 pub mod slack;
+#[cfg(feature = "smtp")]
+pub mod smtp;
+#[cfg(all(target_os = "macos", feature = "macos-spotlight"))]
+pub mod spotlight;
 #[cfg(feature = "telegram")]
 pub mod telegram;
 #[cfg(feature = "weather")]

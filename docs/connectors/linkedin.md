@@ -37,7 +37,8 @@ Recommended setup:
 
 ```bash
 rzn-tools setup linkedin
-rzn-tools linkedin auth-status
+rzn-tools tools linkedin
+rzn-tools call linkedin get_auth_status --args '{}'
 ```
 
 Direct config examples:
@@ -52,13 +53,15 @@ rzn-tools config set linkedin --key organization_urn --value "urn:li:organizatio
 ## CLI
 
 ```bash
-rzn-tools linkedin auth-status
-rzn-tools linkedin me
-rzn-tools linkedin share --text "Hello LinkedIn"
-rzn-tools linkedin share --text "Read this" --url "https://example.com/post"
-rzn-tools linkedin company-share --organization urn:li:organization:123456 --text "Company update"
-rzn-tools linkedin api-request --method GET --path /v2/userinfo
-rzn-tools linkedin refresh-token
+rzn-tools call linkedin get_auth_status --args '{}'
+rzn-tools call linkedin get_me --args '{}'
+rzn-tools call linkedin create_share_update --args '{"text":"Hello LinkedIn"}'
+rzn-tools call linkedin create_share_update \
+  --args '{"text":"Read this","url":"https://example.com/post"}'
+rzn-tools call linkedin create_company_update \
+  --args '{"organization_urn":"urn:li:organization:123456","text":"Company update"}'
+rzn-tools call linkedin api_request --args '{"method":"GET","path":"/v2/userinfo"}'
+rzn-tools call linkedin refresh_access_token --args '{}'
 ```
 
 ## Notes

@@ -169,7 +169,7 @@ impl MyConnector {
 #[async_trait]
 impl Connector for MyConnector {
     fn name(&self) -> &'static str {
-        "myconnector"  // Used in CLI: rzn-tools myconnector <tool>
+        "myconnector"  // Call from CLI: rzn-tools call myconnector <tool> --args '<JSON_OBJECT>'
     }
 
     fn description(&self) -> &'static str {
@@ -873,9 +873,10 @@ Environment variable: `MYSERVICE_API_KEY`
 ## Examples
 
 \`\`\`bash
-# Using connector subcommands (recommended)
-rzn-tools myconnector search --query "rust programming"
-rzn-tools myconnector get --id abc123
+# Discover and call connector tools
+rzn-tools tools myconnector
+rzn-tools call myconnector search --args '{"query":"rust programming"}'
+rzn-tools call myconnector get --args '{"id":"abc123"}'
 
 # Using generic commands
 rzn-tools search myconnector "rust programming"

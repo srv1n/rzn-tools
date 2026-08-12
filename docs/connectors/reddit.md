@@ -15,10 +15,13 @@ Public subreddit browsing, post/comment reads, user metadata, and media URL reso
 ## CLI Examples
 
 ```bash
-rzn-tools reddit top --subreddit wallpapers --time all --limit 500 --output-format normalized_v1
-rzn-tools reddit top --subreddit wallpapers --time all --cursor "$CURSOR" --output-format normalized_v1
-rzn-tools reddit hot --subreddit pics --include-nsfw --limit 100
-rzn-tools reddit media --id reddit:post:abc123
+rzn-tools call reddit list \
+  --args '{"subreddit":"wallpapers","sort":"top","time":"all","limit":500,"output_format":"normalized_v1"}'
+rzn-tools call reddit list \
+  --args '{"subreddit":"wallpapers","sort":"top","time":"all","cursor":"<CURSOR>","output_format":"normalized_v1"}'
+rzn-tools call reddit list \
+  --args '{"subreddit":"pics","sort":"hot","include_nsfw":true,"limit":100}'
+rzn-tools call reddit media --args '{"id":"reddit:post:abc123"}'
 ```
 
 ## Listing Output

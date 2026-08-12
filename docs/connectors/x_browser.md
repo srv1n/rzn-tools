@@ -168,30 +168,26 @@ numeric `user_id`.
 }
 ```
 
-## CLI usage — examples (`rzn-tools x-browser ...`)
+## CLI usage — examples (`rzn-tools call x-browser ...`)
 
 The CLI maps directly onto the MCP tools above.
 
 Search with dates + engagement sorting:
 
 ```bash
-rzn-tools x-browser search --query "rust lang:en" --limit 30 --mode top \
-  --since 2026-02-01 --until 2026-02-24 \
-  --exclude-retweets true --exclude-replies true \
-  --min-likes 10 --sort-by engagement --order desc
+rzn-tools call x-browser search_tweets --args '{"query":"rust lang:en","limit":30,"mode":"top","since":"2026-02-01","until":"2026-02-24","exclude_retweets":true,"exclude_replies":true,"min_likes":10,"sort_by":"engagement","order":"desc"}'
 ```
 
 Fetch a thread in chronological order:
 
 ```bash
-rzn-tools x-browser thread --tweet-id 1234567890123456789 --limit 200 --sort-by time --order asc
+rzn-tools call x-browser get_thread --args '{"tweet_id":"1234567890123456789","limit":200,"sort_by":"time","order":"asc"}'
 ```
 
 User tweets only (exclude retweets), constrained to February 2026:
 
 ```bash
-rzn-tools x-browser tweets --username rustlang --limit 100 --exclude-retweets true \
-  --start-time 2026-02-01 --end-time 2026-02-28 --order desc
+rzn-tools call x-browser get_user_tweets --args '{"username":"rustlang","limit":100,"exclude_retweets":true,"start_time":"2026-02-01","end_time":"2026-02-28","order":"desc"}'
 ```
 
 ## Practical LLM guidance

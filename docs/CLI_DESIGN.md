@@ -109,6 +109,8 @@ pub enum Commands {
     Config { action },          // rzn-tools config show|set|test
     Connectors,                 // rzn-tools connectors
     Tools { connector },        // rzn-tools tools youtube
+    Call { connector, tool, args }, // rzn-tools call reddit list --args '{...}'
+    Youtube { args },            // rzn-tools youtube <id-or-url> / youtube search ...
 }
 ```
 
@@ -226,8 +228,8 @@ if std::env::var("GOOGLE_API_KEY").is_ok() && std::env::var("GOOGLE_CSE_ID").is_
 
 ### Unit Tests
 ```bash
-cargo test                           # All tests
-cargo test --package rzn_tools_cli  # CLI-specific tests
+make test CARGO_ARGS="--workspace"
+make test CARGO_ARGS="-p rzn_tools_cli"
 ```
 
 ### Integration Tests
@@ -244,6 +246,7 @@ rzn-tools connectors
 rzn-tools tools youtube
 rzn-tools search youtube "test"
 rzn-tools get youtube dQw4w9WgXcQ
+rzn-tools call reddit list --args '{"subreddit":"rust","limit":5}'
 
 # Test output formats
 rzn-tools list --output json
@@ -255,14 +258,14 @@ rzn-tools list --output markdown
 
 ### Development Build
 ```bash
-cargo build                          # Debug build
-cargo build --release                # Release build
+make build CARGO_ARGS="-p rzn_tools_cli"
+make build-release CARGO_ARGS="-p rzn_tools_cli"
 ```
 
 ### Feature Gates
 ```bash
-cargo build --features tui           # Include TUI mode
-cargo build --no-default-features    # Minimal build
+make build CARGO_ARGS="-p rzn_tools_cli --features tui"
+make build CARGO_ARGS="-p rzn_tools_cli --no-default-features"
 ```
 
 ### Cross-Compilation

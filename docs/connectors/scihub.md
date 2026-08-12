@@ -104,32 +104,22 @@ When an Unpaywall email is configured, the connector queries Unpaywall first (be
 
 ### Basic Lookup
 ```bash
-# Look up a paper by DOI
-rzn-tools scihub paper --doi "10.1371/journal.pone.0000308"
-
-# Output as JSON
-rzn-tools scihub paper --doi "10.1038/nature12373" --output json
-
-# Copy PDF URL to clipboard
-rzn-tools scihub paper --doi "10.48550/arXiv.1706.03762" --copy
+rzn-tools tools scihub
+rzn-tools call scihub get --args '{"doi":"10.1371/journal.pone.0000308"}'
+rzn-tools --output json call scihub get --args '{"doi":"10.1038/nature12373"}'
 ```
 
 ### Search
 ```bash
-# Search by topic
-rzn-tools scihub search --query "attention mechanism" --limit 5
-
-# Search open-access only
-rzn-tools scihub search --query "CRISPR" --oa-only --limit 10
-
-# Paginate results
-rzn-tools scihub search --query "machine learning" --page 2
+rzn-tools call scihub search --args '{"query":"attention mechanism","limit":5}'
+rzn-tools call scihub search --args '{"query":"CRISPR","oa_only":true,"limit":10}'
+rzn-tools call scihub search --args '{"query":"machine learning","page":2}'
 ```
 
 ### Batch Lookup
 ```bash
-# Look up multiple DOIs at once
-rzn-tools scihub batch --dois "10.1038/nature12373,10.1371/journal.pone.0000308"
+rzn-tools call scihub batch_get \
+  --args '{"dois":["10.1038/nature12373","10.1371/journal.pone.0000308"]}'
 ```
 
 ### Example Output
@@ -178,14 +168,9 @@ When using rzn-tools as an MCP server, the tool is exposed as `scihub/get`:
 The connector accepts DOIs in various formats:
 
 ```bash
-# Standard DOI
-rzn-tools scihub paper --doi "10.1038/nature12373"
-
-# arXiv DOI
-rzn-tools scihub paper --doi "10.48550/arXiv.1706.03762"
-
-# Journal-specific DOI
-rzn-tools scihub paper --doi "10.1016/j.cell.2023.01.001"
+rzn-tools call scihub get --args '{"doi":"10.1038/nature12373"}'
+rzn-tools call scihub get --args '{"doi":"10.48550/arXiv.1706.03762"}'
+rzn-tools call scihub get --args '{"doi":"10.1016/j.cell.2023.01.001"}'
 ```
 
 ## Error Handling

@@ -3,7 +3,7 @@ use crate::commands::{CommandError, Result};
 use owo_colors::OwoColorize;
 use rzn_tools_core::{
     auth::AuthDetails,
-    auth_store::{AuthStore, FileAuthStore},
+    auth_store::FileAuthStore,
     capabilities::{ConnectorConfigSchema, FieldType},
 };
 use std::io::{self, Write};

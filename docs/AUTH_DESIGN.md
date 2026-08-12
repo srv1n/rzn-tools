@@ -157,11 +157,11 @@ Validation flow:
 
 ```bash
 rzn-tools setup x
-rzn-tools x auth-status
+rzn-tools call x get_auth_status --args '{}'
 
 # If you imported OAuth user tokens:
-rzn-tools x whoami
-rzn-tools x refresh-oauth2
+rzn-tools call x get_me --args '{}'
+rzn-tools call x refresh_access_token --args '{}'
 ```
 
 MCP flow:
