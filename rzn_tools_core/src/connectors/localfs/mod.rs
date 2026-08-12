@@ -4,8 +4,6 @@ use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::auth::AuthDetails;
-use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
 use crate::utils::structured_result_with_text;
 use crate::Connector;
@@ -434,44 +432,6 @@ impl Connector for LocalFsConnector {
         false
     }
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
-    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
-        // No auth required for local filesystem
-        Ok(())
-    }
-
-    async fn test_auth(&self) -> Result<(), ConnectorError> {
-        // No auth required
-        Ok(())
-    }
-
-    fn config_schema(&self) -> ConnectorConfigSchema {
-        ConnectorConfigSchema { fields: vec![] }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "Local filesystem connector for extracting text from documents. Supports PDF, EPUB, DOCX, HTML, Markdown, code, and text files.".to_string(),
-            ),
-        })
-    }
-
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParam>,
@@ -699,11 +659,5 @@ document. Example: path=\"~/spec.pdf\" query=\"threat model\" context_lines=2.",
             "search_content" => self.search_content(&args).await,
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(
-            "Prompts not supported".to_string(),
-        ))
     }
 }

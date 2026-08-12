@@ -206,14 +206,6 @@ pub async fn is_app_running(_app_name: &str) -> Result<bool, ConnectorError> {
     ))
 }
 
-/// Standard connector capabilities for Apple connectors
-pub fn apple_connector_capabilities() -> rmcp::model::ServerCapabilities {
-    rmcp::model::ServerCapabilities {
-        tools: Some(rmcp::model::ToolsCapability { list_changed: None }),
-        ..Default::default()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -10,9 +10,8 @@ use crate::usage::UsageManager;
 use crate::usage_context::current_context;
 use crate::{
     auth::AuthDetails, CallToolRequestParam, CallToolResult, Connector, ConnectorError,
-    InitializeRequestParam, InitializeResult, ListPromptsResult, ListResourcesResult,
-    ListToolsResult, PaginatedRequestParam, Prompt, ReadResourceRequestParam, ResourceContents,
-    ServerCapabilities,
+    ListPromptsResult, ListResourcesResult, ListToolsResult, PaginatedRequestParam, Prompt,
+    ReadResourceRequestParam, ResourceContents,
 };
 
 pub struct MeteredConnector {
@@ -38,17 +37,6 @@ impl Connector for MeteredConnector {
 
     fn credential_provider(&self) -> &'static str {
         self.inner.credential_provider()
-    }
-
-    async fn capabilities(&self) -> ServerCapabilities {
-        self.inner.capabilities().await
-    }
-
-    async fn initialize(
-        &self,
-        request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        self.inner.initialize(request).await
     }
 
     async fn list_resources(

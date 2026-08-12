@@ -1,5 +1,3 @@
-use crate::auth::AuthDetails;
-use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
 use crate::ingest::{
     self, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat, Partial,
@@ -7,8 +5,7 @@ use crate::ingest::{
 };
 use crate::utils::{build_reqwest_client, structured_result, structured_result_with_text};
 use crate::{
-    CallToolRequestParam, CallToolResult, Connector, Implementation, InitializeRequestParam,
-    InitializeResult, ListToolsResult, PaginatedRequestParam, Prompt, ProtocolVersion, Tool,
+    CallToolRequestParam, CallToolResult, Connector, ListToolsResult, PaginatedRequestParam, Tool,
     URLParamExtraction, URLPatternSpec,
 };
 use async_trait::async_trait;
@@ -1272,27 +1269,6 @@ impl Connector for KalshiConnector {
         }]
     }
 
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: Some("https://kalshi.com".to_string()),
-            },
-            instructions: Some(
-                "Use search/list_series/list_events/list_markets for discovery, get/get_series/get_market for core entities, event_metadata and event_candlesticks for event context, order_book/market_candlesticks/list_trades for market microstructure, and get_market_context when you want the important market, event, and routing context assembled in one response. This connector is read-only and does not require authentication."
-                    .to_string(),
-            ),
-        })
-    }
-
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParam>,
@@ -2163,29 +2139,6 @@ impl Connector for KalshiConnector {
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(format!(
-            "Prompt '{}' not found",
-            name
-        )))
-    }
-
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
-    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
-    async fn test_auth(&self) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
-    fn config_schema(&self) -> ConnectorConfigSchema {
-        ConnectorConfigSchema { fields: Vec::new() }
     }
 }
 

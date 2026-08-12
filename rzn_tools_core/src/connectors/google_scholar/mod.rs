@@ -1,4 +1,3 @@
-use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
 use crate::utils::structured_result_with_text;
 use crate::{auth::AuthDetails, Connector};
@@ -138,42 +137,6 @@ impl Connector for GoogleScholarConnector {
         false
     }
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
-    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
-    async fn test_auth(&self) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
-    fn config_schema(&self) -> ConnectorConfigSchema {
-        ConnectorConfigSchema { fields: Vec::new() }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: Some("https://scholar.google.com".to_string()),
-            },
-            instructions: Some(
-                "Search Google Scholar by scraping. This method is unofficial, subject to Google's Terms of Service, and may be unreliable due to CAPTCHAs or HTML changes. Use with caution.".to_string(),
-            ),
-        })
-    }
-
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParam>,
@@ -231,12 +194,5 @@ impl Connector for GoogleScholarConnector {
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(format!(
-            "Prompt '{}' not found",
-            name
-        )))
     }
 }

@@ -3,24 +3,18 @@ pub mod auth;
 pub mod auth_store;
 pub mod capabilities; // Keep for config schema
 pub mod connectors;
-pub mod cpu_pool;
 pub mod display;
 pub mod error;
 pub mod federated;
 pub mod flow_failure;
 pub mod ingest;
-pub mod logging;
 pub mod mcp_server;
 pub mod metered;
 pub mod oauth;
 pub mod oauth_client;
 pub mod paths;
-pub mod prompts;
 pub mod resolver;
-pub mod resources;
 pub mod system_metadata;
-pub mod tools;
-pub mod transport;
 pub mod usage;
 pub mod usage_context;
 pub mod utils;
@@ -118,16 +112,7 @@ pub trait Connector: Send + Sync {
         self.name()
     }
 
-    /// Returns the MCP capabilities of this connector.
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities::default()
-    }
-
     // --- MCP Request Handlers (One for each relevant MCP request type) ---
-    async fn initialize(
-        &self,
-        request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError>;
     async fn list_resources(
         &self,
         _request: Option<PaginatedRequestParam>,
@@ -164,12 +149,20 @@ pub trait Connector: Send + Sync {
         Err(ConnectorError::ToolNotFound)
     }
 
-    // --- Authentication and Configuration (Keep these) ---
+    // --- Authentication and Configuration ---
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError>;
-    async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError>;
-    async fn test_auth(&self) -> Result<(), ConnectorError>;
-    fn config_schema(&self) -> ConnectorConfigSchema;
+    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
+        Ok(AuthDetails::new())
+    }
+    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
+        Ok(())
+    }
+    async fn test_auth(&self) -> Result<(), ConnectorError> {
+        Ok(())
+    }
+    fn config_schema(&self) -> ConnectorConfigSchema {
+        ConnectorConfigSchema::default()
+    }
 }
 // ProviderRegistry and ServerInfo remain the same
 
@@ -254,15 +247,6 @@ impl ProviderRegistry {
             })
             .collect()
     }
-    pub async fn get_provider_capabilities(&self) -> Vec<ServerCapabilities> {
-        let mut results = Vec::new();
-        for provider in self.providers.values() {
-            let c = provider.lock().await;
-            results.push(c.capabilities().await);
-        }
-        results
-    }
-
     pub async fn get_provider_tools(&self) -> Vec<Tool> {
         let mut all_tools = Vec::new();
         for provider in self.providers.values() {
@@ -288,497 +272,274 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
     #[allow(unused_mut)]
     let mut registry = ProviderRegistry::new();
 
-    #[cfg(feature = "hackernews")]
-    {
-        let connector = connectors::hackernews::HackerNewsConnector::new();
-        registry.register_provider(Box::new(connector));
+    #[allow(unused_macros)]
+    macro_rules! register_async {
+        ($connector:expr $(, $alias:literal)*) => {
+            if let Ok(connector) = $connector {
+                let canonical = connector.name();
+                registry.register_provider(Box::new(connector));
+                $(registry.register_alias($alias, canonical);)*
+            }
+        };
     }
+
+    #[allow(unused_macros)]
+    macro_rules! register_sync {
+        ($connector:expr $(, $alias:literal)*) => {{
+            let connector = $connector;
+            let canonical = connector.name();
+            registry.register_provider(Box::new(connector));
+            $(registry.register_alias($alias, canonical);)*
+        }};
+    }
+
+    #[cfg(feature = "hackernews")]
+    register_sync!(connectors::hackernews::HackerNewsConnector::new());
 
     #[cfg(feature = "wikipedia")]
-    {
-        if let Ok(connector) =
-            connectors::wikipedia::WikipediaConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::wikipedia::WikipediaConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "youtube")]
-    {
-        if let Ok(connector) = connectors::youtube::YouTubeConnector::new(None).await {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("youtube_transcripts", "youtube");
-        }
-    }
+    register_async!(
+        connectors::youtube::YouTubeConnector::new(None).await,
+        "youtube_transcripts"
+    );
 
     #[cfg(feature = "arxiv")]
-    {
-        if let Ok(connector) =
-            connectors::arxiv::ArxivConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::arxiv::ArxivConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "biorxiv")]
-    {
-        if let Ok(connector) =
-            connectors::biorxiv::BiorxivConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::biorxiv::BiorxivConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "rss")]
-    {
-        if let Ok(connector) = connectors::rss::RssConnector::new(auth::AuthDetails::new()).await {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::rss::RssConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "weather")]
-    {
-        if let Ok(connector) =
-            connectors::weather::WeatherConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("wttr", "weather");
-        }
-    }
+    register_async!(
+        connectors::weather::WeatherConnector::new(auth::AuthDetails::new()).await,
+        "wttr"
+    );
 
     #[cfg(feature = "polymarket")]
-    {
-        if let Ok(connector) = connectors::polymarket::PolymarketConnector::new().await {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::polymarket::PolymarketConnector::new().await);
 
     #[cfg(feature = "kalshi")]
-    {
-        if let Ok(connector) = connectors::kalshi::KalshiConnector::new().await {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::kalshi::KalshiConnector::new().await);
 
     #[cfg(feature = "discord")]
-    {
-        if let Ok(connector) =
-            connectors::discord::DiscordConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::discord::DiscordConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "google-scholar")]
-    {
-        if let Ok(connector) =
-            connectors::google_scholar::GoogleScholarConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(
+        connectors::google_scholar::GoogleScholarConnector::new(auth::AuthDetails::new()).await
+    );
 
     #[cfg(feature = "pubmed")]
-    {
-        if let Ok(connector) = connectors::pubmed::PubMedConnector::new().await {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::pubmed::PubMedConnector::new().await);
 
     #[cfg(feature = "semantic-scholar")]
-    {
-        if let Ok(connector) =
-            connectors::semantic_scholar::SemanticScholarConnector::new(auth::AuthDetails::new())
-                .await
-        {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("semantic_scholar", "semantic-scholar");
-        }
-    }
+    register_async!(
+        connectors::semantic_scholar::SemanticScholarConnector::new(auth::AuthDetails::new()).await,
+        "semantic_scholar"
+    );
 
     #[cfg(any(feature = "web", feature = "web-lite"))]
-    {
-        if let Ok(connector) = connectors::web::WebConnector::new(auth::AuthDetails::new()).await {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::web::WebConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "play-store")]
-    {
-        if let Ok(connector) =
-            connectors::play_store::PlayStoreConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("play_store", "play-store");
-        }
-    }
+    register_async!(
+        connectors::play_store::PlayStoreConnector::new(auth::AuthDetails::new()).await,
+        "play_store"
+    );
 
     #[cfg(feature = "app-store")]
-    {
-        if let Ok(connector) =
-            connectors::app_store::AppStoreConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("appstore", "app-store");
-        }
-    }
+    register_async!(
+        connectors::app_store::AppStoreConnector::new(auth::AuthDetails::new()).await,
+        "appstore"
+    );
 
     #[cfg(feature = "app-store-connect")]
-    {
-        if let Ok(connector) =
-            connectors::app_store_connect::AppStoreConnectConnector::new(auth::AuthDetails::new())
-                .await
-        {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("asc", "app-store-connect");
-            registry.register_alias("appstoreconnect", "app-store-connect");
-        }
-    }
+    register_async!(
+        connectors::app_store_connect::AppStoreConnectConnector::new(auth::AuthDetails::new())
+            .await,
+        "asc",
+        "appstoreconnect"
+    );
 
     #[cfg(feature = "apple-search-ads")]
-    {
-        if let Ok(connector) =
-            connectors::apple_search_ads::AppleSearchAdsConnector::new(auth::AuthDetails::new())
-                .await
-        {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("asa", "apple-search-ads");
-            registry.register_alias("apple-searchads", "apple-search-ads");
-        }
-    }
+    register_async!(
+        connectors::apple_search_ads::AppleSearchAdsConnector::new(auth::AuthDetails::new()).await,
+        "asa",
+        "apple-searchads"
+    );
 
     #[cfg(feature = "reddit")]
-    {
-        // Use empty/default auth; downstream can call set_auth later.
-        if let Ok(connector) =
-            connectors::reddit::RedditConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::reddit::RedditConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "linkedin")]
-    {
-        if let Ok(connector) =
-            connectors::linkedin::LinkedInConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::linkedin::LinkedInConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "x-api")]
-    {
-        if let Ok(connector) = connectors::x::XApiConnector::new(auth::AuthDetails::new()).await {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("x-api", "x");
-            registry.register_alias("twitter-api", "x");
-        }
-    }
+    register_async!(
+        connectors::x::XApiConnector::new(auth::AuthDetails::new()).await,
+        "x-api",
+        "twitter-api"
+    );
 
     #[cfg(feature = "x-twitter")]
-    {
-        if let Ok(connector) =
-            connectors::x_browser::XConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("x-cookies", "x-browser");
-            registry.register_alias("twitter-cookies", "x-browser");
-        }
-    }
+    register_async!(
+        connectors::x_browser::XConnector::new(auth::AuthDetails::new()).await,
+        "x-cookies",
+        "twitter-cookies"
+    );
 
     #[cfg(feature = "scihub")]
-    {
-        if let Ok(connector) =
-            connectors::scihub::SciHubConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::scihub::SciHubConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "imap")]
-    {
-        if let Ok(connector) = connectors::imap::ImapConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::imap::ImapConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "smtp")]
-    {
-        if let Ok(connector) = connectors::smtp::SmtpConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::smtp::SmtpConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "caldav")]
-    {
-        if let Ok(connector) =
-            connectors::caldav::CaldavConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::caldav::CaldavConnector::new(auth::AuthDetails::new()).await);
 
-    // Productivity & Cloud
     #[cfg(feature = "microsoft-graph")]
-    {
-        if let Ok(connector) =
-            connectors::microsoft::GraphConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::microsoft::GraphConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "google-drive")]
-    {
-        if let Ok(connector) =
-            connectors::google_drive::DriveConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::google_drive::DriveConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "google-gmail")]
-    {
-        if let Ok(connector) =
-            connectors::google_gmail::GmailConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::google_gmail::GmailConnector::new(auth::AuthDetails::new()).await);
+
     #[cfg(feature = "google-calendar")]
-    {
-        if let Ok(connector) =
-            connectors::google_calendar::GoogleCalendarConnector::new(auth::AuthDetails::new())
-                .await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(
+        connectors::google_calendar::GoogleCalendarConnector::new(auth::AuthDetails::new()).await
+    );
+
     #[cfg(feature = "google-people")]
-    {
-        if let Ok(connector) =
-            connectors::google_people::GooglePeopleConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(
+        connectors::google_people::GooglePeopleConnector::new(auth::AuthDetails::new()).await
+    );
 
     #[cfg(feature = "google-search-console")]
-    {
-        if let Ok(connector) = connectors::google_search_console::GoogleSearchConsoleConnector::new(
+    register_async!(
+        connectors::google_search_console::GoogleSearchConsoleConnector::new(
             auth::AuthDetails::new(),
         )
-        .await
-        {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("gsc", "google-search-console");
-        }
-    }
+        .await,
+        "gsc"
+    );
 
     #[cfg(feature = "bing-webmaster-tools")]
-    {
-        if let Ok(connector) = connectors::bing_webmaster_tools::BingWebmasterToolsConnector::new(
+    register_async!(
+        connectors::bing_webmaster_tools::BingWebmasterToolsConnector::new(
             auth::AuthDetails::new(),
         )
-        .await
-        {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("bing-webmaster", "bing-webmaster-tools");
-            registry.register_alias("bing-search-console", "bing-webmaster-tools");
-        }
-    }
+        .await,
+        "bing-webmaster",
+        "bing-search-console"
+    );
 
     #[cfg(feature = "macos-automation")]
-    {
-        let connector = connectors::macos::MacOsAutomationConnector::new();
-        registry.register_provider(Box::new(connector));
-    }
+    register_sync!(connectors::macos::MacOsAutomationConnector::new());
 
     #[cfg(all(target_os = "macos", feature = "macos-spotlight"))]
-    {
-        let connector = connectors::spotlight::SpotlightConnector::new();
-        registry.register_provider(Box::new(connector));
-    }
+    register_sync!(connectors::spotlight::SpotlightConnector::new());
 
-    // Apple Ecosystem connectors (macOS only)
     #[cfg(all(target_os = "macos", feature = "apple-mail"))]
-    {
-        let connector = connectors::apple_mail::AppleMailConnector::new();
-        registry.register_provider(Box::new(connector));
-    }
+    register_sync!(connectors::apple_mail::AppleMailConnector::new());
 
     #[cfg(all(target_os = "macos", feature = "apple-notes"))]
-    {
-        let connector = connectors::apple_notes::AppleNotesConnector::new();
-        registry.register_provider(Box::new(connector));
-    }
+    register_sync!(connectors::apple_notes::AppleNotesConnector::new());
 
     #[cfg(all(target_os = "macos", feature = "apple-messages"))]
-    {
-        let connector = connectors::apple_messages::AppleMessagesConnector::new();
-        registry.register_provider(Box::new(connector));
-    }
+    register_sync!(connectors::apple_messages::AppleMessagesConnector::new());
 
     #[cfg(all(target_os = "macos", feature = "apple-reminders"))]
-    {
-        let connector = connectors::apple_reminders::AppleRemindersConnector::new();
-        registry.register_provider(Box::new(connector));
-    }
+    register_sync!(connectors::apple_reminders::AppleRemindersConnector::new());
 
     #[cfg(all(target_os = "macos", feature = "apple-contacts"))]
-    {
-        let connector = connectors::apple_contacts::AppleContactsConnector::new();
-        registry.register_provider(Box::new(connector));
-    }
+    register_sync!(connectors::apple_contacts::AppleContactsConnector::new());
 
     #[cfg(feature = "slack")]
-    {
-        if let Ok(connector) =
-            connectors::slack::SlackConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::slack::SlackConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "telegram")]
-    {
-        if let Ok(connector) =
-            connectors::telegram::TelegramConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::telegram::TelegramConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "whatsapp")]
-    {
-        if let Ok(connector) =
-            connectors::whatsapp::WhatsAppConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::whatsapp::WhatsAppConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "github")]
-    {
-        if let Ok(connector) =
-            connectors::github::GitHubConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::github::GitHubConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "atlassian")]
-    {
-        if let Ok(connector) =
-            connectors::atlassian::AtlassianConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(connectors::atlassian::AtlassianConnector::new(auth::AuthDetails::new()).await);
 
-    // LLM provider web search
     #[cfg(feature = "openai-search")]
-    {
-        if let Ok(connector) =
-            connectors::openai_search::OpenAIWebSearchConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(
+        connectors::openai_search::OpenAIWebSearchConnector::new(auth::AuthDetails::new()).await
+    );
+
     #[cfg(feature = "anthropic-search")]
-    {
-        if let Ok(connector) =
-            connectors::anthropic_search::AnthropicWebSearchConnector::new(auth::AuthDetails::new())
-                .await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(
+        connectors::anthropic_search::AnthropicWebSearchConnector::new(auth::AuthDetails::new())
+            .await
+    );
+
     #[cfg(feature = "gemini-search")]
-    {
-        if let Ok(connector) =
-            connectors::gemini_search::GeminiSearchConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(
+        connectors::gemini_search::GeminiSearchConnector::new(auth::AuthDetails::new()).await
+    );
+
     #[cfg(feature = "perplexity-search")]
-    {
-        if let Ok(connector) =
-            connectors::perplexity_search::PerplexitySearchConnector::new(auth::AuthDetails::new())
-                .await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(
+        connectors::perplexity_search::PerplexitySearchConnector::new(auth::AuthDetails::new())
+            .await
+    );
+
     #[cfg(feature = "xai-search")]
-    {
-        if let Ok(connector) =
-            connectors::xai_search::XaiSearchConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(
+        connectors::xai_search::XaiSearchConnector::new(auth::AuthDetails::new()).await
+    );
+
     #[cfg(feature = "exa-search")]
-    {
-        if let Ok(connector) =
-            connectors::exa_search::ExaSearchConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("exa-search", "exa");
-        }
-    }
+    register_async!(
+        connectors::exa_search::ExaSearchConnector::new(auth::AuthDetails::new()).await,
+        "exa-search"
+    );
+
     #[cfg(feature = "firecrawl-search")]
-    {
-        if let Ok(connector) =
-            connectors::firecrawl_search::FirecrawlSearchConnector::new(auth::AuthDetails::new())
-                .await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(
+        connectors::firecrawl_search::FirecrawlSearchConnector::new(auth::AuthDetails::new()).await
+    );
+
     #[cfg(feature = "serper-search")]
-    {
-        if let Ok(connector) =
-            connectors::serper_search::SerperSearchConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(
+        connectors::serper_search::SerperSearchConnector::new(auth::AuthDetails::new()).await
+    );
+
     #[cfg(feature = "tavily-search")]
-    {
-        if let Ok(connector) =
-            connectors::tavily_search::TavilySearchConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-            registry.register_alias("tavily", "tavily-search");
-        }
-    }
+    register_async!(
+        connectors::tavily_search::TavilySearchConnector::new(auth::AuthDetails::new()).await,
+        "tavily"
+    );
+
     #[cfg(feature = "serpapi-search")]
-    {
-        if let Ok(connector) =
-            connectors::serpapi_search::SerpapiSearchConnector::new(auth::AuthDetails::new()).await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(
+        connectors::serpapi_search::SerpapiSearchConnector::new(auth::AuthDetails::new()).await
+    );
+
     #[cfg(feature = "parallel-search")]
-    {
-        if let Ok(connector) =
-            connectors::parallel_search::ParallelSearchConnector::new(auth::AuthDetails::new())
-                .await
-        {
-            registry.register_provider(Box::new(connector));
-        }
-    }
+    register_async!(
+        connectors::parallel_search::ParallelSearchConnector::new(auth::AuthDetails::new()).await
+    );
 
     #[cfg(feature = "localfs")]
-    {
-        let connector = connectors::localfs::LocalFsConnector::new();
-        registry.register_provider(Box::new(connector));
-    }
+    register_sync!(connectors::localfs::LocalFsConnector::new());
 
     registry
 }

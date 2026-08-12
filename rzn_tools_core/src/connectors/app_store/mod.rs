@@ -8,7 +8,6 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use crate::auth::AuthDetails;
-use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
 use crate::utils::structured_result_with_text;
 use crate::{Connector, URLParamExtraction, URLPatternSpec};
@@ -122,35 +121,6 @@ impl Connector for AppStoreConnector {
                 use_full_url: false,
             }],
         }]
-    }
-
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: Some(Default::default()),
-            ..Default::default()
-        }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "Use `search` to discover apps (iTunes Search API), then `lookup` or `reviews` \
-by `track_id` (aka App Store / adam id)."
-                    .to_string(),
-            ),
-        })
     }
 
     async fn list_tools(
@@ -305,37 +275,18 @@ by `track_id` (aka App Store / adam id)."
         }
     }
 
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(
-            "Prompt not found".to_string(),
-        ))
-    }
-
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
-    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
     async fn test_auth(&self) -> Result<(), ConnectorError> {
-        let _ = self
-            .request_json(
-                Method::GET,
-                "/search",
-                vec![
-                    ("term".into(), "test".into()),
-                    ("entity".into(), "software".into()),
-                    ("country".into(), "US".into()),
-                    ("limit".into(), "1".into()),
-                ],
-            )
-            .await?;
+        self.request_json(
+            Method::GET,
+            "/search",
+            vec![
+                ("term".into(), "test".into()),
+                ("entity".into(), "software".into()),
+                ("country".into(), "US".into()),
+                ("limit".into(), "1".into()),
+            ],
+        )
+        .await?;
         Ok(())
-    }
-
-    fn config_schema(&self) -> ConnectorConfigSchema {
-        ConnectorConfigSchema { fields: vec![] }
     }
 }

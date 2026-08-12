@@ -1,6 +1,5 @@
 // src/connectors/youtube/mod.rs
 
-use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
 use crate::ingest::{
     self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
@@ -849,10 +848,6 @@ impl Connector for YouTubeConnector {
         ]
     }
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
         if let Some(cookie_header) = details.get("cookie").or_else(|| details.get("cookies")) {
             self.cookie_header = Some(cookie_header.to_string());
@@ -882,43 +877,6 @@ impl Connector for YouTubeConnector {
         }
 
         Ok(()) // No auth
-    }
-
-    fn config_schema(&self) -> ConnectorConfigSchema {
-        ConnectorConfigSchema { fields: vec![] }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "Use `get` as the default YouTube read tool: it accepts `url`, `video_id`, or \
-`item_ref`; videos return transcript/chapters when available, while playlists and channels return \
-ordered `entries`. Use \
-`response_format=\"concise\"` with `output_format=\"normalized_v1\"` for machine-friendly \
-transcript work. Use `search` to discover videos first, `list` for recent channel or playlist \
-uploads, and `resolve_channel` only when you need a stable UC... channel id."
-                    .to_string(),
-            ),
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        _request: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Ok(vec![])
     }
 
     async fn list_tools(
@@ -1673,14 +1631,6 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::MethodNotFound) //  No prompts implemented
-    }
-
-    async fn test_auth(&self) -> Result<(), ConnectorError> {
-        Ok(())
     }
 }
 

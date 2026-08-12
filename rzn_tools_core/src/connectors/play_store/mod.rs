@@ -9,7 +9,6 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use crate::auth::AuthDetails;
-use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
 use crate::ingest::{
     Author, ContentBlock, ContentItem, NormalizedItemV1, OutputFormat, Partial, Source, Truncation,
@@ -315,49 +314,6 @@ impl Connector for PlayStoreConnector {
                 use_full_url: false,
             }],
         }]
-    }
-
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
-    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
-    async fn test_auth(&self) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
-    fn config_schema(&self) -> ConnectorConfigSchema {
-        ConnectorConfigSchema { fields: vec![] }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "Play Store connector for public app listing metadata (best-effort).".to_string(),
-            ),
-        })
-    }
-
-    async fn get_prompt(&self, name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(format!(
-            "Prompt '{}' not found",
-            name
-        )))
     }
 
     async fn list_tools(

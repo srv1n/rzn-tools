@@ -569,10 +569,6 @@ impl Connector for WebConnector {
         Ok(())
     }
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
     async fn test_auth(&self) -> Result<(), ConnectorError> {
         // Test scraping a simple website without requiring cookies
         self.scrape_url("https://example.com", &self.browser, None)
@@ -1022,34 +1018,6 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        // Implement initialization logic (if needed).
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                version: "0.1.0".to_string(),
-                title: None,
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some("MCP connector for various data sources".to_string()),
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        request: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        let _uri_str = request.uri.as_str();
-
-        Ok(vec![])
     }
 }
 

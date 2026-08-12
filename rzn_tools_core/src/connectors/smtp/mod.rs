@@ -511,27 +511,6 @@ impl Connector for SmtpConnector {
         true
     }
 
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: Some("https://lettre.rs".to_string()),
-            },
-            instructions: Some(
-                "Use the SMTP connector to send outbound emails after explicit user confirmation."
-                    .to_string(),
-            ),
-        })
-    }
-
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParam>,
@@ -630,10 +609,6 @@ impl Connector for SmtpConnector {
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
     }
 
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {

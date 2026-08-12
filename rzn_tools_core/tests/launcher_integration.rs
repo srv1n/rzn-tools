@@ -51,28 +51,6 @@ impl Connector for DummyConnector {
         }]
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities::default()
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: None,
-        })
-    }
-
     async fn list_resources(
         &self,
         _request: Option<PaginatedRequestParam>,

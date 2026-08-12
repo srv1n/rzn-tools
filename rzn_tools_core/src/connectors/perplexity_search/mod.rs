@@ -70,30 +70,6 @@ impl Connector for PerplexitySearchConnector {
         true
     }
 
-    async fn initialize(
-        &self,
-        _r: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().into(),
-                version: "0.1.0".into(),
-                title: None,
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some("Use the search tool to query Perplexity with citations.".into()),
-        })
-    }
-    async fn read_resource(
-        &self,
-        _r: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Ok(vec![])
-    }
-
     async fn list_tools(
         &self,
         _r: Option<PaginatedRequestParam>,

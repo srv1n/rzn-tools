@@ -218,10 +218,6 @@ impl Connector for RedditConnector {
         ]
     }
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
         let proxy_url = details.get("proxy_url").map(String::as_str);
         self.api_base_url = Self::resolve_api_base_url(&details)?;
@@ -375,26 +371,6 @@ impl Connector for RedditConnector {
                 },
             ],
         }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "Reddit connector for accessing posts, users, and subreddit data".to_string(),
-            ),
-        })
     }
 
     async fn list_tools(
@@ -1477,27 +1453,16 @@ impl Connector for RedditConnector {
             _ => Err(ConnectorError::ToolNotFound),
         }
     }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(
-            "Prompts not supported".to_string(),
-        ))
-    }
 }
 
-// Helper struct to store post information extracted from URL
 struct PostInfo {
     subreddit: Option<String>,
     post_id: String,
 }
 
 impl RedditConnector {
-    // Helper method to extract post ID and subreddit from a Reddit post URL
     fn extract_post_info_from_url(&self, url: &str) -> Option<PostInfo> {
-        // Handle different Reddit URL formats
         let url = url.trim();
-
-        // Regular Reddit URL pattern: reddit.com/r/subreddit/comments/post_id/...
         let reddit_patterns = [
             r"(?:https?://)?(?:www\.)?reddit\.com/r/([^/]+)/comments/([^/]+)",
             r"(?:https?://)?(?:old\.)?reddit\.com/r/([^/]+)/comments/([^/]+)",

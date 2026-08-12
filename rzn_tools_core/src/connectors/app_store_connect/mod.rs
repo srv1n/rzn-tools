@@ -623,36 +623,6 @@ impl Connector for AppStoreConnectConnector {
         true
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: Some(Default::default()),
-            ..Default::default()
-        }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "Create an App Store Connect API key in App Store Connect > Users and Access > \
-Keys. Configure `key_id`, `issuer_id`, and `private_key_path` (path to the downloaded .p8) \
-or `private_key_p8` (contents). Optionally set `vendor_number` for Sales/Finance reports."
-                    .to_string(),
-            ),
-        })
-    }
-
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParam>,
@@ -1335,12 +1305,6 @@ or `private_key_p8` (contents). Optionally set `vendor_number` for Sales/Finance
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(
-            "Prompt not found".to_string(),
-        ))
     }
 
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {

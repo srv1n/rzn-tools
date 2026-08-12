@@ -8,8 +8,6 @@ use serde_json::{json, Value};
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use crate::auth::AuthDetails;
-use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
 use crate::utils::structured_result_with_text;
 
@@ -260,14 +258,6 @@ impl crate::Connector for SpotlightConnector {
         false
     }
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
-    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
     async fn test_auth(&self) -> Result<(), ConnectorError> {
         // Test by running a simple query
         #[cfg(target_os = "macos")]
@@ -276,36 +266,6 @@ impl crate::Connector for SpotlightConnector {
                 .await?;
         }
         Ok(())
-    }
-
-    fn config_schema(&self) -> ConnectorConfigSchema {
-        ConnectorConfigSchema { fields: vec![] }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: Some("Spotlight Search".to_string()),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "macOS Spotlight search connector. Use search_files for full-text search, \
-                 search_by_name for filename search, or search_by_kind for type-specific searches."
-                    .to_string(),
-            ),
-        })
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
     }
 
     async fn list_tools(

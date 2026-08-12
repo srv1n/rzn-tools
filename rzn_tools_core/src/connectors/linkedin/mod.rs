@@ -963,33 +963,6 @@ impl Connector for LinkedInConnector {
         true
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: Some(Default::default()),
-            ..Default::default()
-        }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: Some("LinkedIn".to_string()),
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: Some("https://learn.microsoft.com/en-us/linkedin/".to_string()),
-            },
-            instructions: Some(
-                "Configure LinkedIn by importing externally obtained OAuth/OIDC tokens (access_token, optional refresh_token, optional id_token). This connector does not run the OAuth browser flow itself and does not use browser cookies.".to_string(),
-            ),
-        })
-    }
-
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParam>,
@@ -1287,12 +1260,6 @@ impl Connector for LinkedInConnector {
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(
-            "Prompt not found".to_string(),
-        ))
     }
 
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {

@@ -7,7 +7,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::auth::AuthDetails;
-use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
 use crate::ingest::{
     self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
@@ -1318,10 +1317,6 @@ impl Connector for HackerNewsConnector {
         }]
     }
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
         // No auth required for public Hacker News APIs, but profiles may still want to
         // route traffic via a per-account proxy.
@@ -1336,30 +1331,6 @@ impl Connector for HackerNewsConnector {
             .fetch_json("https://hacker-news.firebaseio.com/v0/maxitem.json")
             .await?;
         Ok(())
-    }
-
-    fn config_schema(&self) -> ConnectorConfigSchema {
-        ConnectorConfigSchema { fields: vec![] }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "Canonical tools for LLMs: use 'get_thread' to fetch a thread, 'search' to search by relevance, 'search_recent' for chronological search, and 'list_threads' for top/new/best/ask/show/job feeds. 'get_thread' defaults to compact plain-text output with a bounded comment list. Legacy aliases ('get', 'get_post', 'search_stories', 'search_by_date', 'get_stories') remain available for compatibility.".to_string(),
-            ),
-        })
     }
 
     async fn list_tools(
@@ -2487,12 +2458,6 @@ impl Connector for HackerNewsConnector {
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(
-            "Prompts not supported".to_string(),
-        ))
     }
 }
 

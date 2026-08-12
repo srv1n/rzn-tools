@@ -9,8 +9,6 @@ use std::borrow::Cow;
 use std::process::Stdio;
 use std::sync::Arc;
 
-use crate::auth::AuthDetails;
-use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
 use crate::utils::structured_result_with_text;
 
@@ -193,14 +191,6 @@ impl crate::Connector for MacOsAutomationConnector {
         false
     }
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
-    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
     async fn test_auth(&self) -> Result<(), ConnectorError> {
         // Best-effort: do a no-op script when on macOS to trigger permissions early
         #[cfg(target_os = "macos")]
@@ -210,30 +200,6 @@ impl crate::Connector for MacOsAutomationConnector {
                 .await?;
         }
         Ok(())
-    }
-
-    fn config_schema(&self) -> ConnectorConfigSchema {
-        ConnectorConfigSchema { fields: vec![] }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "AppleScript/JXA execution with helper tools. On first use, macOS may prompt for Automation/Accessibility permissions.".to_string(),
-            ),
-        })
     }
 
     async fn list_tools(
@@ -609,11 +575,5 @@ user permission). Use when the user has an existing Shortcut workflow. Example: 
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(
-            "Prompts not supported".to_string(),
-        ))
     }
 }

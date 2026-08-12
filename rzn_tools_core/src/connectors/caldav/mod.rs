@@ -1206,35 +1206,6 @@ impl Connector for CaldavConnector {
         true
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: Some(Default::default()),
-            ..Default::default()
-        }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: Some("CalDAV".to_string()),
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "Configure base_url + authentication (username/password or bearer token). \
-Use app-specific passwords where your provider requires them."
-                    .to_string(),
-            ),
-        })
-    }
-
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParam>,
@@ -1477,12 +1448,6 @@ Use app-specific passwords where your provider requires them."
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(
-            "Prompt not found".to_string(),
-        ))
     }
 
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {

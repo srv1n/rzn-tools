@@ -1,12 +1,11 @@
 use crate::capabilities::ConnectorConfigSchema;
-use crate::cpu_pool;
 use crate::error::ConnectorError;
 use crate::ingest::{
     self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
     Partial, Source,
 };
 use crate::utils::{collect_paginated, structured_result_with_text, Page};
-use crate::{auth::AuthDetails, Connector, URLParamExtraction, URLPatternSpec};
+use crate::{Connector, URLParamExtraction, URLPatternSpec};
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, ACCEPT_LANGUAGE};
 use rmcp::model::*;
@@ -368,19 +367,8 @@ impl PubMedConnector {
         );
 
         let parse_start = std::time::Instant::now();
-        println!(
-            "[PUBMED] cpu_pool dispatch queue={} workers={}",
-            cpu_pool::queue_depth(),
-            cpu_pool::worker_count()
-        );
-        info!(
-            target: "app_lib::pubmed",
-            queue_depth = cpu_pool::queue_depth(),
-            workers = cpu_pool::worker_count(),
-            "dispatching pubmed search parse to datasourcer cpu pool"
-        );
         let query_owned = query.to_string();
-        let parse_result = cpu_pool::spawn_cpu(move || {
+        let parse_result = tokio::task::spawn_blocking(move || {
             parse_pubmed_search_document(SearchParseInput {
                 content,
                 limit,
@@ -389,17 +377,12 @@ impl PubMedConnector {
                 content_len,
             })
         })
-        .await?;
-        println!(
-            "[PUBMED] cpu_pool complete queue={} elapsed={}ms",
-            cpu_pool::queue_depth(),
-            parse_start.elapsed().as_millis()
-        );
+        .await
+        .map_err(|error| ConnectorError::Other(format!("PubMed parse task failed: {error}")))??;
         info!(
             target: "app_lib::pubmed",
-            queue_depth = cpu_pool::queue_depth(),
             parse_ms = parse_start.elapsed().as_millis(),
-            "pubmed search parse completed"
+            "pubmed search parse completed on Tokio blocking pool"
         );
 
         Ok(parse_result)
@@ -888,15 +871,6 @@ impl Connector for PubMedConnector {
         }]
     }
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
-    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
-        // PubMed doesn't require authentication for basic searches
-        Ok(())
-    }
-
     async fn test_auth(&self) -> Result<(), ConnectorError> {
         // Test a simple search to verify connectivity
         let _result = self.search_pubmed("test", 1, 1, None).await?;
@@ -906,33 +880,6 @@ impl Connector for PubMedConnector {
     fn config_schema(&self) -> ConnectorConfigSchema {
         // PubMed doesn't require any configuration for basic usage
         ConnectorConfigSchema { fields: vec![] }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "PubMed connector. Effective query tips:\n\
-- Begin with a few essential concepts and add more only if the results are too broad.\n\
-- Group synonyms inside parentheses with OR, then connect distinct ideas with uppercase AND to control the logic.\n\
-- Use quotation marks only when an exact phrase is critical; quoting or truncating turns off Automatic Term Mapping, so compare results with and without those limits.\n\
-- Scan an early relevant record to capture MeSH headings and combine those controlled terms with your free-text keywords.\n\
-- Apply filters (date, article type, language) after reviewing the initial set—filters persist until you clear them.\n\
-- For proximity, use the Title/Abstract proximity syntax (e.g., \"term1 term2\"[tiab:~2]) to keep related words near each other.\n\
-- When you see few or no results, remove field tags or exclusions, broaden terminology, or drop the narrowest concept before re-running.".to_string(),
-            ),
-        })
     }
 
     async fn list_resources(

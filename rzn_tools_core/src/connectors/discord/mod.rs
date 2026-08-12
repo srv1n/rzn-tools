@@ -215,24 +215,6 @@ impl Connector for DiscordConnector {
         }
     }
 
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some("Access Discord. Requires a Bot Token and MESSAGE_CONTENT intent enabled in Discord Developer Portal for reading message content.".to_string()),
-        })
-    }
-
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParam>,
@@ -1148,13 +1130,6 @@ impl Connector for DiscordConnector {
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(format!(
-            "Prompt '{}' not found",
-            name
-        )))
     }
 }
 

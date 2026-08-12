@@ -1,4 +1,3 @@
-use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
 use crate::ingest::{
     self, Author, ContentBlock, ContentItem, NormalizedPageV1, OutputFormat, Partial, Source,
@@ -203,40 +202,6 @@ impl Connector for RssConnector {
 
     fn requires_auth(&self) -> bool {
         false
-    }
-
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
-    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
-    async fn test_auth(&self) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
-    fn config_schema(&self) -> ConnectorConfigSchema {
-        ConnectorConfigSchema { fields: Vec::new() }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some("Fetch and read RSS/Atom/JSON feeds.".to_string()),
-        })
     }
 
     async fn list_tools(
@@ -712,12 +677,5 @@ URL, not a feed URL. Example: url=\"https://blog.rust-lang.org\".",
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(format!(
-            "Prompt '{}' not found",
-            name
-        )))
     }
 }

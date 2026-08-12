@@ -83,31 +83,6 @@ impl Connector for AnthropicWebSearchConnector {
         true
     }
 
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                version: "0.1.0".to_string(),
-                title: None,
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some("Use the search tool to query the web via Anthropic.".into()),
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        _r: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Ok(vec![])
-    }
-
     async fn list_tools(
         &self,
         _r: Option<PaginatedRequestParam>,

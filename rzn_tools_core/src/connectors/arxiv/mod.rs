@@ -544,16 +544,6 @@ impl Connector for ArxivConnector {
         }]
     }
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        // arXiv API doesn't require authentication
-        Ok(AuthDetails::new())
-    }
-
-    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
-        // arXiv API doesn't require authentication
-        Ok(())
-    }
-
     async fn test_auth(&self) -> Result<(), ConnectorError> {
         // Test the API by making a simple search request
         let args = SearchPapersArgs {
@@ -580,26 +570,6 @@ impl Connector for ArxivConnector {
     fn config_schema(&self) -> ConnectorConfigSchema {
         // arXiv API doesn't require configuration
         ConnectorConfigSchema { fields: Vec::new() }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "arXiv connector for searching and retrieving academic papers".to_string(),
-            ),
-        })
     }
 
     async fn list_resources(

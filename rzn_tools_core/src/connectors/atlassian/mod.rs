@@ -233,33 +233,6 @@ impl Connector for AtlassianConnector {
         true
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: Some(Default::default()),
-            ..Default::default()
-        }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "Set jira_base/confluence_base, user (email), and token (API token).".into(),
-            ),
-        })
-    }
-
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParam>,
@@ -363,24 +336,22 @@ impl Connector for AtlassianConnector {
         }
     }
 
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams("Prompt not found".into()))
-    }
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         Ok(self.auth.clone())
     }
+
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
         self.auth = details.clone();
         let _ = FileAuthStore::new_default().save(self.name(), &details);
         Ok(())
     }
+
     async fn test_auth(&self) -> Result<(), ConnectorError> {
-        let _ = self
-            .call_tool(CallToolRequestParam {
-                name: "test_auth".into(),
-                arguments: Some(serde_json::Map::new()),
-            })
-            .await?;
+        self.call_tool(CallToolRequestParam {
+            name: "test_auth".into(),
+            arguments: Some(serde_json::Map::new()),
+        })
+        .await?;
         Ok(())
     }
 

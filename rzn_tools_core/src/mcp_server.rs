@@ -218,27 +218,15 @@ impl McpServer {
         }
     }
 
-    /// Get aggregated capabilities from all connectors
+    /// This server implements the aggregate tools, resources, and prompts routes.
+    /// A connector may return an empty list, but the protocol surface exists.
     pub async fn get_capabilities(&self) -> ServerCapabilities {
-        let registry = self.registry.lock().await;
-        let mut capabilities = ServerCapabilities::default();
-
-        // Check if any connector supports tools
-        for connector in registry.providers.values() {
-            let conn = connector.lock().await;
-            let conn_caps = conn.capabilities().await;
-            if conn_caps.tools.is_some() {
-                capabilities.tools = conn_caps.tools;
-            }
-            if conn_caps.resources.is_some() {
-                capabilities.resources = conn_caps.resources;
-            }
-            if conn_caps.prompts.is_some() {
-                capabilities.prompts = conn_caps.prompts;
-            }
+        ServerCapabilities {
+            tools: Some(Default::default()),
+            resources: Some(Default::default()),
+            prompts: Some(Default::default()),
+            ..Default::default()
         }
-
-        capabilities
     }
 
     /// Handle initialize request
@@ -1489,9 +1477,9 @@ mod tests {
     use crate::ingest::{ContentItem, NormalizedPageV1, OutputFormat, Partial, Source};
     use async_trait::async_trait;
     use rmcp::model::{
-        CallToolRequestParam, InitializeRequestParam, InitializeResult, ListPromptsResult,
-        ListResourcesResult, ListToolsResult, PaginatedRequestParam, Prompt, ProtocolVersion,
-        ReadResourceRequestParam, ResourceContents, ServerCapabilities, Tool,
+        CallToolRequestParam, InitializeRequestParam, ListPromptsResult, ListResourcesResult,
+        ListToolsResult, PaginatedRequestParam, Prompt, ReadResourceRequestParam, ResourceContents,
+        Tool,
     };
     use serde_json::json;
     use std::borrow::Cow;
@@ -1511,28 +1499,6 @@ mod tests {
 
         fn description(&self) -> &'static str {
             "fake"
-        }
-
-        async fn capabilities(&self) -> ServerCapabilities {
-            ServerCapabilities::default()
-        }
-
-        async fn initialize(
-            &self,
-            _request: InitializeRequestParam,
-        ) -> Result<InitializeResult, ConnectorError> {
-            Ok(InitializeResult {
-                protocol_version: ProtocolVersion::LATEST,
-                capabilities: ServerCapabilities::default(),
-                server_info: crate::Implementation {
-                    name: "fake".to_string(),
-                    title: None,
-                    version: "0.0.0".to_string(),
-                    icons: None,
-                    website_url: None,
-                },
-                instructions: None,
-            })
         }
 
         async fn list_resources(
@@ -1662,28 +1628,6 @@ mod tests {
 
         fn description(&self) -> &'static str {
             self.name
-        }
-
-        async fn capabilities(&self) -> ServerCapabilities {
-            ServerCapabilities::default()
-        }
-
-        async fn initialize(
-            &self,
-            _request: InitializeRequestParam,
-        ) -> Result<InitializeResult, ConnectorError> {
-            Ok(InitializeResult {
-                protocol_version: ProtocolVersion::LATEST,
-                capabilities: ServerCapabilities::default(),
-                server_info: crate::Implementation {
-                    name: self.name.to_string(),
-                    title: None,
-                    version: "0.0.0".to_string(),
-                    icons: None,
-                    website_url: None,
-                },
-                instructions: None,
-            })
         }
 
         async fn list_resources(

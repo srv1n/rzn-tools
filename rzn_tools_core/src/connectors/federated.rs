@@ -3,8 +3,6 @@
 //! This connector exposes federated search as an MCP tool, allowing AI agents
 //! to search across multiple data sources with a single tool call.
 
-use crate::auth::AuthDetails;
-use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
 use crate::federated::{FederatedSearch, MergeMode, ProfileStore, SearchProfile};
 use crate::utils::structured_result_with_text;
@@ -77,45 +75,6 @@ impl Connector for FederatedConnector {
 
     fn requires_auth(&self) -> bool {
         false
-    }
-
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
-    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
-    async fn test_auth(&self) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
-    fn config_schema(&self) -> ConnectorConfigSchema {
-        ConnectorConfigSchema { fields: vec![] }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: Some("Federated Search".to_string()),
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "Federated search connector for searching across multiple data sources \
-                simultaneously. Use profiles like 'research', 'enterprise', 'social', \
-                'code', or 'web', or specify connectors directly."
-                    .to_string(),
-            ),
-        })
     }
 
     async fn list_tools(
@@ -267,10 +226,6 @@ impl Connector for FederatedConnector {
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::Other("No prompts available".to_string()))
     }
 }
 

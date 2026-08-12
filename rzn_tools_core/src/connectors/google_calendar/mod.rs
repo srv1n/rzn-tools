@@ -45,18 +45,6 @@ impl Connector for GoogleCalendarConnector {
     fn requires_auth(&self) -> bool {
         true
     }
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: Some(Default::default()),
-            ..Default::default()
-        }
-    }
-    async fn initialize(
-        &self,
-        _r: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult { protocol_version: ProtocolVersion::LATEST, capabilities: self.capabilities().await, server_info: Implementation { name: self.name().to_string(), title: None, version: "0.1.0".to_string(), icons: None, website_url: None }, instructions: Some("Authenticate via Google device flow; shares tokens with other Google connectors under 'google-common'.".to_string()) })
-    }
     async fn list_tools(
         &self,
         _r: Option<PaginatedRequestParam>,
@@ -427,11 +415,7 @@ Tool { name: Cow::Borrowed("list_events"), title: None, description: Some(Cow::B
             _ => Err(ConnectorError::ToolNotFound),
         }
     }
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(
-            "Prompt not found".to_string(),
-        ))
-    }
+
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         Ok(self.auth.clone())
     }

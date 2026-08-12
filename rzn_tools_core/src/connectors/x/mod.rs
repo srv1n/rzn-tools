@@ -1323,27 +1323,6 @@ TWITTER_BEARER_TOKEN."
         }
     }
 
-    async fn initialize(
-        &self,
-        _r: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().into(),
-                version: "0.1.0".into(),
-                title: None,
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "X (Twitter) official API connector. Supports bearer for public reads and OAuth 2.0 / OAuth 1.0a for user-context operations. Use get_auth_status to inspect configured auth. Use whoami to validate user-context auth."
-                    .to_string(),
-            ),
-        })
-    }
-
     async fn list_tools(
         &self,
         request: Option<PaginatedRequestParam>,
@@ -3352,13 +3331,6 @@ the same time filtering as get_user_tweets.",
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(format!(
-            "Prompt with name {} not found",
-            name
-        )))
     }
 }
 

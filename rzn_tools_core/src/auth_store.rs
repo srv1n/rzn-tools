@@ -1,5 +1,5 @@
 use crate::auth::AuthDetails;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -24,16 +24,8 @@ pub trait AuthStore: Send + Sync {
 pub const AUTH_PROFILE_DELIM: &str = "::";
 pub const CONFIG_DIR_NAME: &str = "rzn-tools";
 
-pub fn config_base_dir() -> PathBuf {
-    crate::paths::config_base_dir()
-}
-
 pub fn config_dir() -> PathBuf {
-    config_base_dir().join(CONFIG_DIR_NAME)
-}
-
-pub fn config_file(relative: impl AsRef<Path>) -> PathBuf {
-    config_dir().join(relative)
+    crate::paths::config_base_dir().join(CONFIG_DIR_NAME)
 }
 
 /// A simple in-memory store, mainly for testing.

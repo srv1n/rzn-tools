@@ -249,47 +249,6 @@ impl Connector for ParallelSearchConnector {
         true
     }
 
-    async fn initialize(
-        &self,
-        _r: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().into(),
-                version: "0.2.0".into(),
-                title: None,
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-r#"Parallel Search is for broad web objectives, query fan-out, and ongoing monitoring.
-
-Use Parallel Search when you need:
-- one natural-language search objective answered from the open web
-- multiple parallel subqueries for comparison or coverage
-- recurring monitors that detect new web events on a cadence
-- token-efficient repeated search inside an agent loop
-
-Preferred tool flow:
-1. search -> broad discovery, comparisons, or decomposed subqueries with search_queries.
-2. create_monitor -> persistent tracking for announcements, pricing, funding, or policy changes.
-3. list_monitors -> inspect current monitors before reading or canceling.
-4. get_monitor_events -> fetch detections from a monitor.
-5. cancel_monitor -> stop a monitor that is no longer needed.
-
-Use Exa instead when the task is entity-typed lookup (people, companies, papers, repos, tweets, filings), seed-based similarity, or a single grounded cited answer."#.into(),
-            ),
-        })
-    }
-    async fn read_resource(
-        &self,
-        _r: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Ok(vec![])
-    }
-
     async fn list_tools(
         &self,
         _r: Option<PaginatedRequestParam>,

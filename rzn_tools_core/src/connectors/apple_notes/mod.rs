@@ -5,9 +5,7 @@
 // Great for personal knowledge bases, quick capture, and note organization.
 
 #[cfg(target_os = "macos")]
-use crate::connectors::apple_common::{
-    apple_connector_capabilities, escape_applescript_string, run_applescript_output,
-};
+use crate::connectors::apple_common::{escape_applescript_string, run_applescript_output};
 use crate::error::ConnectorError;
 use crate::utils::structured_result_with_text;
 use async_trait::async_trait;
@@ -525,17 +523,6 @@ impl crate::Connector for AppleNotesConnector {
         true
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        #[cfg(target_os = "macos")]
-        {
-            apple_connector_capabilities()
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            ServerCapabilities::default()
-        }
-    }
-
     async fn get_auth_details(&self) -> Result<crate::auth::AuthDetails, ConnectorError> {
         Ok(crate::auth::AuthDetails::new())
     }
@@ -563,27 +550,6 @@ impl crate::Connector for AppleNotesConnector {
 
     fn config_schema(&self) -> crate::capabilities::ConnectorConfigSchema {
         crate::capabilities::ConnectorConfigSchema { fields: vec![] }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: Some("Apple Notes".to_string()),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "Native Notes.app integration. Access all notes from iCloud and local accounts. First use may trigger a permission prompt."
-                    .to_string(),
-            ),
-        })
     }
 
     async fn list_tools(
@@ -907,9 +873,5 @@ get_note first if you need to preserve existing content.",
                 _ => Err(ConnectorError::ToolNotFound),
             }
         }
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
     }
 }

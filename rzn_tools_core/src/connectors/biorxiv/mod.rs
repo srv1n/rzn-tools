@@ -1,4 +1,3 @@
-use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
 use crate::ingest::{
     self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
@@ -327,44 +326,12 @@ impl Connector for BiorxivConnector {
         false
     }
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
-    async fn set_auth_details(&mut self, _details: AuthDetails) -> Result<(), ConnectorError> {
-        Ok(())
-    }
-
     async fn test_auth(&self) -> Result<(), ConnectorError> {
         // Simple test: fetch 1 recent paper from biorxiv
         match self.fetch_from_api("biorxiv/recent/1").await {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         }
-    }
-
-    fn config_schema(&self) -> ConnectorConfigSchema {
-        ConnectorConfigSchema { fields: Vec::new() }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: Some("https://api.biorxiv.org".to_string()),
-            },
-            instructions: Some(
-                "Access bioRxiv and medRxiv preprints via official API.".to_string(),
-            ),
-        })
     }
 
     async fn list_tools(
@@ -659,12 +626,5 @@ server=\"biorxiv\" doi=\"10.1101/2024.01.01.000000\".",
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn get_prompt(&self, name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::InvalidParams(format!(
-            "Prompt '{}' not found",
-            name
-        )))
     }
 }

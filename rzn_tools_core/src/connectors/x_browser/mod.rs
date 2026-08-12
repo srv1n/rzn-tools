@@ -700,10 +700,6 @@ impl Connector for XConnector {
         }]
     }
 
-    async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
-        Ok(AuthDetails::new())
-    }
-
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
         // If no auth details provided, skip authentication (allows listing tools without auth)
         if details.is_empty() {
@@ -867,28 +863,6 @@ impl Connector for XConnector {
                 },
             ],
         }
-    }
-
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        // Implement initialization logic (if needed).
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "X (Twitter) connector for accessing user profiles, tweets, and social media data"
-                    .to_string(),
-            ),
-        })
     }
 
     async fn list_resources(
@@ -1789,27 +1763,24 @@ only when the user asked you to message someone.",
 
     async fn get_prompt(&self, name: &str) -> Result<Prompt, ConnectorError> {
         match name {
-            "summarize_user_tweets" => {
-                //Does not make sense to retrieve tweets here, we should probably inject them.
-                let prompt = Prompt{
-                    name: "summarize_user_tweets".to_string(),
+            "summarize_user_tweets" => Ok(Prompt {
+                name: "summarize_user_tweets".to_string(),
+                title: None,
+                description: Some(
+                    "Given the provided tweets, generate a concise summary highlighting the main topics, sentiments, and key information conveyed by the user.".to_string(),
+                ),
+                arguments: Some(vec![PromptArgument {
+                    name: "username".to_string(),
                     title: None,
-                    description: Some("Given the provided tweets, generate a concise summary highlighting the main topics, sentiments, and key information conveyed by the user.".to_string()),
-                    arguments: Some(vec![
-                        PromptArgument{
-                            name: "username".to_string(),
-                            title: None,
-                            description: Some("Twitter username for which to summarize tweets".to_string()),
-                            required: Some(true)
-                        }
-                    ]),
-                    icons: None,
-                };
-                Ok(prompt)
-            }
+                    description: Some(
+                        "Twitter username for which to summarize tweets".to_string(),
+                    ),
+                    required: Some(true),
+                }]),
+                icons: None,
+            }),
             _ => Err(ConnectorError::InvalidParams(format!(
-                "Prompt with name {} not found",
-                name
+                "Prompt with name {name} not found"
             ))),
         }
     }

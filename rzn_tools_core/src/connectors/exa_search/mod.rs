@@ -579,48 +579,6 @@ impl Connector for ExaSearchConnector {
         true
     }
 
-    async fn initialize(
-        &self,
-        _r: InitializeRequestParam,
-    ) -> Result<InitializeResult, ConnectorError> {
-        Ok(InitializeResult {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: self.capabilities().await,
-            server_info: Implementation {
-                name: self.name().into(),
-                version: "0.2.0".into(),
-                title: None,
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-r#"Exa is for entity-oriented discovery and source retrieval.
-
-Use Exa when you need:
-- specific entity types such as people, companies, papers, GitHub repos, tweets, or filings
-- one good seed URL expanded into similar pages with find_similar
-- a cited answer to a focused question
-- clean page text, highlights, or summaries for known URLs or Exa ids
-
-Preferred tool flow:
-1. search -> discover candidate URLs/entities. Lean on category, include_domains, and published-date filters.
-2. get_contents -> fetch readable text/highlights/summary for URLs or Exa result ids you already trust.
-3. find_similar -> branch out from one strong seed URL.
-4. answer -> produce a grounded answer with citations when the user wants an answer, not a result set.
-5. research -> run one deeper synthesis job or emit structured JSON.
-
-Use Parallel Search instead when the task is broad fan-out search, comparison across many subqueries, recurring monitoring, or a token-sensitive agent loop."#.into(),
-            ),
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        _r: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Ok(vec![])
-    }
-
     async fn list_tools(
         &self,
         _r: Option<PaginatedRequestParam>,
