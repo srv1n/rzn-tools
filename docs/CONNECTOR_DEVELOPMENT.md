@@ -35,7 +35,7 @@ Use this checklist when adding a new connector:
 ### Phase 2: CLI Integration
 - [ ] Forward feature flag in `rzn_tools_cli/Cargo.toml`
 - [ ] Forward feature flag in `rzn_tools_mcp/Cargo.toml`
-- [ ] Add to "full" and "all-connectors" feature lists
+- [ ] Add to the appropriate distribution profile(s), if any
 
 ### Phase 3: Smart Features (Optional but Recommended)
 - [ ] Add URL/ID patterns to Smart Resolver

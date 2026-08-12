@@ -888,13 +888,6 @@ impl Connector for PubMedConnector {
         }]
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         Ok(AuthDetails::new())
     }

@@ -511,13 +511,6 @@ impl Connector for SmtpConnector {
         true
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn initialize(
         &self,
         _request: InitializeRequestParam,
@@ -537,23 +530,6 @@ impl Connector for SmtpConnector {
                     .to_string(),
             ),
         })
-    }
-
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: Vec::new(),
-            next_cursor: None,
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        _request: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
     }
 
     async fn list_tools(
@@ -654,16 +630,6 @@ impl Connector for SmtpConnector {
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn list_prompts(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: Vec::new(),
-            next_cursor: None,
-        })
     }
 
     async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {

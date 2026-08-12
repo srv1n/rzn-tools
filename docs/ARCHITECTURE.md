@@ -74,8 +74,6 @@ explicit advanced local feature that uses Rookie and publicsuffix for browser-pr
 For normal individual signed-in browser workflows (Web, X, Reddit, and YouTube), use
 `rzn-browser` as a separate CLI/MCP surface; rzn-tools does not take a code dependency on it.
 
-**Derive Macros** (`scrapable_derive/`): `#[derive(Scrapable)]` for automatic HTML parsing with CSS selector-based field extraction.
-
 ## Development Guidelines
 
 ### Adding New Connectors

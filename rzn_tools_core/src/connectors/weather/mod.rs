@@ -462,13 +462,6 @@ impl Connector for WeatherConnector {
         false
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn initialize(
         &self,
         _request: InitializeRequestParam,
@@ -488,23 +481,6 @@ impl Connector for WeatherConnector {
                     .to_string(),
             ),
         })
-    }
-
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: Vec::new(),
-            next_cursor: None,
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        _request: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
     }
 
     async fn list_tools(
@@ -664,16 +640,6 @@ Example: location=\"San Francisco\" days=2 units=\"metric\".",
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn list_prompts(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: Vec::new(),
-            next_cursor: None,
-        })
     }
 
     async fn get_prompt(&self, name: &str) -> Result<Prompt, ConnectorError> {

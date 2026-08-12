@@ -70,13 +70,6 @@ impl Connector for PerplexitySearchConnector {
         true
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn initialize(
         &self,
         _r: InitializeRequestParam,
@@ -92,15 +85,6 @@ impl Connector for PerplexitySearchConnector {
                 website_url: None,
             },
             instructions: Some("Use the search tool to query Perplexity with citations.".into()),
-        })
-    }
-    async fn list_resources(
-        &self,
-        _r: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: vec![],
-            next_cursor: None,
         })
     }
     async fn read_resource(
@@ -257,19 +241,6 @@ sources. Example: query=\"new EU AI Act enforcement dates\" limit=5.",
             data["raw"] = value.clone();
         }
         Ok(structured_result_with_text(&data, None)?)
-    }
-
-    async fn list_prompts(
-        &self,
-        _r: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![],
-            next_cursor: None,
-        })
-    }
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::ToolNotFound)
     }
 
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {

@@ -260,7 +260,6 @@ rzn-tools/
 ├── rzn_tools_core/       # Core library with Connector trait
 ├── rzn_tools_cli/        # CLI binary
 ├── rzn_tools_mcp/        # MCP server binary
-├── scrapable_derive/ # Proc-macro for HTML parsing
 ├── vendor/           # Vendored dependencies
 ├── docs/             # Documentation
 └── packaging/        # Installation scripts, Homebrew formula

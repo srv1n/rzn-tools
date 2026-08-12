@@ -1057,13 +1057,6 @@ impl Connector for XApiConnector {
         true
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         let mut auth = AuthDetails::new();
         let oauth2 = self.oauth2_snapshot();
@@ -1349,24 +1342,6 @@ TWITTER_BEARER_TOKEN."
                     .to_string(),
             ),
         })
-    }
-
-    async fn list_resources(
-        &self,
-        request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        let _cursor = request.and_then(|r| r.cursor);
-        Ok(ListResourcesResult {
-            resources: Vec::new(),
-            next_cursor: None,
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        _request: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
     }
 
     async fn list_tools(
@@ -3377,17 +3352,6 @@ the same time filtering as get_user_tweets.",
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn list_prompts(
-        &self,
-        request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        let _cursor = request.and_then(|r| r.cursor);
-        Ok(ListPromptsResult {
-            prompts: Vec::new(),
-            next_cursor: None,
-        })
     }
 
     async fn get_prompt(&self, name: &str) -> Result<Prompt, ConnectorError> {

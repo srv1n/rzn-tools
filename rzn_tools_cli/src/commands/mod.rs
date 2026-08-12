@@ -7,6 +7,7 @@ pub mod list;
 pub mod pricing;
 pub mod report;
 pub mod search;
+#[cfg(feature = "serve")]
 pub mod serve;
 pub mod setup;
 pub mod skills;

@@ -700,14 +700,6 @@ impl Connector for XConnector {
         }]
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        // Define the capabilities according to what your connector supports.
-        ServerCapabilities {
-            tools: None,
-            ..Default::default() // Use default for other capabilities
-        }
-    }
-
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         Ok(AuthDetails::new())
     }

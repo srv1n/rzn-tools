@@ -4,8 +4,8 @@ This crate compiles with a minimal core by default. You opt‑in to connectors a
 
 ## Distribution Profiles
 
-- `server-full`: Portable API/HTTP connectors for server and downstream distributions. It does not read local browser profiles, include Rookie or publicsuffix, or enable the legacy `x-browser` connector. It excludes `telegram`: that connector remains available locally, but its upstream MTProto chain depends on a yanked crate and cannot resolve for a fresh downstream Cargo consumer.
-- `desktop-full`: All connectors plus `x-browser` and `browser-cookie-import` for an explicit, advanced local browser-profile import path.
+- `server-full`: Portable API/HTTP connectors for server and downstream distributions. It does not read local browser profiles, include Rookie or publicsuffix, or enable `x-browser`, `telegram`, Discord, or macOS-only connectors. Telegram remains locally available, but its upstream MTProto chain depends on a yanked crate and cannot resolve for a fresh downstream Cargo consumer.
+- `desktop-full`: `all-connectors` plus `x-browser` and `browser-cookie-import` for an explicit, advanced local browser-profile import path. It includes the macOS connectors; Discord remains individually opt-in.
 - `full`: Compatibility alias for the portable `server-full` profile. It is safe as a default/server distribution profile; use `desktop-full` only when browser-profile import is deliberately required.
 - `all-connectors`: Convenience bundle that enables most connectors (use only when size isn’t a concern).
 - examples: Enable example binaries under `rzn_tools_core/examples/*`.

@@ -119,7 +119,9 @@ pub trait Connector: Send + Sync {
     }
 
     /// Returns the MCP capabilities of this connector.
-    async fn capabilities(&self) -> ServerCapabilities; // Use MCP's ServerCapabilities
+    async fn capabilities(&self) -> ServerCapabilities {
+        ServerCapabilities::default()
+    }
 
     // --- MCP Request Handlers (One for each relevant MCP request type) ---
     async fn initialize(
@@ -128,12 +130,19 @@ pub trait Connector: Send + Sync {
     ) -> Result<InitializeResult, ConnectorError>;
     async fn list_resources(
         &self,
-        request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError>;
+        _request: Option<PaginatedRequestParam>,
+    ) -> Result<ListResourcesResult, ConnectorError> {
+        Ok(ListResourcesResult {
+            resources: Vec::new(),
+            next_cursor: None,
+        })
+    }
     async fn read_resource(
         &self,
-        request: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError>;
+        _request: ReadResourceRequestParam,
+    ) -> Result<Vec<ResourceContents>, ConnectorError> {
+        Err(ConnectorError::ResourceNotFound)
+    }
     async fn list_tools(
         &self,
         request: Option<PaginatedRequestParam>,
@@ -144,9 +153,16 @@ pub trait Connector: Send + Sync {
     ) -> Result<CallToolResult, ConnectorError>;
     async fn list_prompts(
         &self,
-        request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError>;
-    async fn get_prompt(&self, name: &str) -> Result<Prompt, ConnectorError>; // Still a single prompt
+        _request: Option<PaginatedRequestParam>,
+    ) -> Result<ListPromptsResult, ConnectorError> {
+        Ok(ListPromptsResult {
+            prompts: Vec::new(),
+            next_cursor: None,
+        })
+    }
+    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
+        Err(ConnectorError::ToolNotFound)
+    }
 
     // --- Authentication and Configuration (Keep these) ---
 
@@ -220,11 +236,6 @@ impl ProviderRegistry {
         }
         None
     }
-    pub fn get_provider_mut(&mut self, _name: &str) -> Option<&mut Box<dyn Connector>> {
-        // You usually won't need get_provider_mut with Arc.  Remove it if not needed.
-        // self.providers.get_mut(name).map(|arc| Arc::get_mut(arc).expect("Mutable reference to connector requested, but it's shared"))
-        None
-    }
     pub fn list_providers(&self) -> Vec<ServerInfo> {
         self.providers
             .iter()
@@ -243,10 +254,6 @@ impl ProviderRegistry {
             })
             .collect()
     }
-    pub fn get_provider_details(&self) -> Vec<ServerInfo> {
-        self.list_providers()
-    }
-
     pub async fn get_provider_capabilities(&self) -> Vec<ServerCapabilities> {
         let mut results = Vec::new();
         for provider in self.providers.values() {

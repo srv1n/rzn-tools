@@ -13,26 +13,21 @@ use crate::{auth::AuthDetails, Connector, URLParamExtraction, URLPatternSpec};
 use async_trait::async_trait;
 use chrono::TimeZone;
 use chrono::{DateTime, Duration, NaiveDate, Utc};
-use futures::FutureExt;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use reqwest::header::{HeaderMap, HeaderValue, COOKIE};
 use reqwest::Client as HttpClient;
 use rmcp::model::*;
-use rusty_ytdl::search::{SearchOptions, SearchResult, SearchType, YouTube};
-use rusty_ytdl::{RequestOptions, Video, VideoError, VideoOptions};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashSet;
-use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Duration as StdDuration;
 use tokio::process::Command;
 use url::{form_urlencoded, Url};
-use yt_transcript_rs::errors::{CouldNotRetrieveTranscript, CouldNotRetrieveTranscriptReason};
-use yt_transcript_rs::YouTubeTranscriptApi;
 
 fn inline_output_format_property(schema: &mut Value) {
     let schema_obj = schema
@@ -329,95 +324,6 @@ pub enum UploadDateFilter {
     ThisWeek,
     ThisMonth,
     ThisYear,
-}
-
-impl From<rusty_ytdl::search::Video> for VideoSearchResult {
-    fn from(video: rusty_ytdl::search::Video) -> Self {
-        let thumbnail = video
-            .thumbnails
-            .first()
-            .map(|t| t.url.clone())
-            .unwrap_or_default();
-
-        Self {
-            id: video.id.clone(),
-            title: video.title.clone(),
-            description: video.description.clone(),
-            thumbnail,
-            url: format!("https://www.youtube.com/watch?v={}", video.id),
-            duration_seconds: video.duration,
-            views: video.views,
-            uploaded_at: video.uploaded_at.clone(),
-            channel_name: video.channel.name.clone(),
-        }
-    }
-}
-
-impl From<rusty_ytdl::search::Channel> for ChannelSearchResult {
-    fn from(channel: rusty_ytdl::search::Channel) -> Self {
-        let thumbnail = channel
-            .icon
-            .first()
-            .map(|t| t.url.clone())
-            .unwrap_or_default();
-
-        Self {
-            id: channel.id,
-            title: channel.name,
-            url: channel.url,
-            thumbnail,
-            verified: channel.verified,
-            subscribers: channel.subscribers,
-        }
-    }
-}
-
-impl From<rusty_ytdl::search::Playlist> for PlaylistSearchResult {
-    fn from(playlist: rusty_ytdl::search::Playlist) -> Self {
-        let thumbnail = playlist
-            .thumbnails
-            .first()
-            .map(|t| t.url.clone())
-            .unwrap_or_default();
-
-        Self {
-            id: playlist.id,
-            title: playlist.name,
-            url: playlist.url,
-            thumbnail,
-            channel: playlist.channel.clone().into(),
-            video_count: playlist.videos.len() as u64,
-            views: playlist.views,
-            last_update: playlist.last_update,
-        }
-    }
-}
-
-impl From<rusty_ytdl::search::Channel> for SearchResultItem {
-    fn from(value: rusty_ytdl::search::Channel) -> Self {
-        SearchResultItem::Channel(value.into())
-    }
-}
-
-impl From<rusty_ytdl::search::Video> for SearchResultItem {
-    fn from(value: rusty_ytdl::search::Video) -> Self {
-        SearchResultItem::Video(value.into())
-    }
-}
-
-impl From<rusty_ytdl::search::Playlist> for SearchResultItem {
-    fn from(value: rusty_ytdl::search::Playlist) -> Self {
-        SearchResultItem::Playlist(value.into())
-    }
-}
-
-fn to_rusty_search_type(category: SearchCategory) -> SearchType {
-    match category {
-        SearchCategory::Video => SearchType::Video,
-        SearchCategory::Playlist => SearchType::Playlist,
-        SearchCategory::Channel => SearchType::Channel,
-        SearchCategory::All => SearchType::All,
-    }
 }
 
 fn apply_sort(
@@ -760,11 +666,40 @@ struct TimedTextTrack {
     kind: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct TimedTextTranscript {
     text: String,
     language_code: String,
     is_generated: bool,
+    segments: Vec<TimedTextSegment>,
+}
+
+#[derive(Debug, Clone)]
+struct TimedTextSegment {
+    text: String,
+    start_ms: u64,
+    duration_ms: u64,
+}
+
+#[derive(Debug, Clone)]
+struct YouTubeVideoDetails {
+    title: String,
+    description: String,
+    channel_id: String,
+    channel_name: String,
+    publish_date: Option<String>,
+    upload_date: Option<String>,
+    duration_seconds: u64,
+    view_count: u64,
+    keywords: Vec<String>,
+    is_live_content: bool,
+    chapters: Vec<VideoChapter>,
+}
+
+#[derive(Debug, Clone)]
+struct VideoChapter {
+    title: String,
+    start_time: i32,
 }
 
 /// Concise video search result - includes key metadata for LLM decision-making
@@ -819,13 +754,13 @@ pub struct ChapterContent {
 
 #[derive(Clone)]
 pub struct YouTubeConnector {
-    video_options: VideoOptions,
+    cookie_header: Option<String>,
 }
 
 impl YouTubeConnector {
     pub async fn new(auth: Option<AuthDetails>) -> Result<Self, ConnectorError> {
         let mut connector = YouTubeConnector {
-            video_options: VideoOptions::default(), // Default quality
+            cookie_header: None,
         };
 
         if let Some(auth) = auth {
@@ -914,27 +849,13 @@ impl Connector for YouTubeConnector {
         ]
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        // Define the capabilities according to what your connector supports.
-        ServerCapabilities {
-            tools: None,
-            ..Default::default() // Use default for other capabilities
-        }
-    }
-
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         Ok(AuthDetails::new())
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
         if let Some(cookie_header) = details.get("cookie").or_else(|| details.get("cookies")) {
-            self.video_options = VideoOptions {
-                request_options: RequestOptions {
-                    cookies: Some(cookie_header.to_string()),
-                    ..Default::default()
-                },
-                ..Default::default()
-            };
+            self.cookie_header = Some(cookie_header.to_string());
             return Ok(());
         }
 
@@ -948,13 +869,7 @@ impl Connector for YouTubeConnector {
                     .await
                     .map_err(|e| ConnectorError::Other(e.to_string()))?;
 
-                self.video_options = VideoOptions {
-                    request_options: RequestOptions {
-                        cookies: Some(cookies),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                };
+                self.cookie_header = Some(cookies);
                 return Ok(());
             }
 
@@ -999,60 +914,10 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
         })
     }
 
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        let resources = vec![];
-
-        Ok(ListResourcesResult {
-            resources,
-            next_cursor: None,
-        })
-    }
-
     async fn read_resource(
         &self,
         _request: ReadResourceRequestParam,
     ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        // let uri_str = request.uri.as_str();
-
-        // if uri_str.starts_with("youtube://video/") {
-        //     let parts: Vec<&str> = uri_str.split('/').collect();
-        //     if parts.len() < 4 {
-        //         return Err(ConnectorError::InvalidInput(format!("Invalid resource URI: {}", uri_str)));
-        //     }
-        //     let video_id = parts[3];
-
-        //     let video_options = VideoOptions {
-        //         quality: self.video_quality.clone(),
-        //         filter: VideoSearchOptions::Video, // or Audio, depending on what you need
-        //         ..Default::default()
-        //     };
-        //     let video = Video::new_with_options(format!("https://www.youtube.com/watch?v={}", video_id).as_str(), video_options)
-        //         .map_err(|e| ConnectorError::Other(e.to_string()))?;
-
-        //     let video_info = video.get_info().await.map_err(|e| ConnectorError::Other(e.to_string()))?;
-
-        //     let chapters = video_info.video_details.chapters.clone();
-        //      let transcript = match YoutubeTranscript::fetch_transcript(&format!("https://www.youtube.com/watch?v={}", video_id), None).await {
-        //         Ok(transcript) => {
-        //             let chapter_contents = self.group_transcript_by_chapters(&chapters, transcript);
-        //             Some(chapter_contents)
-        //         }
-        //         Err(e) => {
-        //             eprintln!("Error fetching transcript: {}", e);
-        //             None
-        //         }
-        //     };
-
-        //     let youtube_content =  YouTubeContent {
-        //         title: video_info.video_details.title.clone(),
-        //         description: video_info.video_details.description.clone(),
-        //         transcript: None, // Populated below if available
-        //         chapters: transcript.unwrap_or_default()
-        //     };
-
         Ok(vec![])
     }
 
@@ -1324,134 +1189,52 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
                     }
                 };
                 let want_normalized = input.output_format == OutputFormat::NormalizedV1;
+                let client = youtube_http_client(self.cookie_header.as_deref())?;
+                let watch_html = fetch_youtube_watch_html(&client, &video_id).await?;
+                let player = extract_player_response(&watch_html)?;
+                classify_player_response(&player, &video_id)?;
+                let video_info = parse_video_details(&player, &video_id)?;
+                let chapters = video_info.chapters.clone();
 
-                let video = Video::new_with_options(
-                    format!("https://www.youtube.com/watch?v={}", video_id).as_str(),
-                    self.video_options.clone(),
-                )
-                .map_err(|e| classify_video_error(e, &video_id))?;
-
-                // Guard against upstream panics in rusty_ytdl
-                let video_info = AssertUnwindSafe(video.get_info())
-                    .catch_unwind()
-                    .await
-                    .map_err(|_| {
-                        ConnectorError::Other(format!(
-                            "Internal: rusty_ytdl::get_info panicked for video '{}'. \
-                             Retry is unlikely to help; report this as a bug.",
-                            video_id
-                        ))
-                    })?
-                    .map_err(|e| classify_video_error(e, &video_id))?;
-
-                let chapters = video_info.video_details.chapters.clone();
-                let api = YouTubeTranscriptApi::new(None, None, None)
-                    .map_err(|e| ConnectorError::Other(e.to_string()))?;
-
-                // Fetch transcript parts once; we will decide whether to expose
-                // chapterized content or a raw transcript, but never both.
-                let mut transcript_parts: Option<Vec<yt_transcript_rs::FetchedTranscriptSnippet>> =
-                    None;
+                let mut transcript_segments: Option<Vec<TimedTextSegment>> = None;
                 let mut transcript_meta: Option<(String, String, bool)> = None;
-                // Classified reason the transcript ended up unavailable, if any.
-                // `None` means a transcript was successfully produced.
                 let mut transcript_unavailable_reason: Option<&'static str> = None;
-                let (chapters_out, transcript_out) = match api
-                    .fetch_transcript(&video_id, &["en"], false)
-                    .await
-                {
+                let transcript = fetch_transcript_with_fallback(&client, &player, &video_id).await;
+                let (chapters_out, transcript_out) = match transcript {
                     Ok(fetched) => {
-                        let parts = fetched.parts();
                         if want_normalized {
-                            transcript_parts = Some(parts.to_vec());
+                            transcript_segments = Some(fetched.segments.clone());
                             transcript_meta = Some((
-                                fetched.language.clone(),
+                                fetched.language_code.clone(),
                                 fetched.language_code.clone(),
                                 fetched.is_generated,
                             ));
                         }
-                        // Build a raw transcript string from parts (cleaned) for fallback.
-                        let raw_text = parts
-                            .iter()
-                            .map(|p| p.text.clone())
-                            .collect::<Vec<_>>()
-                            .join(" ");
-                        let cleaned = clean_html_entities(&raw_text);
-
-                        if cleaned.trim().is_empty() {
-                            tracing::warn!(
-                                video_id = %video_id,
-                                "Transcript API returned empty text; trying TimedText fallback"
-                            );
-                            match fetch_transcript_from_timedtext(&video_id).await {
-                                Ok(fallback) => {
-                                    if want_normalized {
-                                        transcript_parts = None;
-                                        transcript_meta = Some((
-                                            fallback.language_code.clone(),
-                                            fallback.language_code.clone(),
-                                            fallback.is_generated,
-                                        ));
-                                    }
-                                    (Vec::new(), Some(fallback.text))
-                                }
-                                Err(fallback_err) => {
-                                    tracing::warn!(
-                                        error = %fallback_err,
-                                        video_id = %video_id,
-                                        "TimedText fallback transcript fetch failed after empty transcript"
-                                    );
-                                    transcript_unavailable_reason =
-                                        Some("empty_transcript_and_fallback_failed");
-                                    (Vec::new(), None)
-                                }
-                            }
-                        } else if !chapters.is_empty() {
-                            // Prefer chapterized content when real chapter metadata exists.
-                            let grouped = group_transcript_by_chapters_new(&chapters, fetched);
+                        if !chapters.is_empty() {
+                            let grouped = group_timedtext_by_chapters(&chapters, &fetched.segments);
                             if !grouped.is_empty() {
                                 (grouped, None)
-                            } else if !cleaned.is_empty() {
-                                (Vec::new(), Some(cleaned))
+                            } else if !fetched.text.is_empty() {
+                                (Vec::new(), Some(fetched.text))
                             } else {
                                 (Vec::new(), None)
                             }
-                        } else if !cleaned.is_empty() {
-                            // No chapters metadata → provide raw transcript only.
-                            (Vec::new(), Some(cleaned))
+                        } else if !fetched.text.is_empty() {
+                            (Vec::new(), Some(fetched.text))
                         } else {
+                            transcript_unavailable_reason = Some("empty_transcript");
                             (Vec::new(), None)
                         }
                     }
-                    Err(e) => {
-                        let (code, human) = classify_transcript_error(&e);
+                    Err((code, detail)) => {
                         tracing::warn!(
                             reason = code,
-                            detail = %human,
+                            detail = %detail,
                             video_id = %video_id,
                             "Failed to fetch YouTube transcript"
                         );
-                        match fetch_transcript_from_timedtext(&video_id).await {
-                            Ok(fallback) => {
-                                if want_normalized {
-                                    transcript_meta = Some((
-                                        fallback.language_code.clone(),
-                                        fallback.language_code.clone(),
-                                        fallback.is_generated,
-                                    ));
-                                }
-                                (Vec::new(), Some(fallback.text))
-                            }
-                            Err(fallback_err) => {
-                                tracing::warn!(
-                                    error = %fallback_err,
-                                    video_id = %video_id,
-                                    "TimedText fallback transcript fetch failed"
-                                );
-                                transcript_unavailable_reason = Some(code);
-                                (Vec::new(), None)
-                            }
-                        }
+                        transcript_unavailable_reason = Some(code);
+                        (Vec::new(), None)
                     }
                 };
 
@@ -1461,20 +1244,16 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
                     let mut blocks: Vec<ContentBlock> = Vec::new();
                     let mut relationships: Vec<Relationship> = Vec::new();
 
-                    if !video_info.video_details.description.is_empty() {
+                    if !video_info.description.is_empty() {
                         let desc_ref = format!("youtube:description:{}", video_id);
                         blocks.push(ContentBlock {
                             block_ref: desc_ref.clone(),
                             block_kind: "description".to_string(),
-                            text: video_info.video_details.description.clone(),
-                            author: video_info
-                                .video_details
-                                .author
-                                .as_ref()
-                                .map(|author| Author {
-                                    name: author.name.clone(),
-                                    id: Some(format!("youtube:channel:{}", author.id)),
-                                }),
+                            text: video_info.description.clone(),
+                            author: Some(Author {
+                                name: video_info.channel_name.clone(),
+                                id: Some(format!("youtube:channel:{}", video_info.channel_id)),
+                            }),
                             created_at: None,
                             reply_to: None,
                             position: None,
@@ -1489,35 +1268,14 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
                         });
                     }
 
-                    if let Some(parts) = transcript_parts {
-                        for part in parts {
-                            let start_ms = (part.start * 1000.0).round().max(0.0) as u64;
-                            let end_ms =
-                                ((part.start + part.duration) * 1000.0).round().max(0.0) as u64;
-                            let seg_ref =
-                                format!("youtube:segment:{}:{}-{}", video_id, start_ms, end_ms);
-                            blocks.push(ContentBlock {
-                                block_ref: seg_ref.clone(),
-                                block_kind: "transcript_segment".to_string(),
-                                text: part.text,
-                                author: None,
-                                created_at: None,
-                                reply_to: None,
-                                position: Some(json!({
-                                    "kind": "time_range",
-                                    "start_ms": start_ms,
-                                    "end_ms": end_ms,
-                                })),
-                                score: None,
-                                attachments: Vec::new(),
-                                metadata: None,
-                            });
-                            relationships.push(Relationship {
-                                rel: "has_block".to_string(),
-                                from: item_ref.clone(),
-                                to: seg_ref,
-                            });
-                        }
+                    if let Some(parts) = transcript_segments {
+                        append_timedtext_blocks(
+                            &video_id,
+                            &item_ref,
+                            parts,
+                            &mut blocks,
+                            &mut relationships,
+                        );
                     } else if !chapters_out.is_empty() {
                         for (idx, chapter) in chapters_out.iter().enumerate() {
                             let start_ms = (chapter.start_time as i64).max(0) as u64 * 1000;
@@ -1574,25 +1332,22 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
                         }
                     }
 
-                    let created_at = parse_video_date(&video_info.video_details.publish_date)
-                        .or_else(|| parse_video_date(&video_info.video_details.upload_date));
-                    let authors = video_info
-                        .video_details
-                        .author
-                        .as_ref()
-                        .map(|author| Author {
-                            name: author.name.clone(),
-                            id: Some(format!("youtube:channel:{}", author.id)),
-                        })
-                        .into_iter()
-                        .collect::<Vec<_>>();
+                    let created_at = video_info
+                        .publish_date
+                        .as_deref()
+                        .and_then(parse_video_date)
+                        .or_else(|| video_info.upload_date.as_deref().and_then(parse_video_date));
+                    let authors = vec![Author {
+                        name: video_info.channel_name.clone(),
+                        id: Some(format!("youtube:channel:{}", video_info.channel_id)),
+                    }];
                     let metadata = json!({
-                        "channel_id": video_info.video_details.channel_id.clone(),
-                        "channel_name": video_info.video_details.owner_channel_name.clone(),
-                        "view_count": video_info.video_details.view_count.clone(),
-                        "length_seconds": video_info.video_details.length_seconds.clone(),
-                        "keywords": video_info.video_details.keywords.clone(),
-                        "is_live_content": video_info.video_details.is_live_content,
+                        "channel_id": video_info.channel_id.clone(),
+                        "channel_name": video_info.channel_name.clone(),
+                        "view_count": video_info.view_count,
+                        "length_seconds": video_info.duration_seconds,
+                        "keywords": video_info.keywords.clone(),
+                        "is_live_content": video_info.is_live_content,
                         "transcript": transcript_meta.as_ref().map(|(lang, code, generated)| json!({
                             "language": lang,
                             "language_code": code,
@@ -1604,7 +1359,7 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
                         item_ref: item_ref.clone(),
                         kind: "video".to_string(),
                         canonical_url: Some(canonical_url),
-                        title: Some(video_info.video_details.title.clone()),
+                        title: Some(video_info.title.clone()),
                         created_at,
                         source_updated_at: None,
                         authors,
@@ -1642,7 +1397,7 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
                         })
                         .collect();
                     let youtube_content = YouTubeContentConcise {
-                        title: video_info.video_details.title.clone(),
+                        title: video_info.title.clone(),
                         transcript: transcript_out,
                         chapters: concise_chapters,
                         transcript_unavailable_reason: reason_for_response,
@@ -1652,8 +1407,8 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
                 } else {
                     let youtube_content = YouTubeContent {
                         id: video_id,
-                        title: video_info.video_details.title.clone(),
-                        description: video_info.video_details.description.clone(),
+                        title: video_info.title.clone(),
+                        description: video_info.description.clone(),
                         transcript: transcript_out,
                         chapters: chapters_out,
                         transcript_unavailable_reason: reason_for_response,
@@ -1666,54 +1421,14 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
                 let input: SearchVideosInput = serde_json::from_value(Value::Object(args_map))
                     .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
 
-                let youtube = YouTube::new().map_err(|e| ConnectorError::Other(e.to_string()))?;
-
-                let search_options = SearchOptions {
-                    limit: input.limit,
-                    search_type: to_rusty_search_type(input.search_type),
-                    ..Default::default()
-                };
-
-                // Guard against upstream panics in rusty_ytdl search path
-                let results: Vec<SearchResult> =
-                    AssertUnwindSafe(youtube.search(&input.query, Some(&search_options)))
-                        .catch_unwind()
-                        .await
-                        .map_err(|_| ConnectorError::Other("YouTube search panicked".to_string()))?
-                        .map_err(|e| ConnectorError::Other(e.to_string()))?;
-
-                let mut mapped_results: Vec<SearchResultItem> = results
-                    .into_iter()
-                    .filter_map(|result| match result {
-                        SearchResult::Video(video)
-                            if matches!(
-                                input.search_type,
-                                SearchCategory::Video | SearchCategory::All
-                            ) =>
-                        {
-                            Some(SearchResultItem::from(video))
-                        }
-                        SearchResult::Playlist(playlist)
-                            if matches!(
-                                input.search_type,
-                                SearchCategory::Playlist | SearchCategory::All
-                            ) =>
-                        {
-                            Some(SearchResultItem::from(playlist))
-                        }
-                        SearchResult::Channel(channel)
-                            if matches!(
-                                input.search_type,
-                                SearchCategory::Channel | SearchCategory::All
-                            ) =>
-                        {
-                            Some(SearchResultItem::from(channel))
-                        }
-                        SearchResult::Video(_)
-                        | SearchResult::Playlist(_)
-                        | SearchResult::Channel(_) => None,
-                    })
-                    .collect();
+                let client = youtube_http_client(self.cookie_header.as_deref())?;
+                let mut mapped_results = search_youtube_native(
+                    &client,
+                    &input.query,
+                    input.search_type,
+                    input.limit as usize,
+                )
+                .await?;
 
                 apply_upload_date_filter(
                     &mut mapped_results,
@@ -1916,26 +1631,11 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
                 if let Some(q) = input.query.as_deref() {
                     let qn = normalize_ws(q);
                     if !qn.is_empty() {
-                        let youtube =
-                            YouTube::new().map_err(|e| ConnectorError::Other(e.to_string()))?;
-                        let search_options = SearchOptions {
-                            limit: limit as u64,
-                            search_type: SearchType::Channel,
-                            ..Default::default()
-                        };
-
-                        let results: Vec<SearchResult> =
-                            AssertUnwindSafe(youtube.search(&qn, Some(&search_options)))
-                                .catch_unwind()
-                                .await
-                                .map_err(|_| {
-                                    ConnectorError::Other("YouTube search panicked".to_string())
-                                })?
-                                .map_err(|e| ConnectorError::Other(e.to_string()))?;
-
-                        for r in results {
-                            if let SearchResult::Channel(channel) = r {
-                                let mapped: ChannelSearchResult = channel.into();
+                        for result in
+                            search_youtube_native(&client, &qn, SearchCategory::Channel, limit)
+                                .await?
+                        {
+                            if let SearchResultItem::Channel(mapped) = result {
                                 let score = score_channel_candidate(
                                     &qn,
                                     &mapped.title,
@@ -1973,16 +1673,6 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn list_prompts(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![], // No prompts for now.  Add if you have use cases.
-            next_cursor: None,
-        })
     }
 
     async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
@@ -2177,131 +1867,6 @@ fn list_videos_normalized_result(out: &ListVideosOutput) -> Result<CallToolResul
         Source::new("youtube", "list"),
     );
     structured_result(&page)
-}
-
-/// Convert a `rusty_ytdl::VideoError` into a `ConnectorError` with an
-/// agent-actionable message. Per Anthropic's tool-writing guidance,
-/// opaque upstream errors prevent agents from self-correcting — they
-/// need to know *what* failed and *what to try next*.
-fn classify_video_error(err: VideoError, video_id: &str) -> ConnectorError {
-    match err {
-        VideoError::VideoNotFound => ConnectorError::InvalidParams(format!(
-            "YouTube video '{}' was not found. Double-check the video_id \
-             or URL; the video may have been deleted or the id may be malformed. \
-             Use `youtube.search` if you only have a title.",
-            video_id
-        )),
-        VideoError::VideoIsPrivate => ConnectorError::InvalidInput(format!(
-            "YouTube video '{}' is private and cannot be fetched without \
-             owner authentication. No retry will help; inform the user.",
-            video_id
-        )),
-        VideoError::LiveStreamNotSupported => ConnectorError::InvalidInput(format!(
-            "YouTube video '{}' is a live stream, which this tool cannot \
-             fetch. Wait for the stream to end and a VOD to be published, \
-             or choose a different video.",
-            video_id
-        )),
-        VideoError::VideoPlayerResponseError(detail) => {
-            // Covers age-gated, region-locked, unplayable, and similar.
-            // The detail string from YouTube often names the specific cause.
-            let lower = detail.to_lowercase();
-            let hint = if lower.contains("age") {
-                "Video appears to be age-restricted. This tool cannot \
-                 authenticate; inform the user or try a mirror."
-            } else if lower.contains("region") || lower.contains("country") {
-                "Video appears to be region-restricted. A different network \
-                 or proxy may be required."
-            } else if lower.contains("removed") || lower.contains("unavailable") {
-                "Video appears unavailable (removed, geo-blocked, or \
-                 temporarily inaccessible). Try again later or pick \
-                 another video."
-            } else {
-                "YouTube refused to return player data. Try a different \
-                 video; this one is likely restricted or unavailable."
-            };
-            ConnectorError::InvalidInput(format!(
-                "YouTube rejected playback for '{}': {}. {}",
-                video_id, detail, hint
-            ))
-        }
-        VideoError::Reqwest(_)
-        | VideoError::ReqwestMiddleware(_)
-        | VideoError::DownloadError(_) => ConnectorError::Other(format!(
-            "Network error fetching YouTube video '{}': {}. Transient — \
-             the agent may retry once after a short delay.",
-            video_id, err
-        )),
-        other => ConnectorError::Other(format!(
-            "Unexpected YouTube error for '{}': {}.",
-            video_id, other
-        )),
-    }
-}
-
-/// Map a transcript-fetch failure to a short, stable reason code the agent
-/// can branch on without regex-matching free-form error text. Also returns
-/// a human-readable explanation suitable for logs.
-fn classify_transcript_error(err: &CouldNotRetrieveTranscript) -> (&'static str, String) {
-    match &err.reason {
-        Some(CouldNotRetrieveTranscriptReason::TranscriptsDisabled) => (
-            "transcripts_disabled",
-            "The channel has disabled subtitles for this video.".to_string(),
-        ),
-        Some(CouldNotRetrieveTranscriptReason::NoTranscriptFound { .. }) => (
-            "no_english_transcript",
-            "No English transcript is available; other languages may exist.".to_string(),
-        ),
-        Some(CouldNotRetrieveTranscriptReason::VideoUnavailable) => (
-            "video_unavailable",
-            "The video is no longer available (removed or private).".to_string(),
-        ),
-        Some(CouldNotRetrieveTranscriptReason::VideoUnplayable { reason, .. }) => (
-            "video_unplayable",
-            reason
-                .clone()
-                .unwrap_or_else(|| "The video is unplayable.".to_string()),
-        ),
-        Some(CouldNotRetrieveTranscriptReason::IpBlocked(_)) => (
-            "ip_blocked",
-            "YouTube is blocking this server's IP address.".to_string(),
-        ),
-        Some(CouldNotRetrieveTranscriptReason::RequestBlocked(_)) => (
-            "request_blocked",
-            "YouTube is rate-limiting or blocking requests.".to_string(),
-        ),
-        Some(CouldNotRetrieveTranscriptReason::AgeRestricted) => (
-            "age_restricted",
-            "The video is age-restricted and requires authentication.".to_string(),
-        ),
-        Some(CouldNotRetrieveTranscriptReason::InvalidVideoId) => (
-            "invalid_video_id",
-            "The provided video id was not recognized by YouTube.".to_string(),
-        ),
-        Some(CouldNotRetrieveTranscriptReason::YouTubeRequestFailed(msg)) => (
-            "upstream_request_failed",
-            format!("YouTube request failed: {msg}"),
-        ),
-        Some(CouldNotRetrieveTranscriptReason::YouTubeDataUnparsable(_)) => (
-            "youtube_data_unparsable",
-            "YouTube's response could not be parsed; may be a transient \
-             upstream change."
-                .to_string(),
-        ),
-        Some(CouldNotRetrieveTranscriptReason::FailedToCreateConsentCookie) => (
-            "consent_cookie_failed",
-            "Could not establish a consent cookie with YouTube.".to_string(),
-        ),
-        Some(CouldNotRetrieveTranscriptReason::TranslationUnavailable(_))
-        | Some(CouldNotRetrieveTranscriptReason::TranslationLanguageUnavailable(_)) => (
-            "translation_unavailable",
-            "Requested transcript translation is not available.".to_string(),
-        ),
-        None => (
-            "unknown",
-            "Transcript fetch failed without a reason.".to_string(),
-        ),
-    }
 }
 
 fn resolve_get_target(input: &GetVideoDetailsInput) -> Result<YouTubeGetTarget, ConnectorError> {
@@ -3423,70 +2988,504 @@ fn lockup_metadata_text_parts(renderer: &Value) -> Vec<String> {
         .collect()
 }
 
-async fn fetch_transcript_from_timedtext(
-    video_id: &str,
-) -> Result<TimedTextTranscript, ConnectorError> {
-    match fetch_transcript_from_watch_page_timedtext(video_id).await {
-        Ok(transcript) => return Ok(transcript),
-        Err(e) => {
-            tracing::warn!(
-                error = %e,
-                video_id = %video_id,
-                "Watch-page timedtext fallback failed; trying yt-dlp fallback"
-            );
-        }
+async fn search_youtube_native(
+    client: &HttpClient,
+    query: &str,
+    category: SearchCategory,
+    limit: usize,
+) -> Result<Vec<SearchResultItem>, ConnectorError> {
+    if query.trim().is_empty() {
+        return Err(ConnectorError::InvalidParams(
+            "YouTube search query cannot be empty".to_string(),
+        ));
+    }
+    if limit == 0 {
+        return Ok(Vec::new());
     }
 
-    fetch_transcript_via_yt_dlp(video_id).await
+    let mut url = Url::parse("https://www.youtube.com/results")
+        .map_err(|e| ConnectorError::Other(e.to_string()))?;
+    url.query_pairs_mut()
+        .append_pair("search_query", query)
+        .append_pair("hl", "en");
+    let html = fetch_youtube_html(client, url.as_str()).await?;
+    let raw = extract_json_object_after_marker(&html, "var ytInitialData = ")
+        .or_else(|| extract_json_object_after_marker(&html, "window[\"ytInitialData\"] = "))
+        .ok_or_else(|| {
+            ConnectorError::Other("YouTube search page did not contain ytInitialData".to_string())
+        })?;
+    let root: Value =
+        serde_json::from_str(raw).map_err(|e| ConnectorError::Other(e.to_string()))?;
+
+    let mut results = Vec::new();
+    collect_search_results(&root, category, limit, &mut results);
+    // ponytail: one results page; add Innertube continuations only if callers need deeper search.
+    Ok(results)
 }
 
-async fn fetch_transcript_from_watch_page_timedtext(
-    video_id: &str,
-) -> Result<TimedTextTranscript, ConnectorError> {
-    let client = HttpClient::builder()
-        .user_agent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
-AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        )
-        .build()
-        .map_err(|e| ConnectorError::Other(e.to_string()))?;
+fn collect_search_results(
+    value: &Value,
+    category: SearchCategory,
+    limit: usize,
+    out: &mut Vec<SearchResultItem>,
+) {
+    if out.len() >= limit {
+        return;
+    }
+    match value {
+        Value::Object(map) => {
+            let result = if matches!(category, SearchCategory::Video | SearchCategory::All) {
+                map.get("videoRenderer")
+                    .and_then(video_search_result)
+                    .map(SearchResultItem::Video)
+            } else {
+                None
+            }
+            .or_else(|| {
+                matches!(category, SearchCategory::Playlist | SearchCategory::All)
+                    .then(|| map.get("playlistRenderer").and_then(playlist_search_result))
+                    .flatten()
+                    .map(SearchResultItem::Playlist)
+            })
+            .or_else(|| {
+                matches!(category, SearchCategory::Channel | SearchCategory::All)
+                    .then(|| map.get("channelRenderer").and_then(channel_search_result))
+                    .flatten()
+                    .map(SearchResultItem::Channel)
+            });
+            if let Some(result) = result {
+                out.push(result);
+            }
+            for child in map.values() {
+                collect_search_results(child, category, limit, out);
+            }
+        }
+        Value::Array(items) => {
+            for child in items {
+                collect_search_results(child, category, limit, out);
+            }
+        }
+        _ => {}
+    }
+}
 
+fn video_search_result(renderer: &Value) -> Option<VideoSearchResult> {
+    let id = renderer.get("videoId")?.as_str()?.to_string();
+    Some(VideoSearchResult {
+        title: renderer.get("title").and_then(json_title)?,
+        description: renderer
+            .get("detailedMetadataSnippets")
+            .and_then(Value::as_array)
+            .and_then(|items| items.first())
+            .and_then(|item| item.get("snippetText"))
+            .and_then(json_title)
+            .or_else(|| renderer.get("descriptionSnippet").and_then(json_title))
+            .unwrap_or_default(),
+        thumbnail: first_thumbnail_url(renderer),
+        url: format!("https://www.youtube.com/watch?v={id}"),
+        duration_seconds: renderer
+            .get("lengthText")
+            .and_then(json_title)
+            .as_deref()
+            .map(parse_duration_seconds)
+            .unwrap_or_default(),
+        views: renderer
+            .get("viewCountText")
+            .and_then(json_title)
+            .as_deref()
+            .map(parse_abbreviated_count)
+            .unwrap_or_default(),
+        uploaded_at: renderer.get("publishedTimeText").and_then(json_title),
+        channel_name: renderer
+            .get("ownerText")
+            .and_then(json_title)
+            .or_else(|| renderer.get("longBylineText").and_then(json_title))
+            .unwrap_or_default(),
+        id,
+    })
+}
+
+fn playlist_search_result(renderer: &Value) -> Option<PlaylistSearchResult> {
+    let id = renderer.get("playlistId")?.as_str()?.to_string();
+    let channel_id = renderer
+        .pointer("/shortBylineText/runs/0/navigationEndpoint/browseEndpoint/browseId")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let channel_title = renderer
+        .get("shortBylineText")
+        .and_then(json_title)
+        .unwrap_or_default();
+    Some(PlaylistSearchResult {
+        title: renderer.get("title").and_then(json_title)?,
+        url: format!("https://www.youtube.com/playlist?list={id}"),
+        thumbnail: first_thumbnail_url(renderer),
+        channel: ChannelSearchResult {
+            url: if channel_id.is_empty() {
+                String::new()
+            } else {
+                format!("https://www.youtube.com/channel/{channel_id}")
+            },
+            id: channel_id,
+            title: channel_title,
+            thumbnail: String::new(),
+            verified: false,
+            subscribers: 0,
+        },
+        video_count: renderer
+            .get("videoCount")
+            .and_then(Value::as_str)
+            .and_then(|value| value.parse().ok())
+            .or_else(|| {
+                renderer
+                    .get("videoCountText")
+                    .and_then(json_title)
+                    .as_deref()
+                    .map(parse_abbreviated_count)
+            })
+            .unwrap_or_default(),
+        views: 0,
+        last_update: None,
+        id,
+    })
+}
+
+fn channel_search_result(renderer: &Value) -> Option<ChannelSearchResult> {
+    let id = renderer.get("channelId")?.as_str()?.to_string();
+    let verified = renderer
+        .get("ownerBadges")
+        .and_then(Value::as_array)
+        .is_some_and(|badges| {
+            badges.iter().any(|badge| {
+                badge
+                    .pointer("/metadataBadgeRenderer/style")
+                    .and_then(Value::as_str)
+                    .is_some_and(|style| style.contains("VERIFIED"))
+            })
+        });
+    Some(ChannelSearchResult {
+        title: renderer.get("title").and_then(json_title)?,
+        url: renderer
+            .pointer("/navigationEndpoint/browseEndpoint/canonicalBaseUrl")
+            .and_then(Value::as_str)
+            .map(|path| format!("https://www.youtube.com{path}"))
+            .unwrap_or_else(|| format!("https://www.youtube.com/channel/{id}")),
+        thumbnail: first_thumbnail_url(renderer),
+        subscribers: renderer
+            .get("subscriberCountText")
+            .and_then(json_title)
+            .as_deref()
+            .map(parse_abbreviated_count)
+            .unwrap_or_default(),
+        id,
+        verified,
+    })
+}
+
+fn first_thumbnail_url(renderer: &Value) -> String {
+    renderer
+        .pointer("/thumbnail/thumbnails/0/url")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn parse_duration_seconds(raw: &str) -> u64 {
+    raw.split(':').fold(0, |total, part| {
+        total
+            .saturating_mul(60)
+            .saturating_add(part.trim().parse::<u64>().unwrap_or_default())
+    })
+}
+
+fn parse_abbreviated_count(raw: &str) -> u64 {
+    let token = raw
+        .split_whitespace()
+        .find(|token| token.chars().any(|ch| ch.is_ascii_digit()))
+        .unwrap_or("0")
+        .replace(',', "");
+    let (number, multiplier) = match token.chars().last() {
+        Some('K' | 'k') => (&token[..token.len() - 1], 1_000.0),
+        Some('M' | 'm') => (&token[..token.len() - 1], 1_000_000.0),
+        Some('B' | 'b') => (&token[..token.len() - 1], 1_000_000_000.0),
+        _ => (token.as_str(), 1.0),
+    };
+    (number.parse::<f64>().unwrap_or_default() * multiplier) as u64
+}
+
+fn youtube_http_client(cookie_header: Option<&str>) -> Result<HttpClient, ConnectorError> {
+    let mut builder = HttpClient::builder().user_agent(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    );
+    if let Some(cookie) = cookie_header {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            COOKIE,
+            HeaderValue::from_str(cookie).map_err(|_| {
+                ConnectorError::InvalidInput("YouTube cookie header is invalid".to_string())
+            })?,
+        );
+        builder = builder.default_headers(headers);
+    }
+    builder
+        .build()
+        .map_err(|e| ConnectorError::Other(e.to_string()))
+}
+
+async fn fetch_youtube_watch_html(
+    client: &HttpClient,
+    video_id: &str,
+) -> Result<String, ConnectorError> {
     let watch_url = format!("https://www.youtube.com/watch?v={}&hl=en", video_id);
-    let watch_html = client
+    client
         .get(watch_url)
         .send()
         .await
-        .map_err(|e| ConnectorError::Other(e.to_string()))?
+        .map_err(ConnectorError::HttpRequest)?
         .error_for_status()
-        .map_err(|e| ConnectorError::Other(e.to_string()))?
+        .map_err(ConnectorError::HttpRequest)?
         .text()
         .await
-        .map_err(|e| ConnectorError::Other(e.to_string()))?;
+        .map_err(ConnectorError::HttpRequest)
+}
 
-    let tracks = extract_caption_tracks_from_watch_html(&watch_html)?;
-    let selected = select_preferred_caption_track(&tracks).ok_or_else(|| {
-        ConnectorError::Other("No usable caption track found on watch page".to_string())
-    })?;
-
-    let timedtext_url = force_json3_caption_url(
-        selected
-            .base_url
-            .as_deref()
-            .ok_or_else(|| ConnectorError::Other("Caption track missing baseUrl".to_string()))?,
-    );
-    let text = fetch_transcript_text_from_timedtext_url(&client, &timedtext_url).await?;
-
-    let language_code = selected
-        .language_code
-        .clone()
-        .unwrap_or_else(|| "unknown".to_string());
-    let is_generated = selected.kind.as_deref() == Some("asr");
-
-    Ok(TimedTextTranscript {
-        text,
-        language_code,
-        is_generated,
+fn extract_player_response(watch_html: &str) -> Result<Value, ConnectorError> {
+    const MARKERS: [&str; 3] = [
+        "var ytInitialPlayerResponse = ",
+        "ytInitialPlayerResponse = ",
+        "window[\"ytInitialPlayerResponse\"] = ",
+    ];
+    let raw = MARKERS
+        .iter()
+        .find_map(|marker| extract_json_object_after_marker(watch_html, marker))
+        .ok_or_else(|| {
+            ConnectorError::Other(
+                "youtube_data_unparsable: watch page did not contain player JSON".to_string(),
+            )
+        })?;
+    serde_json::from_str(raw).map_err(|e| {
+        ConnectorError::Other(format!(
+            "youtube_data_unparsable: malformed player JSON: {e}"
+        ))
     })
+}
+
+fn classify_player_response(player: &Value, video_id: &str) -> Result<(), ConnectorError> {
+    let status = player
+        .pointer("/playabilityStatus/status")
+        .and_then(Value::as_str)
+        .unwrap_or("OK");
+    if status == "OK" {
+        return Ok(());
+    }
+
+    let reason = player
+        .pointer("/playabilityStatus/reason")
+        .and_then(Value::as_str)
+        .unwrap_or("YouTube rejected playback");
+    let lower = reason.to_ascii_lowercase();
+    let code = if lower.contains("age") {
+        "age_restricted"
+    } else if lower.contains("private")
+        || lower.contains("unavailable")
+        || lower.contains("removed")
+    {
+        "video_unavailable"
+    } else if lower.contains("traffic") || lower.contains("ip address") {
+        "ip_blocked"
+    } else {
+        "video_unplayable"
+    };
+    Err(ConnectorError::InvalidInput(format!(
+        "{code}: YouTube rejected playback for '{video_id}': {reason}"
+    )))
+}
+
+fn parse_video_details(
+    player: &Value,
+    expected_video_id: &str,
+) -> Result<YouTubeVideoDetails, ConnectorError> {
+    let details = player.get("videoDetails").ok_or_else(|| {
+        ConnectorError::Other(
+            "youtube_data_unparsable: player JSON missing videoDetails".to_string(),
+        )
+    })?;
+    let micro = player
+        .pointer("/microformat/playerMicroformatRenderer")
+        .unwrap_or(&Value::Null);
+    let required = |name: &str| {
+        details
+            .get(name)
+            .and_then(Value::as_str)
+            .map(ToString::to_string)
+            .ok_or_else(|| {
+                ConnectorError::Other(format!(
+                    "youtube_data_unparsable: player JSON missing videoDetails.{name}"
+                ))
+            })
+    };
+    if details
+        .get("videoId")
+        .and_then(Value::as_str)
+        .is_some_and(|actual| actual != expected_video_id)
+    {
+        return Err(ConnectorError::Other(
+            "youtube_data_unparsable: player JSON videoId did not match the request".to_string(),
+        ));
+    }
+
+    Ok(YouTubeVideoDetails {
+        title: required("title")?,
+        description: details
+            .get("shortDescription")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        channel_id: required("channelId")?,
+        channel_name: details
+            .get("author")
+            .and_then(Value::as_str)
+            .or_else(|| micro.get("ownerChannelName").and_then(Value::as_str))
+            .unwrap_or_default()
+            .to_string(),
+        publish_date: micro
+            .get("publishDate")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        upload_date: micro
+            .get("uploadDate")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        duration_seconds: details
+            .get("lengthSeconds")
+            .and_then(Value::as_str)
+            .and_then(|value| value.parse().ok())
+            .unwrap_or_default(),
+        view_count: details
+            .get("viewCount")
+            .and_then(Value::as_str)
+            .and_then(|value| value.parse().ok())
+            .unwrap_or_default(),
+        keywords: details
+            .get("keywords")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(ToString::to_string)
+            .collect(),
+        is_live_content: details
+            .get("isLiveContent")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        chapters: extract_video_chapters(player),
+    })
+}
+
+fn extract_video_chapters(player: &Value) -> Vec<VideoChapter> {
+    fn collect(value: &Value, out: &mut Vec<VideoChapter>) {
+        match value {
+            Value::Object(map) => {
+                if let Some(renderer) = map.get("chapterRenderer") {
+                    if let (Some(title), Some(start_time_ms)) = (
+                        renderer.get("title").and_then(json_title),
+                        renderer.get("timeRangeStartMillis").and_then(Value::as_u64),
+                    ) {
+                        out.push(VideoChapter {
+                            title,
+                            start_time: (start_time_ms / 1000).min(i32::MAX as u64) as i32,
+                        });
+                    }
+                }
+                for child in map.values() {
+                    collect(child, out);
+                }
+            }
+            Value::Array(items) => {
+                for child in items {
+                    collect(child, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut chapters = Vec::new();
+    collect(player, &mut chapters);
+    chapters.sort_by_key(|chapter| chapter.start_time);
+    chapters.dedup_by_key(|chapter| chapter.start_time);
+    chapters
+}
+
+async fn fetch_transcript_with_fallback(
+    client: &HttpClient,
+    player: &Value,
+    video_id: &str,
+) -> Result<TimedTextTranscript, (&'static str, String)> {
+    match fetch_transcript_from_player(client, player).await {
+        Ok(transcript) => Ok(transcript),
+        Err(error @ ("transcripts_disabled", _)) => Err(error),
+        Err(primary) => match fetch_transcript_via_yt_dlp(video_id).await {
+            Ok(transcript) => Ok(transcript),
+            Err(fallback) => {
+                tracing::warn!(error = %fallback, video_id, "Optional yt-dlp fallback failed");
+                Err(primary)
+            }
+        },
+    }
+}
+
+async fn fetch_transcript_from_player(
+    client: &HttpClient,
+    player: &Value,
+) -> Result<TimedTextTranscript, (&'static str, String)> {
+    let tracks = extract_caption_tracks(player).map_err(|error| {
+        (
+            "transcripts_disabled",
+            format!("YouTube player JSON had no caption tracks: {error}"),
+        )
+    })?;
+    let selected = select_preferred_caption_track(&tracks).ok_or_else(|| {
+        (
+            "transcripts_disabled",
+            "No usable caption track found in player JSON".to_string(),
+        )
+    })?;
+    let timedtext_url = force_json3_caption_url(selected.base_url.as_deref().ok_or_else(|| {
+        (
+            "youtube_data_unparsable",
+            "Caption track missing baseUrl".to_string(),
+        )
+    })?);
+    fetch_transcript_from_timedtext_url(client, &timedtext_url)
+        .await
+        .map(|mut transcript| {
+            transcript.language_code = selected
+                .language_code
+                .clone()
+                .unwrap_or_else(|| "unknown".to_string());
+            transcript.is_generated = selected.kind.as_deref() == Some("asr");
+            transcript
+        })
+        .map_err(|error| ("upstream_request_failed", error.to_string()))
+}
+
+fn extract_caption_tracks(player: &Value) -> Result<Vec<TimedTextTrack>, ConnectorError> {
+    let tracks = player
+        .pointer("/captions/playerCaptionsTracklistRenderer/captionTracks")
+        .cloned()
+        .ok_or_else(|| {
+            ConnectorError::Other("YouTube player JSON did not include caption tracks".to_string())
+        })?;
+    let tracks: Vec<TimedTextTrack> =
+        serde_json::from_value(tracks).map_err(|e| ConnectorError::Other(e.to_string()))?;
+    if tracks.is_empty() {
+        return Err(ConnectorError::Other(
+            "YouTube player JSON included an empty caption track list".to_string(),
+        ));
+    }
+    Ok(tracks)
 }
 
 async fn fetch_transcript_via_yt_dlp(
@@ -3528,56 +3527,29 @@ AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
         )
         .build()
         .map_err(|e| ConnectorError::Other(e.to_string()))?;
-    let text = fetch_transcript_text_from_timedtext_url(&client, &timedtext_url).await?;
-
-    Ok(TimedTextTranscript {
-        text,
-        language_code,
-        is_generated,
-    })
-}
-
-fn extract_caption_tracks_from_watch_html(
-    watch_html: &str,
-) -> Result<Vec<TimedTextTrack>, ConnectorError> {
-    static CAPTION_TRACKS_RE: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r#"(?s)"captionTracks":(\[.*?\]),"audioTracks""#)
-            .expect("valid captionTracks regex")
-    });
-
-    let tracks_json = CAPTION_TRACKS_RE
-        .captures(watch_html)
-        .and_then(|c| c.get(1).map(|m| m.as_str()))
-        .ok_or_else(|| {
-            ConnectorError::Other(
-                "Could not locate captionTracks in YouTube watch page response".to_string(),
-            )
-        })?;
-
-    let tracks: Vec<TimedTextTrack> =
-        serde_json::from_str(tracks_json).map_err(|e| ConnectorError::Other(e.to_string()))?;
-
-    if tracks.is_empty() {
-        return Err(ConnectorError::Other(
-            "YouTube watch page did not include any caption tracks".to_string(),
-        ));
-    }
-
-    Ok(tracks)
+    fetch_transcript_from_timedtext_url(&client, &timedtext_url)
+        .await
+        .map(|mut transcript| {
+            transcript.language_code = language_code;
+            transcript.is_generated = is_generated;
+            transcript
+        })
 }
 
 fn select_preferred_caption_track(tracks: &[TimedTextTrack]) -> Option<&TimedTextTrack> {
     const ENGLISH_CODES: [&str; 5] = ["en", "en-us", "en-gb", "en-in", "en-orig"];
 
-    for preferred in ENGLISH_CODES {
-        if let Some(track) = tracks.iter().find(|track| {
-            track
-                .language_code
-                .as_deref()
-                .map(|code| code.eq_ignore_ascii_case(preferred))
-                .unwrap_or(false)
-        }) {
-            return Some(track);
+    for generated in [false, true] {
+        for preferred in ENGLISH_CODES {
+            if let Some(track) = tracks.iter().find(|track| {
+                (track.kind.as_deref() == Some("asr")) == generated
+                    && track
+                        .language_code
+                        .as_deref()
+                        .is_some_and(|code| code.eq_ignore_ascii_case(preferred))
+            }) {
+                return Some(track);
+            }
         }
     }
 
@@ -3687,10 +3659,10 @@ fn select_track_url(tracks: &Value) -> Option<String> {
     })
 }
 
-async fn fetch_transcript_text_from_timedtext_url(
+async fn fetch_transcript_from_timedtext_url(
     client: &HttpClient,
     timedtext_url: &str,
-) -> Result<String, ConnectorError> {
+) -> Result<TimedTextTranscript, ConnectorError> {
     let json3: Value = client
         .get(timedtext_url)
         .send()
@@ -3702,14 +3674,14 @@ async fn fetch_transcript_text_from_timedtext_url(
         .await
         .map_err(|e| ConnectorError::Other(e.to_string()))?;
 
-    extract_transcript_text_from_json3(&json3).ok_or_else(|| {
+    parse_json3_transcript(&json3).ok_or_else(|| {
         ConnectorError::Other("TimedText transcript response had no text events".to_string())
     })
 }
 
-fn extract_transcript_text_from_json3(json3: &Value) -> Option<String> {
+fn parse_json3_transcript(json3: &Value) -> Option<TimedTextTranscript> {
     let events = json3.get("events")?.as_array()?;
-    let mut chunks: Vec<String> = Vec::new();
+    let mut segments = Vec::new();
 
     for event in events {
         let Some(segs) = event.get("segs").and_then(|v| v.as_array()) else {
@@ -3729,16 +3701,38 @@ fn extract_transcript_text_from_json3(json3: &Value) -> Option<String> {
             continue;
         }
 
-        if chunks.last() == Some(&normalized) {
+        if segments
+            .last()
+            .is_some_and(|segment: &TimedTextSegment| segment.text == normalized)
+        {
             continue;
         }
-        chunks.push(normalized);
+        segments.push(TimedTextSegment {
+            text: normalized,
+            start_ms: event
+                .get("tStartMs")
+                .and_then(Value::as_u64)
+                .unwrap_or_default(),
+            duration_ms: event
+                .get("dDurationMs")
+                .and_then(Value::as_u64)
+                .unwrap_or_default(),
+        });
     }
 
-    if chunks.is_empty() {
+    if segments.is_empty() {
         None
     } else {
-        Some(chunks.join(" "))
+        Some(TimedTextTranscript {
+            text: segments
+                .iter()
+                .map(|segment| segment.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" "),
+            language_code: "unknown".to_string(),
+            is_generated: false,
+            segments,
+        })
     }
 }
 
@@ -3820,59 +3814,293 @@ fn score_channel_candidate(
     score
 }
 
-fn group_transcript_by_chapters_new(
-    chapters: &[rusty_ytdl::Chapter],
-    transcript: yt_transcript_rs::FetchedTranscript,
-) -> Vec<ChapterContent> {
-    let parts = transcript.parts();
-
-    if chapters.is_empty() {
-        let raw_text = parts
-            .iter()
-            .map(|p| p.text.clone())
-            .collect::<Vec<_>>()
-            .join(" ");
-        let cleaned_text = clean_html_entities(&raw_text);
-        return vec![ChapterContent {
-            heading: "Full Video".to_string(),
-            start_time: 0,
-            content: cleaned_text,
-        }];
-    }
-
-    let mut chapter_contents = Vec::new();
-
-    for (i, chapter) in chapters.iter().enumerate() {
-        let next_start_time = chapters
-            .get(i + 1)
-            .map(|next| next.start_time)
-            .unwrap_or(i32::MAX);
-
-        let content: Vec<String> = parts
-            .iter()
-            .filter(|p| {
-                let p_time = p.start as i32;
-                p_time >= chapter.start_time && p_time < next_start_time
-            })
-            .map(|p| p.text.clone())
-            .collect();
-
-        let raw_text = content.join(" ").replace("\n", " ");
-        let cleaned_text = clean_html_entities(&raw_text);
-
-        chapter_contents.push(ChapterContent {
-            heading: chapter.title.clone(),
-            start_time: chapter.start_time,
-            content: cleaned_text,
+fn append_timedtext_blocks(
+    video_id: &str,
+    item_ref: &str,
+    segments: Vec<TimedTextSegment>,
+    blocks: &mut Vec<ContentBlock>,
+    relationships: &mut Vec<Relationship>,
+) {
+    for segment in segments {
+        let end_ms = segment.start_ms.saturating_add(segment.duration_ms);
+        let block_ref = format!("youtube:segment:{video_id}:{}-{end_ms}", segment.start_ms);
+        blocks.push(ContentBlock {
+            block_ref: block_ref.clone(),
+            block_kind: "transcript_segment".to_string(),
+            text: segment.text,
+            author: None,
+            created_at: None,
+            reply_to: None,
+            position: Some(json!({
+                "kind": "time_range",
+                "start_ms": segment.start_ms,
+                "end_ms": end_ms,
+            })),
+            score: None,
+            attachments: Vec::new(),
+            metadata: None,
+        });
+        relationships.push(Relationship {
+            rel: "has_block".to_string(),
+            from: item_ref.to_string(),
+            to: block_ref,
         });
     }
+}
 
-    chapter_contents
+fn group_timedtext_by_chapters(
+    chapters: &[VideoChapter],
+    segments: &[TimedTextSegment],
+) -> Vec<ChapterContent> {
+    chapters
+        .iter()
+        .enumerate()
+        .map(|(i, chapter)| {
+            let next_start_time = chapters
+                .get(i + 1)
+                .map(|next| next.start_time)
+                .unwrap_or(i32::MAX);
+
+            let content = segments
+                .iter()
+                .filter(|segment| {
+                    let start = (segment.start_ms / 1000).min(i32::MAX as u64) as i32;
+                    start >= chapter.start_time && start < next_start_time
+                })
+                .map(|segment| segment.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            ChapterContent {
+                heading: chapter.title.clone(),
+                start_time: chapter.start_time,
+                content,
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn player_fixture() -> Value {
+        json!({
+            "playabilityStatus": { "status": "OK" },
+            "videoDetails": {
+                "videoId": "fixture123",
+                "title": "Fixture title",
+                "shortDescription": "Fixture description",
+                "channelId": "UCfixture",
+                "author": "Fixture channel",
+                "lengthSeconds": "120",
+                "viewCount": "42",
+                "keywords": ["one", "two"],
+                "isLiveContent": false
+            },
+            "microformat": {
+                "playerMicroformatRenderer": {
+                    "publishDate": "2026-01-02",
+                    "uploadDate": "2026-01-01"
+                }
+            },
+            "captions": {
+                "playerCaptionsTracklistRenderer": {
+                    "captionTracks": [
+                        { "baseUrl": "https://example.test/asr", "languageCode": "en", "kind": "asr" },
+                        { "baseUrl": "https://example.test/manual", "languageCode": "en" },
+                        { "baseUrl": "https://example.test/es", "languageCode": "es" }
+                    ]
+                }
+            },
+            "playerOverlays": {
+                "chapters": [
+                    { "chapterRenderer": { "title": { "simpleText": "Intro" }, "timeRangeStartMillis": 0 } },
+                    { "chapterRenderer": { "title": { "simpleText": "Body" }, "timeRangeStartMillis": 60000 } }
+                ]
+            }
+        })
+    }
+
+    #[test]
+    fn extracts_watch_page_player_json_metadata_and_chapters() {
+        let player = player_fixture();
+        let html = format!("<script>var ytInitialPlayerResponse = {player};</script>");
+        let extracted = extract_player_response(&html).expect("player response");
+        let details = parse_video_details(&extracted, "fixture123").expect("video details");
+
+        assert_eq!(details.title, "Fixture title");
+        assert_eq!(details.description, "Fixture description");
+        assert_eq!(details.channel_id, "UCfixture");
+        assert_eq!(details.channel_name, "Fixture channel");
+        assert_eq!(details.publish_date.as_deref(), Some("2026-01-02"));
+        assert_eq!(details.duration_seconds, 120);
+        assert_eq!(details.view_count, 42);
+        assert_eq!(details.chapters.len(), 2);
+        assert_eq!(details.chapters[1].start_time, 60);
+    }
+
+    #[test]
+    fn caption_selection_prefers_manual_english_then_generated_then_fallback() {
+        let tracks = extract_caption_tracks(&player_fixture()).expect("tracks");
+        assert_eq!(
+            select_preferred_caption_track(&tracks).and_then(|track| track.base_url.as_deref()),
+            Some("https://example.test/manual")
+        );
+
+        let generated = vec![TimedTextTrack {
+            base_url: Some("generated".to_string()),
+            language_code: Some("en".to_string()),
+            kind: Some("asr".to_string()),
+        }];
+        assert_eq!(
+            select_preferred_caption_track(&generated).and_then(|track| track.base_url.as_deref()),
+            Some("generated")
+        );
+
+        let alternate = vec![TimedTextTrack {
+            base_url: Some("spanish".to_string()),
+            language_code: Some("es".to_string()),
+            kind: None,
+        }];
+        assert_eq!(
+            select_preferred_caption_track(&alternate)
+                .and_then(|track| track.language_code.as_deref()),
+            Some("es")
+        );
+    }
+
+    #[test]
+    fn parses_json3_timing_and_groups_transcript_by_chapters() {
+        let transcript = parse_json3_transcript(&json!({
+            "events": [
+                { "tStartMs": 0, "dDurationMs": 1200, "segs": [{ "utf8": "Hello &amp; " }, { "utf8": "welcome" }] },
+                { "tStartMs": 61000, "dDurationMs": 900, "segs": [{ "utf8": "Main point" }] }
+            ]
+        }))
+        .expect("json3 transcript");
+        assert_eq!(transcript.text, "Hello & welcome Main point");
+        assert_eq!(transcript.segments[1].start_ms, 61_000);
+
+        let chapters = group_timedtext_by_chapters(
+            &[
+                VideoChapter {
+                    title: "Intro".to_string(),
+                    start_time: 0,
+                },
+                VideoChapter {
+                    title: "Body".to_string(),
+                    start_time: 60,
+                },
+            ],
+            &transcript.segments,
+        );
+        assert_eq!(chapters[0].content, "Hello & welcome");
+        assert_eq!(chapters[1].content, "Main point");
+    }
+
+    #[tokio::test]
+    async fn captions_disabled_has_stable_reason_without_network() {
+        let mut player = player_fixture();
+        player.as_object_mut().unwrap().remove("captions");
+        let client = youtube_http_client(None).unwrap();
+        let error = fetch_transcript_from_player(&client, &player)
+            .await
+            .expect_err("captions disabled");
+        assert_eq!(error.0, "transcripts_disabled");
+    }
+
+    #[test]
+    fn malformed_missing_and_unavailable_player_responses_are_classified() {
+        assert!(extract_player_response("<html></html>")
+            .unwrap_err()
+            .to_string()
+            .contains("youtube_data_unparsable"));
+        assert!(parse_video_details(&json!({}), "fixture123")
+            .unwrap_err()
+            .to_string()
+            .contains("youtube_data_unparsable"));
+
+        for (reason, code) in [
+            ("Sign in to confirm your age", "age_restricted"),
+            ("This video is unavailable", "video_unavailable"),
+        ] {
+            let player = json!({ "playabilityStatus": { "status": "ERROR", "reason": reason } });
+            assert!(classify_player_response(&player, "fixture123")
+                .unwrap_err()
+                .to_string()
+                .contains(code));
+        }
+    }
+
+    #[test]
+    fn concise_detailed_and_normalized_transcript_shapes_stay_compatible() {
+        let concise = serde_json::to_value(YouTubeContentConcise {
+            title: "Fixture title".to_string(),
+            transcript: Some("Hello".to_string()),
+            chapters: Vec::new(),
+            transcript_unavailable_reason: None,
+        })
+        .unwrap();
+        assert_eq!(concise["title"], "Fixture title");
+        assert_eq!(concise["transcript"], "Hello");
+
+        let detailed = serde_json::to_value(YouTubeContent {
+            id: "fixture123".to_string(),
+            title: "Fixture title".to_string(),
+            description: "Fixture description".to_string(),
+            transcript: Some("Hello".to_string()),
+            chapters: Vec::new(),
+            transcript_unavailable_reason: None,
+        })
+        .unwrap();
+        assert_eq!(detailed["id"], "fixture123");
+        assert_eq!(detailed["description"], "Fixture description");
+
+        let mut blocks = Vec::new();
+        let mut relationships = Vec::new();
+        append_timedtext_blocks(
+            "fixture123",
+            "youtube:video:fixture123",
+            vec![TimedTextSegment {
+                text: "Hello".to_string(),
+                start_ms: 100,
+                duration_ms: 900,
+            }],
+            &mut blocks,
+            &mut relationships,
+        );
+        assert_eq!(blocks[0].block_kind, "transcript_segment");
+        assert_eq!(blocks[0].position.as_ref().unwrap()["start_ms"], 100);
+        assert_eq!(relationships[0].rel, "has_block");
+    }
+
+    #[test]
+    fn parses_lightweight_search_renderers() {
+        let root = json!({
+            "contents": [
+                { "videoRenderer": {
+                    "videoId": "video123", "title": { "simpleText": "Video" },
+                    "lengthText": { "simpleText": "1:02" },
+                    "viewCountText": { "simpleText": "1.2K views" },
+                    "ownerText": { "simpleText": "Channel" }
+                } },
+                { "channelRenderer": {
+                    "channelId": "UCchannel", "title": { "simpleText": "Channel" },
+                    "subscriberCountText": { "simpleText": "2.5M subscribers" }
+                } }
+            ]
+        });
+        let mut results = Vec::new();
+        collect_search_results(&root, SearchCategory::All, 10, &mut results);
+        assert_eq!(results.len(), 2);
+        assert!(
+            matches!(&results[0], SearchResultItem::Video(video) if video.duration_seconds == 62 && video.views == 1_200)
+        );
+        assert!(
+            matches!(&results[1], SearchResultItem::Channel(channel) if channel.subscribers == 2_500_000)
+        );
+    }
 
     #[test]
     fn extract_json_object_after_marker_handles_nested_json() {

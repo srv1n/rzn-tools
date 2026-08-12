@@ -10,9 +10,6 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
   rzn-tools tools youtube                     Show tools for a specific connector
   rzn-tools search youtube \"rust tutorial\"    Search YouTube videos
   rzn-tools hackernews search --query \"rust\"  Search Hacker News directly
-  rzn-tools configure cloudflare guide        Show Cloudflare tunnel setup help
-  rzn-tools serve                             Run the local MCP HTTP server
-  rzn-tools configure cloudflare tunnel --hostname rzn-tools-origin.example.com --tunnel-name rzn-tools-mcp
 
 \x1b[1;36mAuthentication:\x1b[0m
   rzn-tools setup                             Interactive setup wizard
@@ -97,6 +94,7 @@ pub enum Commands {
     },
 
     /// Configure hosting and proxy integration helpers
+    #[cfg(feature = "serve")]
     #[command(after_help = "\x1b[1;33mExamples:\x1b[0m
   rzn-tools configure cloudflare guide
   rzn-tools configure cloudflare doctor
@@ -107,6 +105,7 @@ pub enum Commands {
     },
 
     /// Run the native MCP HTTP server
+    #[cfg(feature = "serve")]
     #[command(after_help = "\x1b[1;33mExamples:\x1b[0m
   rzn-tools configure cloudflare guide
   rzn-tools configure cloudflare tunnel --hostname rzn-tools-origin.example.com --tunnel-name rzn-tools-mcp
@@ -1211,6 +1210,7 @@ pub enum OutputFormat {
 }
 
 #[derive(Subcommand, Clone)]
+#[cfg(feature = "serve")]
 pub enum ConfigureTarget {
     /// Save Cloudflare tunnel defaults for `rzn-tools serve`
     Cloudflare {
@@ -1220,6 +1220,7 @@ pub enum ConfigureTarget {
 }
 
 #[derive(Subcommand, Clone)]
+#[cfg(feature = "serve")]
 pub enum CloudflareConfigureAction {
     /// Show first-run setup help for rzn-tools behind Cloudflare Tunnel
     Guide,

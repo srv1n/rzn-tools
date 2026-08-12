@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- YouTube: use watch-page player JSON and JSON3 timed text for metadata, transcripts, chapters, and search without `rusty_ytdl`, Boa, or `yt-transcript-rs` in default builds.
+
 ## [0.2.18] - 2026-08-01
 
 ### Added

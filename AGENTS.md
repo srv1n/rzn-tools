@@ -3,7 +3,6 @@
 ## Project Structure & Module Organization
 - `rzn_tools_core/` contains the core library, connector trait, registry, and shared utilities.
 - `rzn_tools_cli/` is the CLI binary; `rzn_tools_mcp/` is the MCP server binary.
-- `scrapable_derive/` holds the proc-macro for HTML parsing.
 - `docs/` houses connector and architecture docs; `packaging/` includes install scripts/formulas.
 - `vendor/` contains vendored dependencies; config lives in `Cargo.toml`, `.cargo/config.toml`, `clippy.toml`, and `rustfmt.toml`.
 

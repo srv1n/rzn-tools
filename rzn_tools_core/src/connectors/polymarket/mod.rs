@@ -8,9 +8,8 @@ use crate::ingest::{
 use crate::utils::{build_reqwest_client, structured_result, structured_result_with_text};
 use crate::{
     CallToolRequestParam, Connector, Implementation, InitializeRequestParam, InitializeResult,
-    ListPromptsResult, ListResourcesResult, ListToolsResult, PaginatedRequestParam, Prompt,
-    ProtocolVersion, ReadResourceRequestParam, ResourceContents, ServerCapabilities, Tool,
-    URLParamExtraction, URLPatternSpec,
+    ListToolsResult, PaginatedRequestParam, Prompt, ProtocolVersion, Tool, URLParamExtraction,
+    URLPatternSpec,
 };
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
@@ -3094,13 +3093,6 @@ impl Connector for PolymarketConnector {
         }]
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn initialize(
         &self,
         _request: InitializeRequestParam,
@@ -3120,23 +3112,6 @@ impl Connector for PolymarketConnector {
                     .to_string(),
             ),
         })
-    }
-
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: Vec::new(),
-            next_cursor: None,
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        _request: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
     }
 
     async fn list_tools(
@@ -4085,16 +4060,6 @@ impl Connector for PolymarketConnector {
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn list_prompts(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: Vec::new(),
-            next_cursor: None,
-        })
     }
 
     async fn get_prompt(&self, name: &str) -> Result<Prompt, ConnectorError> {

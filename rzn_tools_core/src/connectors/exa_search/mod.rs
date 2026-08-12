@@ -578,12 +578,6 @@ impl Connector for ExaSearchConnector {
     fn requires_auth(&self) -> bool {
         true
     }
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
 
     async fn initialize(
         &self,
@@ -617,16 +611,6 @@ Preferred tool flow:
 
 Use Parallel Search instead when the task is broad fan-out search, comparison across many subqueries, recurring monitoring, or a token-sensitive agent loop."#.into(),
             ),
-        })
-    }
-
-    async fn list_resources(
-        &self,
-        _r: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: vec![],
-            next_cursor: None,
         })
     }
 
@@ -946,20 +930,6 @@ Use Parallel Search instead when the task is broad fan-out search, comparison ac
             "research" => self.research_impl(&args).await,
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn list_prompts(
-        &self,
-        _r: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![],
-            next_cursor: None,
-        })
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::ToolNotFound)
     }
 
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {

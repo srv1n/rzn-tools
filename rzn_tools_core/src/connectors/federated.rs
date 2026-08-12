@@ -9,8 +9,8 @@ use crate::error::ConnectorError;
 use crate::federated::{FederatedSearch, MergeMode, ProfileStore, SearchProfile};
 use crate::utils::structured_result_with_text;
 use crate::{
-    CallToolRequestParam, CallToolResult, Connector, ListPromptsResult, ListResourcesResult,
-    ListToolsResult, PaginatedRequestParam, ProviderRegistry, Tool,
+    CallToolRequestParam, CallToolResult, Connector, ListToolsResult, PaginatedRequestParam,
+    ProviderRegistry, Tool,
 };
 use async_trait::async_trait;
 use rmcp::model::*;
@@ -79,13 +79,6 @@ impl Connector for FederatedConnector {
         false
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         Ok(AuthDetails::new())
     }
@@ -123,23 +116,6 @@ impl Connector for FederatedConnector {
                     .to_string(),
             ),
         })
-    }
-
-    async fn list_resources(
-        &self,
-        _params: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: vec![],
-            next_cursor: None,
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        _params: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
     }
 
     async fn list_tools(
@@ -291,16 +267,6 @@ impl Connector for FederatedConnector {
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn list_prompts(
-        &self,
-        _params: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![],
-            next_cursor: None,
-        })
     }
 
     async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {

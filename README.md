@@ -850,9 +850,10 @@ rzn_tools_core = { version = "0.2.18", features = ["desktop-full"] }
 
 For a backend that launches `rzn-tools-mcp` as a separate process, pin the Git commit rather
 than using a sibling path dependency. `server-full` is the portable profile; it excludes
-Rookie, publicsuffix, browser-cookie import, `x-browser`, and `telegram`. Telegram remains in
-`all-connectors` and `desktop-full`; its upstream MTProto dependency chain currently resolves
-through a yanked crate, so it cannot be included in a fresh downstream Cargo graph.
+Rookie, publicsuffix, browser-cookie import, `x-browser`, `telegram`, Discord, and macOS-only
+connectors. Telegram remains in `all-connectors` and `desktop-full`; its upstream MTProto
+dependency chain currently resolves through a yanked crate, so it cannot be included in a fresh
+downstream Cargo graph. Discord remains individually opt-in.
 
 ```toml
 rzn_tools_mcp = { git = "https://github.com/srv1n/rzn-tools.git", rev = "<full-commit-sha>", features = ["server-full"] }
@@ -869,7 +870,6 @@ rzn-tools/
 ├── rzn_tools_core/           # Package: rzn_tools_core
 ├── rzn_tools_cli/            # Package: rzn_tools_cli
 ├── rzn_tools_mcp/            # Package: rzn_tools_mcp
-└── scrapable_derive/ # Proc-macro for HTML parsing
 ```
 
 All connectors implement a common trait:

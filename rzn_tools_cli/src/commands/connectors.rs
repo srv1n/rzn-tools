@@ -468,119 +468,102 @@ async fn call_tool(cli: &Cli, connector: &str, tool: &str, args: Map<String, Val
     output_tool_result(cli, connector, tool, &payload, meta_value.as_ref())
 }
 
+async fn handle_model_search(
+    cli: &Cli,
+    connector: &str,
+    query: String,
+    limit: u32,
+    model: Option<String>,
+    response_format: String,
+) -> Result<()> {
+    let mut args = Map::new();
+    args.insert("query".to_string(), json!(query));
+    args.insert("limit".to_string(), json!(limit));
+    if let Some(model) = model {
+        args.insert("model".to_string(), json!(model));
+    }
+    args.insert("response_format".to_string(), json!(response_format));
+    call_tool(cli, connector, "search", args).await
+}
+
 /// Handle OpenAI Search commands
 pub async fn handle_openai_search(cli: &Cli, tool: OpenaiSearchTools) -> Result<()> {
-    let (tool_name, args) = match tool {
+    match tool {
         OpenaiSearchTools::Search {
             query,
             limit,
             model,
             response_format,
-        } => {
-            let mut args = Map::new();
-            args.insert("query".to_string(), json!(query));
-            args.insert("limit".to_string(), json!(limit));
-            if let Some(m) = model {
-                args.insert("model".to_string(), json!(m));
-            }
-            args.insert("response_format".to_string(), json!(response_format));
-            ("search", args)
-        }
-    };
-
-    call_tool(cli, "openai-search", tool_name, args).await
+        } => handle_model_search(cli, "openai-search", query, limit, model, response_format).await,
+    }
 }
 
 /// Handle Anthropic Search commands
 pub async fn handle_anthropic_search(cli: &Cli, tool: AnthropicSearchTools) -> Result<()> {
-    let (tool_name, args) = match tool {
+    match tool {
         AnthropicSearchTools::Search {
             query,
             limit,
             model,
             response_format,
         } => {
-            let mut args = Map::new();
-            args.insert("query".to_string(), json!(query));
-            args.insert("limit".to_string(), json!(limit));
-            if let Some(m) = model {
-                args.insert("model".to_string(), json!(m));
-            }
-            args.insert("response_format".to_string(), json!(response_format));
-            ("search", args)
+            handle_model_search(
+                cli,
+                "anthropic-search",
+                query,
+                limit,
+                model,
+                response_format,
+            )
+            .await
         }
-    };
-
-    call_tool(cli, "anthropic-search", tool_name, args).await
+    }
 }
 
 /// Handle Gemini Search commands
 pub async fn handle_gemini_search(cli: &Cli, tool: GeminiSearchTools) -> Result<()> {
-    let (tool_name, args) = match tool {
+    match tool {
         GeminiSearchTools::Search {
             query,
             limit,
             model,
             response_format,
-        } => {
-            let mut args = Map::new();
-            args.insert("query".to_string(), json!(query));
-            args.insert("limit".to_string(), json!(limit));
-            if let Some(m) = model {
-                args.insert("model".to_string(), json!(m));
-            }
-            args.insert("response_format".to_string(), json!(response_format));
-            ("search", args)
-        }
-    };
-
-    call_tool(cli, "gemini-search", tool_name, args).await
+        } => handle_model_search(cli, "gemini-search", query, limit, model, response_format).await,
+    }
 }
 
 /// Handle Perplexity Search commands
 pub async fn handle_perplexity_search(cli: &Cli, tool: PerplexitySearchTools) -> Result<()> {
-    let (tool_name, args) = match tool {
+    match tool {
         PerplexitySearchTools::Search {
             query,
             limit,
             model,
             response_format,
         } => {
-            let mut args = Map::new();
-            args.insert("query".to_string(), json!(query));
-            args.insert("limit".to_string(), json!(limit));
-            if let Some(m) = model {
-                args.insert("model".to_string(), json!(m));
-            }
-            args.insert("response_format".to_string(), json!(response_format));
-            ("search", args)
+            handle_model_search(
+                cli,
+                "perplexity-search",
+                query,
+                limit,
+                model,
+                response_format,
+            )
+            .await
         }
-    };
-
-    call_tool(cli, "perplexity-search", tool_name, args).await
+    }
 }
 
 /// Handle xAI Search commands
 pub async fn handle_xai_search(cli: &Cli, tool: XaiSearchTools) -> Result<()> {
-    let (tool_name, args) = match tool {
+    match tool {
         XaiSearchTools::Search {
             query,
             limit,
             model,
             response_format,
-        } => {
-            let mut args = Map::new();
-            args.insert("query".to_string(), json!(query));
-            args.insert("limit".to_string(), json!(limit));
-            if let Some(m) = model {
-                args.insert("model".to_string(), json!(m));
-            }
-            args.insert("response_format".to_string(), json!(response_format));
-            ("search", args)
-        }
-    };
-
-    call_tool(cli, "xai-search", tool_name, args).await
+        } => handle_model_search(cli, "xai-search", query, limit, model, response_format).await,
+    }
 }
 
 /// Handle Exa commands

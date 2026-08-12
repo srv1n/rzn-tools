@@ -57,21 +57,6 @@ impl Connector for GoogleCalendarConnector {
     ) -> Result<InitializeResult, ConnectorError> {
         Ok(InitializeResult { protocol_version: ProtocolVersion::LATEST, capabilities: self.capabilities().await, server_info: Implementation { name: self.name().to_string(), title: None, version: "0.1.0".to_string(), icons: None, website_url: None }, instructions: Some("Authenticate via Google device flow; shares tokens with other Google connectors under 'google-common'.".to_string()) })
     }
-    async fn list_resources(
-        &self,
-        _r: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: vec![],
-            next_cursor: None,
-        })
-    }
-    async fn read_resource(
-        &self,
-        _r: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
-    }
     async fn list_tools(
         &self,
         _r: Option<PaginatedRequestParam>,
@@ -441,15 +426,6 @@ Tool { name: Cow::Borrowed("list_events"), title: None, description: Some(Cow::B
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-    async fn list_prompts(
-        &self,
-        _r: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![],
-            next_cursor: None,
-        })
     }
     async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
         Err(ConnectorError::InvalidParams(
