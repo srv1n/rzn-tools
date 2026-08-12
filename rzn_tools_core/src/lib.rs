@@ -633,14 +633,6 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
         registry.register_provider(Box::new(connector));
     }
 
-    // EXPERIMENTAL - NOT READY: HealthKit data store not available on macOS
-    // See: rzn_tools_core/src/connectors/apple_health/NOT_READY.md
-    // #[cfg(all(target_os = "macos", feature = "apple-health"))]
-    // {
-    //     let connector = connectors::apple_health::AppleHealthConnector::new();
-    //     registry.register_provider(Box::new(connector));
-    // }
-
     #[cfg(feature = "slack")]
     {
         if let Ok(connector) =

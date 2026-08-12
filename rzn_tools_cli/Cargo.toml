@@ -52,7 +52,6 @@ default = ["default-connectors"]
 default-connectors = [
     "arxiv",
     "biorxiv",
-    "github",
     "hackernews",
     "app-store",
     "play-store",
@@ -145,9 +144,6 @@ llm-macros = ["rzn_tools_core/llm-macros", "rzn_tools_mcp?/llm-macros"]
 # macOS-specific connectors
 macos-automation = ["rzn_tools_core/macos-automation", "rzn_tools_mcp?/macos-automation"]
 macos-spotlight = ["rzn_tools_core/macos-spotlight", "rzn_tools_mcp?/macos-spotlight"]
-# EXPERIMENTAL - NOT READY: See rzn_tools_core/src/connectors/apple_health/NOT_READY.md
-# apple-health = ["rzn_tools_core/apple-health"]
-
 # Apple Ecosystem connectors (macOS only)
 apple-mail = ["rzn_tools_core/apple-mail", "rzn_tools_mcp?/apple-mail"]
 apple-notes = ["rzn_tools_core/apple-notes", "rzn_tools_mcp?/apple-notes"]

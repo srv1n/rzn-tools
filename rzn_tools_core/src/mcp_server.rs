@@ -621,7 +621,6 @@ impl McpServer {
                     | "apple-messages"
                     | "apple-reminders"
                     | "apple-contacts"
-                    | "apple-health"
                     | "google-calendar"
                     | "google-drive"
                     | "google-gmail"

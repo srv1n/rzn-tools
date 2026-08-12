@@ -31,10 +31,6 @@ pub mod macos;
 pub mod smtp;
 #[cfg(all(target_os = "macos", feature = "macos-spotlight"))]
 pub mod spotlight;
-// EXPERIMENTAL - NOT READY: HealthKit data store not available on macOS
-// See: rzn_tools_core/src/connectors/apple_health/NOT_READY.md
-// #[cfg(all(target_os = "macos", feature = "apple-health"))]
-// pub mod apple_health;
 #[cfg(feature = "app-store")]
 pub mod app_store;
 #[cfg(feature = "app-store-connect")]

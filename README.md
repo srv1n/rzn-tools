@@ -942,11 +942,8 @@ rzn-tools is built on the shoulders of excellent open-source crates:
 
 | Crate | Used For |
 |-------|----------|
-| [roux](https://crates.io/crates/roux) | Reddit API client |
 | [octocrab](https://crates.io/crates/octocrab) | GitHub API client |
 | [wikipedia](https://crates.io/crates/wikipedia) | Wikipedia API client |
-| [yt-transcript-rs](https://crates.io/crates/yt-transcript-rs) | YouTube transcript extraction |
-| [rusty_ytdl](https://crates.io/crates/rusty_ytdl) | YouTube video metadata |
 | [agent-twitter-client](https://crates.io/crates/agent-twitter-client) | X (Twitter) client |
 | [rookie](https://crates.io/crates/rookie) | Optional advanced local browser-profile cookie import |
 | [graph-rs-sdk](https://crates.io/crates/graph-rs-sdk) | Microsoft Graph API |

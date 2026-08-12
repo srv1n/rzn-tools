@@ -1,6 +1,7 @@
 # Vendoring provenance
 
-This is a modified vendor copy, not a pristine upstream archive.
+This records a historical vendor import; the source was removed after the
+YouTube connector gained a native implementation.
 
 | Field | Value |
 |---|---|
@@ -9,9 +10,13 @@ This is a modified vendor copy, not a pristine upstream archive.
 | Upstream commit | `126fc667d486c548d368dd1a9ba0f0459d46b0db` |
 | Upstream Git tree | `08d16941b526a17e0227c6d547ac302960efd929` |
 | Imported | 2026-08-01 |
-| License | Upstream MIT license retained in `LICENSE` |
+| License | Upstream MIT |
 
 ## Local deltas
+
+The imported source and license files are intentionally absent from this
+checkout. This record remains so the former dependency can be traced without
+keeping dead code in the repository.
 
 - Removed Reqwest's `cookies` feature from the vendor manifest.
 - Removed the public cookie-jar module and its re-export; the upstream

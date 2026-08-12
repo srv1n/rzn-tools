@@ -11,9 +11,6 @@
     "apple-contacts": {
       "path": "resources/icons/connectors/apple-contacts.svg"
     },
-    "apple-health": {
-      "path": "resources/icons/connectors/apple-health.svg"
-    },
     "apple-mail": {
       "path": "resources/icons/connectors/apple-mail.svg"
     },
@@ -190,10 +187,6 @@
     "apple-contacts": {
       "icon": "apple-contacts",
       "path": "resources/icons/connectors/apple-contacts.svg"
-    },
-    "apple-health": {
-      "icon": "apple-health",
-      "path": "resources/icons/connectors/apple-health.svg"
     },
     "apple-mail": {
       "icon": "apple-mail",

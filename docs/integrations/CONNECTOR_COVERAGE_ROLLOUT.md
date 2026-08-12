@@ -184,7 +184,6 @@ Legend:
 |----------|------|-----------|-----------|------|
 | anthropic_search | true | yes | yes | API key / provider auth |
 | apple_contacts | true | yes | no | OS permission prompt risk |
-| apple_health | true | maybe | no | Not ready on macOS per repo note |
 | apple_mail | true | yes | no | OS permission prompt risk |
 | apple_messages | true | yes | no | OS permission prompt risk |
 | apple_notes | true | yes | no | OS permission prompt risk |
