@@ -23,6 +23,18 @@ This repo gives you one local runtime that can be used three ways:
 | `rzn-tools-mcp` or `rzn-tools serve` | Claude, ChatGPT, Codex, and other MCP clients |
 | `rzn_tools_core` | embedding the same connector model in a Rust app |
 
+The CLI keeps polished YouTube transcript workflows, smart `search`, `get`, and `fetch`, and one
+generic escape hatch for every other connector tool:
+
+```bash
+rzn-tools tools github
+rzn-tools call github search_repositories --args '{"query":"rust cli","limit":10}'
+rzn-tools youtube dQw4w9WgXcQ
+```
+
+`tools <connector>` is the argument contract; `call` deliberately does not duplicate it in typed
+CLI enums.
+
 This is not a hosted SaaS. It is a local-first integration layer: install it once, then search,
 fetch, and normalize across many systems through one consistent surface.
 
