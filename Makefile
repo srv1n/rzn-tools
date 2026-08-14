@@ -1,4 +1,4 @@
-.PHONY: help ensure-sccache build build-release test check clippy fmt fmt-check doc run install release release-dry-run release-prepare release-retitle-legacy release-retitle-legacy-dry-run plugins-keygen plugins-build-rzn-tools-macos-arm64 plugins-verify plugins-validate-system-metadata
+.PHONY: help ensure-sccache build build-release test check clippy fmt fmt-check doc run install release release-dry-run release-prepare release-retitle-legacy release-retitle-legacy-dry-run plugins-keygen plugins-build-rzn-tools-macos-arm64 plugins-verify plugins-validate-system-metadata sidecar-package sidecar-verify
 
 # Rust entrypoint policy
 #
@@ -15,7 +15,8 @@ help:
 		'  make build-release CARGO_ARGS="-p rzn_tools_cli --features full"' \
 		'  make test CARGO_ARGS="-p rzn_tools_core"' \
 		'  make check | make clippy | make fmt | make fmt-check | make doc' \
-		'  make run CARGO_ARGS="-p rzn_tools_cli -- list"'
+		'  make run CARGO_ARGS="-p rzn_tools_cli -- list"' \
+		'  make sidecar-package'
 
 ensure-sccache:
 	@command -v "$(SCCACHE)" >/dev/null 2>&1 || { \
@@ -57,6 +58,19 @@ doc: ensure-sccache
 
 run: ensure-sccache
 	cargo run $(CARGO_ARGS)
+
+# Build an immutable, digest-addressed MCP sidecar artifact.
+sidecar-package:
+	./packaging/scripts/package-sidecar.sh
+
+# Verify one sidecar artifact produced by `make sidecar-package`.
+sidecar-verify:
+	@test -n "$(SIDECAR_DIR)" || { echo "Usage: make sidecar-verify SIDECAR_DIR=target/sidecars/<sha256>" >&2; exit 1; }
+	@test -x "$(SIDECAR_DIR)/rzn-tools" || { echo "missing executable: $(SIDECAR_DIR)/rzn-tools" >&2; exit 1; }
+	@test -f "$(SIDECAR_DIR)/rzn-tools.sha256" || { echo "missing digest file" >&2; exit 1; }
+	@test -f "$(SIDECAR_DIR)/manifest.json" || { echo "missing manifest" >&2; exit 1; }
+	@if command -v sha256sum >/dev/null 2>&1; then (cd "$(SIDECAR_DIR)" && sha256sum -c rzn-tools.sha256); else (cd "$(SIDECAR_DIR)" && shasum -a 256 -c rzn-tools.sha256); fi
+	@python3 -c 'import json,pathlib,sys; m=json.loads(pathlib.Path(sys.argv[1]).read_text()); d=pathlib.Path(sys.argv[2]).read_text().split()[0]; assert m["sha256"] == d; assert m["install_layout"].endswith(f"/{d}/rzn-tools"); assert m["protocol"] == "mcp-stdio"; assert m["protocol_version"] == "2025-03-26"; assert m["capability_version"] == "rzn-tools-mcp-capabilities-v1"; assert m["max_frame_bytes"] == 4194304; assert m["handshake"] == "initialize"; print("sidecar manifest: OK")' "$(SIDECAR_DIR)/manifest.json" "$(SIDECAR_DIR)/rzn-tools.sha256"
 
 # -----------------------------------------------------------------------------
 # RZN Desktop Extension Bundle (plugin.json + plugin.sig + payload ZIP)

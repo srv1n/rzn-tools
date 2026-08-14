@@ -26,6 +26,17 @@ cargo build --release -p rzn_tools_mcp --features full
 | `stdio` | `rzn-tools-mcp` | Best for local MCP desktop clients |
 | `http` | `rzn-tools-mcp http --bind 127.0.0.1:8000` | Exposes `/mcp`, `/healthz`, `/readyz` for tunnels, workers, and remote proxies |
 
+For a backend-launched tenant sidecar, use the fixed invocation-scoped profile:
+
+```bash
+rzn-tools-mcp sidecar --connectors youtube,hackernews
+```
+
+This is the same MCP JSON-RPC line transport and `initialize` handshake. It refuses inherited
+credential environment variables, keeps `secrets/set` credentials in process memory, never logs
+request frames, and exits successfully on stdin EOF. Package it with `make sidecar-package`; the
+artifact is digest-addressed and intended for `/opt/rzn/sidecars/rzn-tools/<sha256>/rzn-tools`.
+
 HTTP mode keeps a single MCP endpoint. There are no per-tool routes because that would be a bad design.
 
 If you prefer the main CLI entrypoint, the same HTTP flow is available via:

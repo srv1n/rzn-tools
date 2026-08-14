@@ -1,5 +1,9 @@
 use crate::auth::AuthDetails;
-use std::path::PathBuf;
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Mutex, OnceLock},
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -23,6 +27,20 @@ pub trait AuthStore: Send + Sync {
 /// - Keys without this delimiter are treated as `profile = "default"`.
 pub const AUTH_PROFILE_DELIM: &str = "::";
 pub const CONFIG_DIR_NAME: &str = "rzn-tools";
+
+static INVOCATION_AUTH: OnceLock<Mutex<HashMap<String, AuthDetails>>> = OnceLock::new();
+
+/// Keep credentials in the sidecar process instead of the user's global auth file.
+pub fn enable_invocation_scoped_auth() {
+    let store = INVOCATION_AUTH.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(mut map) = store.lock() {
+        map.clear();
+    }
+}
+
+fn invocation_auth() -> Option<&'static Mutex<HashMap<String, AuthDetails>>> {
+    INVOCATION_AUTH.get()
+}
 
 pub fn config_dir() -> PathBuf {
     crate::paths::config_base_dir().join(CONFIG_DIR_NAME)
@@ -70,7 +88,9 @@ impl FileAuthStore {
     pub fn new_default() -> Self {
         let dir = config_dir();
         let path = dir.join("auth.json");
-        std::fs::create_dir_all(&dir).ok();
+        if invocation_auth().is_none() {
+            std::fs::create_dir_all(&dir).ok();
+        }
         Self { path }
     }
 
@@ -166,6 +186,9 @@ impl FileAuthStore {
     }
 
     fn read_map(&self) -> std::collections::HashMap<String, AuthDetails> {
+        if let Some(store) = invocation_auth() {
+            return store.lock().map(|map| map.clone()).unwrap_or_default();
+        }
         match std::fs::read_to_string(&self.path) {
             Ok(s) => serde_json::from_str(&s).unwrap_or_default(),
             Err(_) => std::collections::HashMap::new(),
@@ -175,6 +198,12 @@ impl FileAuthStore {
         &self,
         map: &std::collections::HashMap<String, AuthDetails>,
     ) -> Result<(), StoreError> {
+        if let Some(store) = invocation_auth() {
+            *store
+                .lock()
+                .map_err(|e| StoreError::Persist(format!("lock poisoned: {}", e)))? = map.clone();
+            return Ok(());
+        }
         let s = serde_json::to_string_pretty(map)
             .map_err(|e| StoreError::Persist(format!("serde: {}", e)))?;
         std::fs::write(&self.path, &s).map_err(|e| StoreError::Persist(e.to_string()))?;
