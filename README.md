@@ -15,6 +15,12 @@ links, APIs, SaaS tools, search providers, and local apps. The default alternati
 mediocre in their own special way: manual copy-paste into an LLM, one script per provider, or a
 graveyard of single-purpose MCP servers.
 
+## Current documentation
+
+Start with the [system documentation](docs/system/00-overview.md). It is the
+short source for architecture, CLI use, connectors, MCP, development,
+operations, and security. The older pages in `docs/` keep provider detail.
+
 This repo gives you one local runtime that can be used three ways:
 
 | Surface | Use it for |
@@ -58,7 +64,7 @@ These connectors work immediately after installation.
 | <img src="resources/icons/connectors/semantic_scholar.svg" width="16" height="16" /> Semantic Scholar | Academic paper search, citations, references |
 | <img src="resources/icons/connectors/google_scholar.svg" width="16" height="16" /> Google Scholar | Academic paper search |
 | <img src="resources/icons/connectors/wikipedia.svg" width="16" height="16" /> Wikipedia | Article content and search |
-| <img src="resources/icons/connectors/hackernews.svg" width="16" height="16" /> Hacker News | Stories, comments, user profiles |
+| <img src="resources/icons/connectors/hackernews.svg" width="16" height="16" /> Hacker News | Stories, comments, and search |
 | <img src="resources/icons/connectors/youtube.svg" width="16" height="16" /> YouTube | Video metadata, transcripts, search |
 | <img src="resources/icons/connectors/rss.svg" width="16" height="16" /> RSS | Fetch and parse RSS/Atom feeds |
 | <img src="resources/icons/connectors/weather.svg" width="16" height="16" /> Weather | Current weather + short forecast via wttr.in |
@@ -75,7 +81,7 @@ These connectors work without credentials but offer additional functionality whe
 
 | Connector | Without Auth | With Auth |
 |-----------|--------------|-----------|
-| <img src="resources/icons/connectors/reddit.svg" width="16" height="16" /> Reddit | Public subreddit browsing | Post to subreddits, access private content |
+| <img src="resources/icons/connectors/reddit.svg" width="16" height="16" /> Reddit | Public subreddit browsing | Higher-rate authenticated public reads |
 | <img src="resources/icons/connectors/github.svg" width="16" height="16" /> GitHub | Public repo search | Private repos, higher rate limits |
 | <img src="resources/icons/connectors/semantic_scholar.svg" width="16" height="16" /> Semantic Scholar | Basic search | Higher rate limits |
 
@@ -89,7 +95,7 @@ These connectors work without credentials but offer additional functionality whe
 | <img src="resources/icons/connectors/send.svg" width="16" height="16" /> Telegram | `api_id` + `api_hash` + local session | Dialogs, messages, and sending |
 | <img src="resources/icons/connectors/atlassian.svg" width="16" height="16" /> Atlassian | API token | Jira issues, Confluence pages |
 | <img src="resources/icons/connectors/app_store.svg" width="16" height="16" /> App Store Connect | API key (JWT) | Apps, App Analytics reports, Sales & Finance reports |
-| <img src="resources/icons/connectors/apple.svg" width="16" height="16" /> Apple Search Ads | OAuth client creds + ES256 key | Keyword recommendations + reporting |
+| <img src="resources/icons/connectors/apple.svg" width="16" height="16" /> Apple Ads | OAuth client creds + ES256 key | Platform v1 App Store/Maps campaigns, insights, recommendations, reports |
 | <img src="resources/icons/connectors/google_drive.svg" width="16" height="16" /> Google Drive | OAuth2 | Files and folders |
 | <img src="resources/icons/connectors/gmail.svg" width="16" height="16" /> Gmail | OAuth2 | Email access |
 | <img src="resources/icons/connectors/google_calendar.svg" width="16" height="16" /> Google Calendar | OAuth2 | Calendar events |
@@ -98,7 +104,7 @@ These connectors work without credentials but offer additional functionality whe
 | <img src="resources/icons/connectors/google_search_console.svg" width="16" height="16" /> Google Search Console | OAuth2 | SEO performance, sitemaps, URL inspection |
 | <img src="resources/icons/connectors/bing.svg" width="16" height="16" /> Bing Webmaster Tools | API key | SEO performance stats + URL submission |
 | <img src="resources/icons/connectors/linkedin.svg" width="16" height="16" /> LinkedIn | OAuth2 / OIDC token import | Auth status, member identity, official posting APIs, raw authenticated requests |
-| <img src="resources/icons/connectors/microsoft.svg" width="16" height="16" /> Microsoft Graph | OAuth2 | OneDrive, Outlook, Calendar |
+| <img src="resources/icons/connectors/microsoft.svg" width="16" height="16" /> Microsoft Graph | OAuth2 | Outlook mail and calendar; mail draft/send |
 | <img src="resources/icons/connectors/imap.svg" width="16" height="16" /> IMAP | Server credentials | Email retrieval |
 | <img src="resources/icons/connectors/mailgun.svg" width="16" height="16" /> SMTP | Server credentials | Outbound email sending |
 | <img src="resources/icons/connectors/x.svg" width="16" height="16" /> X (Twitter) API | Bearer token | Official X API v2: tweets, profiles, recent search |
@@ -425,11 +431,11 @@ rzn-tools anthropic-search search --query "AI safety"
 # Google services (requires OAuth setup)
 rzn-tools google-calendar list-events
 rzn-tools google-drive list-files --query "project report"
-rzn-tools google-gmail search --query "from:boss@company.com"
+rzn-tools google-gmail list-messages --q "from:boss@company.com"
 
 # Microsoft 365 (requires OAuth setup)
-rzn-tools microsoft-graph list-drive-items
-rzn-tools microsoft-graph list-mail --filter "isRead eq false"
+rzn-tools microsoft-graph list-messages
+rzn-tools microsoft-graph list-events
 
 # SMTP (requires setup)
 rzn-tools smtp test-connection
@@ -438,7 +444,7 @@ rzn-tools smtp send-mail --to user@example.com --subject "Hello" --body "Test"
 # Academic research
 rzn-tools pubmed search --query "CRISPR gene therapy" --limit 10
 rzn-tools semantic-scholar search --query "attention mechanism"
-rzn-tools biorxiv search --query "protein folding"
+rzn-tools biorxiv recent --limit 10
 rzn-tools scihub paper --doi "10.1038/nature12373"  # Open-access lookup
 rzn-tools scihub search --query "attention mechanism"  # Search papers
 rzn-tools scihub batch --dois "10.1038/nature12373,10.1371/journal.pone.0000308"
@@ -579,7 +585,7 @@ The wizard will:
 2. Walk you through each step
 3. Securely prompt for tokens (hidden input)
 4. Test the connection automatically
-5. Save credentials to `~/.config/rzn-tools/auth.json`
+5. Save credentials below the operating system config directory
 
 Example session:
 
@@ -600,10 +606,7 @@ How to get credentials:
 
 Configuration options:
 
-  Option 1: Set environment variables:
-    export SLACK_BOT_TOKEN="<Bot Token>"
-
-  Option 2: Enter credentials now (stored in ~/.config/rzn-tools/auth.json):
+  Enter credentials now in the local auth store:
 
 Enter credentials now? [y/N] y
   Bot Token (starts with xoxb-): ****
@@ -634,13 +637,12 @@ rzn-tools config set github --value "ghp_xxxx"
 
 ### Environment Variables
 
-You can also configure connectors via environment variables:
+Some connectors read environment variables. The live connector schema and
+`rzn-tools setup <connector>` are the source of truth. Environment support is
+not universal.
 
 ```bash
 export GITHUB_TOKEN="ghp_..."
-export SLACK_BOT_TOKEN="xoxb-..."
-export REDDIT_CLIENT_ID="..."
-export REDDIT_CLIENT_SECRET="..."
 export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
@@ -850,9 +852,10 @@ rzn_tools_core = { version = "0.2.18", features = ["desktop-full"] }
 
 For a backend that launches `rzn-tools-mcp` as a separate process, pin the Git commit rather
 than using a sibling path dependency. `server-full` is the portable profile; it excludes
-Rookie, publicsuffix, browser-cookie import, `x-browser`, and `telegram`. Telegram remains in
-`all-connectors` and `desktop-full`; its upstream MTProto dependency chain currently resolves
-through a yanked crate, so it cannot be included in a fresh downstream Cargo graph.
+Rookie, publicsuffix, browser-cookie import, `x-browser`, `telegram`, Discord, and macOS-only
+connectors. Telegram remains in `all-connectors` and `desktop-full`; its upstream MTProto
+dependency chain currently resolves through a yanked crate, so it cannot be included in a fresh
+downstream Cargo graph. Discord remains individually opt-in.
 
 ```toml
 rzn_tools_mcp = { git = "https://github.com/srv1n/rzn-tools.git", rev = "<full-commit-sha>", features = ["server-full"] }
@@ -869,7 +872,6 @@ rzn-tools/
 ├── rzn_tools_core/           # Package: rzn_tools_core
 ├── rzn_tools_cli/            # Package: rzn_tools_cli
 ├── rzn_tools_mcp/            # Package: rzn_tools_mcp
-└── scrapable_derive/ # Proc-macro for HTML parsing
 ```
 
 All connectors implement a common trait:

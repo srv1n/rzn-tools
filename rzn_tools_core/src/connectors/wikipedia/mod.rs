@@ -609,13 +609,6 @@ impl Connector for WikipediaConnector {
         }]
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         let mut auth = AuthDetails::new();
         auth.insert("language".to_string(), self.language.clone());

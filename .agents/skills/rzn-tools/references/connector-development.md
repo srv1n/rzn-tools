@@ -45,7 +45,7 @@ For a connector named `my-service` with module `my_service`:
 Release builds use:
 
 ```bash
-cargo build --release -p rzn_tools_cli --features full
+make build-release CARGO_ARGS="-p rzn_tools_cli --features full"
 ```
 
 ## Tool Design

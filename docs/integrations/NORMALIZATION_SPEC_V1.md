@@ -1,12 +1,24 @@
 # RZN Integrations Normalization Spec v1 (Standard Inputs + Normalized Outputs)
 
-**Status**: Draft (implementation-facing)
-**Last updated**: 2025-12-29
+**Status**: Implemented subset; the code and conformance tests are authoritative
+**Last verified**: 2026-08-23
 **Audience**: Connector authors, downstream hosts (desktop/server), ingestion/indexing pipelines
 **Primary goal**: add connectors without downstream custom parsing, pagination, or ID-mapping code.
 
-This is the *implementation* spec: what connector authors must implement and what downstream
-hosts can rely on.
+This document describes the intended contract. Current behavior has these
+important limits:
+
+- Only tools that advertise `_meta.supports_output_format` are checked.
+- Not every connector implements normalized output.
+- Structured results also contain a text fallback. `content` is not empty.
+- `decode_cursor` returns no value for invalid input; each connector must turn
+  that into an input error.
+- The constructor does not enforce the relationship between `has_more` and
+  `next_cursor`; connector code and fixture tests must enforce it.
+
+Implementation: `rzn_tools_core/src/ingest.rs`. Conformance tests and fixtures:
+`rzn_tools_core/tests/normalized_conformance.rs` and
+`rzn_tools_core/tests/fixtures/normalized/`.
 
 Related documents:
 - Background + examples: `docs/integrations/INGEST_CONTRACT_V1.md`

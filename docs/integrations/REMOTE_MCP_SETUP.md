@@ -301,7 +301,7 @@ OpenAI renamed "connectors" to "apps", so expect the UI to say **Apps**.
 ### What matters
 
 - ChatGPT custom MCP integrations are **remote only**. You cannot point ChatGPT at a local-only server.
-- OpenAI's developer mode supports **SSE and streaming HTTP** remote MCP servers.
+- OpenAI's developer mode needs a compatible remote MCP transport.
 - If ChatGPT says your server does not implement its specification, your remote MCP surface is not compatible enough yet.
 
 ### Add rzn-tools in ChatGPT
@@ -322,6 +322,8 @@ https://mcp.example.com/mcp
 ### Important ChatGPT caveats
 
 - OpenAI's help docs say remote servers only.
+- The current rzn-tools server does not implement GET SSE. POST requests can
+  return one SSE event. Verify client compatibility before you expose it.
 - OpenAI's help/docs also make clear that plan availability and tool permissions vary by plan.
 - If you do not see Developer mode or app creation UI, your plan, region, or workspace settings probably do not allow it.
 
@@ -336,7 +338,9 @@ Anthropic supports remote MCP connectors in Claude and Claude Desktop.
 ### What matters
 
 - Remote MCP requests come from **Anthropic's cloud**, not from the user's local machine.
-- Claude supports **SSE and Streamable HTTP** remote servers.
+- Claude supports remote MCP servers, but the transport must match the client.
+- The current rzn-tools server does not implement GET SSE. Verify the HTTP
+  transport with Claude before you rely on it.
 - Claude Desktop should add remote connectors via the product UI, not by stuffing remote URLs into `claude_desktop_config.json`.
 
 ### Add rzn-tools in Claude / Claude Desktop

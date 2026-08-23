@@ -67,16 +67,14 @@ Inputs follow our JSON Schema pattern; outputs include structured items with `te
 
 ## Implementation Checklist
 
-- [ ] OAuth + token storage; `test_auth`
-- [ ] `list_channels`, `list_messages`, `get_thread`, `search_messages`, `list_files`
-- [ ] Pagination and 429 backoff
-- [ ] File metadata (no content download in MVP)
-- [ ] Docs and examples
+- [x] Stored token auth and `test_auth`
+- [x] Channel, message, thread, search, file, permalink, and user reads
+- [x] Bounded pagination and retry for rate limits and server errors
 
 ## Quick Start (build + configure)
 
-- Build CLI with Slack enabled: `cargo build -p rzn_tools_cli --features slack`
-- Set token: `rzn-tools config set slack token xoxb-...` (bot or user token with read scopes)
+- Build CLI with Slack enabled: `make build CARGO_ARGS="-p rzn_tools_cli --features slack"`
+- Set token: `rzn-tools config set slack --value xoxb-...` (bot or user token with read scopes)
 - Test: `rzn-tools config test slack` or call `rzn-tools tools slack`
 
 ### Examples

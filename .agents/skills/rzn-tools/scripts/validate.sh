@@ -8,21 +8,21 @@ cd "$repo_root"
 
 case "$mode" in
   quick)
-    cargo fmt --all -- --check
-    cargo check -p rzn_tools_cli
-    cargo check -p rzn_tools_mcp --features full
+    make fmt-check
+    make check CARGO_ARGS="-p rzn_tools_cli"
+    make check CARGO_ARGS="-p rzn_tools_mcp --features full"
     ;;
   full)
-    cargo fmt --all -- --check
-    cargo clippy --all-targets --all-features -- -D warnings
-    cargo test --workspace
-    RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+    make fmt-check
+    make clippy CARGO_ARGS="--all-targets --all-features -- -D warnings"
+    make test CARGO_ARGS="--workspace"
+    RUSTDOCFLAGS="-D warnings" make doc CARGO_ARGS="--workspace"
     ;;
   release-cli)
-    cargo build --release -p rzn_tools_cli --features full
+    make build-release CARGO_ARGS="-p rzn_tools_cli --features full"
     ;;
   release-mcp)
-    cargo build --release -p rzn_tools_mcp --features full
+    make build-release CARGO_ARGS="-p rzn_tools_mcp --features full"
     ;;
   *)
     printf 'Usage: %s [quick|full|release-cli|release-mcp]\n' "$0" >&2

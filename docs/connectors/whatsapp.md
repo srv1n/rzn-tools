@@ -105,7 +105,7 @@ export WUZAPI_TOKEN="rzn_tools_user_token_change_me"
 Then run the MCP server (from source):
 
 ```bash
-cargo run -p rzn_tools_mcp --bin rzn-tools-mcp --features full  # or: --features whatsapp
+make run CARGO_ARGS="-p rzn_tools_mcp --features full --"
 ```
 
 If you are configuring an MCP client (e.g. Claude Desktop), place the env vars in the MCP server

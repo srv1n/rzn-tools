@@ -17,6 +17,7 @@ use crate::utils::structured_result_with_text;
 use crate::Connector;
 
 const ASA_BASE_URL: &str = "https://api.searchads.apple.com/api/v5";
+const ASA_PLATFORM_BASE_URL: &str = "https://api.ads.apple.com/v1";
 const ASA_TOKEN_URL: &str = "https://appleid.apple.com/auth/oauth2/token";
 const ASA_TOKEN_AUDIENCE: &str = "https://appleid.apple.com";
 const ASA_TOKEN_SCOPE: &str = "searchadsorg";
@@ -69,6 +70,39 @@ struct CreateCampaignInput {
     body: Value,
 }
 
+#[derive(Debug, Deserialize)]
+struct PlatformRequestInput {
+    method: String,
+    path: String,
+    #[serde(default)]
+    query: Map<String, Value>,
+    #[serde(default)]
+    body: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlatformBodyInput {
+    body: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlatformRecommendationsInput {
+    kind: String,
+    body: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlatformReportInput {
+    level: String,
+    body: Value,
+}
+
+#[derive(Clone, Copy)]
+enum RequestScope {
+    Organization,
+    AdAccount,
+}
+
 #[derive(Clone)]
 pub struct AppleSearchAdsConnector {
     auth: AuthDetails,
@@ -105,6 +139,19 @@ impl AppleSearchAdsConnector {
                 FileAuthStore::new_default()
                     .load(self.name())
                     .and_then(|m| m.get("org_id").cloned())
+            })
+    }
+
+    fn ad_account_id(&self) -> Option<String> {
+        self.auth
+            .get("ad_account_id")
+            .cloned()
+            .or_else(|| std::env::var("ASA_AD_ACCOUNT_ID").ok())
+            .or_else(|| std::env::var("APPLE_ADS_AD_ACCOUNT_ID").ok())
+            .or_else(|| {
+                FileAuthStore::new_default()
+                    .load(self.name())
+                    .and_then(|m| m.get("ad_account_id").cloned())
             })
     }
 
@@ -305,7 +352,11 @@ impl AppleSearchAdsConnector {
         Ok((token_type, token_resp.access_token))
     }
 
-    async fn send_with_backoff<F>(&self, build: F) -> Result<reqwest::Response, ConnectorError>
+    async fn send_with_backoff<F>(
+        &self,
+        scope: RequestScope,
+        build: F,
+    ) -> Result<reqwest::Response, ConnectorError>
     where
         F: Fn(&Client, &str, &str, &str) -> reqwest::RequestBuilder,
     {
@@ -314,14 +365,22 @@ impl AppleSearchAdsConnector {
         const MAX_RETRIES: usize = 5;
         let mut delay_ms = 700u64;
         for attempt in 0..=MAX_RETRIES {
-            let org_id = self.org_id().ok_or_else(|| {
-                ConnectorError::Authentication(
-                    "Missing Apple Search Ads org id: set org_id or ASA_ORG_ID".into(),
-                )
-            })?;
+            let scope_id = match scope {
+                RequestScope::Organization => self.org_id().ok_or_else(|| {
+                    ConnectorError::Authentication(
+                        "Missing Apple Search Ads org id: set org_id or ASA_ORG_ID".into(),
+                    )
+                })?,
+                RequestScope::AdAccount => self.ad_account_id().ok_or_else(|| {
+                    ConnectorError::Authentication(
+                        "Missing Apple Ads Platform ad account id: set ad_account_id or ASA_AD_ACCOUNT_ID"
+                            .into(),
+                    )
+                })?,
+            };
             let (token_type, access_token) = self.ensure_access_token().await?;
 
-            let resp = build(&self.http, &token_type, &access_token, &org_id)
+            let resp = build(&self.http, &token_type, &access_token, &scope_id)
                 .send()
                 .await;
             match resp {
@@ -364,49 +423,197 @@ impl AppleSearchAdsConnector {
         query: Vec<(String, String)>,
         body: Option<Value>,
     ) -> Result<Value, ConnectorError> {
-        let url = if path.starts_with("http") {
-            path.to_string()
-        } else {
-            format!("{ASA_BASE_URL}{}", path)
-        };
+        let url = api_url(ASA_BASE_URL, path)?;
 
         let resp = self
-            .send_with_backoff(|client, token_type, access_token, org_id| {
-                let mut b = client
-                    .request(method.clone(), &url)
-                    .header(AUTHORIZATION, format!("{token_type} {}", access_token))
-                    .header("X-AdServices-OrgId", org_id)
-                    .header("X-AP-Context", format!("orgId={org_id}"));
-                if !query.is_empty() {
-                    b = b.query(&query);
-                }
-                if let Some(ref json_body) = body {
-                    b = b.header(CONTENT_TYPE, "application/json").json(json_body);
-                }
-                b
-            })
+            .send_with_backoff(
+                RequestScope::Organization,
+                |client, token_type, access_token, org_id| {
+                    let mut b = client
+                        .request(method.clone(), &url)
+                        .header(AUTHORIZATION, format!("{token_type} {}", access_token))
+                        .header("X-AdServices-OrgId", org_id)
+                        .header("X-AP-Context", format!("orgId={org_id}"));
+                    if !query.is_empty() {
+                        b = b.query(&query);
+                    }
+                    if let Some(ref json_body) = body {
+                        b = b.header(CONTENT_TYPE, "application/json").json(json_body);
+                    }
+                    b
+                },
+            )
             .await?;
 
-        let status = resp.status();
-        if status == StatusCode::NOT_FOUND {
-            return Err(ConnectorError::ResourceNotFound);
-        }
-        if !status.is_success() {
-            let text = resp.text().await.unwrap_or_default();
-            return Err(match status {
-                StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
-                    ConnectorError::Authentication(text)
-                }
-                _ => ConnectorError::Other(format!(
-                    "Apple Search Ads API returned HTTP {}: {}",
-                    status, text
-                )),
-            });
-        }
+        response_json(resp, "Apple Search Ads").await
+    }
 
-        resp.json::<Value>()
-            .await
-            .map_err(ConnectorError::HttpRequest)
+    async fn request_platform_json(
+        &self,
+        method: Method,
+        path: &str,
+        query: Vec<(String, String)>,
+        body: Option<Value>,
+    ) -> Result<Value, ConnectorError> {
+        let url = api_url(ASA_PLATFORM_BASE_URL, path)?;
+        let resp = self
+            .send_with_backoff(
+                RequestScope::AdAccount,
+                |client, token_type, access_token, ad_account_id| {
+                    let mut b = client
+                        .request(method.clone(), &url)
+                        .header(AUTHORIZATION, format!("{token_type} {access_token}"))
+                        .header("X-AP-Context", format!("adAccountId={ad_account_id};"));
+                    if !query.is_empty() {
+                        b = b.query(&query);
+                    }
+                    if let Some(ref json_body) = body {
+                        b = b.header(CONTENT_TYPE, "application/json").json(json_body);
+                    }
+                    b
+                },
+            )
+            .await?;
+
+        response_json(resp, "Apple Ads Platform").await
+    }
+}
+
+fn api_url(base: &str, path: &str) -> Result<String, ConnectorError> {
+    if path.is_empty()
+        || !path.starts_with('/')
+        || path.starts_with("//")
+        || path.contains("?")
+        || path.contains("://")
+        || path.split('/').any(|part| part == "..")
+        || path.bytes().any(|byte| byte.is_ascii_control())
+    {
+        return Err(ConnectorError::InvalidParams(
+            "Apple Ads API path must be an absolute relative path without a query string or traversal"
+                .into(),
+        ));
+    }
+    Ok(format!("{base}{path}"))
+}
+
+fn parse_platform_method(raw: &str) -> Result<Method, ConnectorError> {
+    match raw.to_ascii_uppercase().as_str() {
+        "GET" => Ok(Method::GET),
+        "POST" => Ok(Method::POST),
+        "PUT" => Ok(Method::PUT),
+        "DELETE" => Ok(Method::DELETE),
+        _ => Err(ConnectorError::InvalidParams(
+            "Apple Ads Platform method must be GET, POST, PUT, or DELETE".into(),
+        )),
+    }
+}
+
+fn query_pairs(query: Map<String, Value>) -> Result<Vec<(String, String)>, ConnectorError> {
+    let mut pairs = Vec::new();
+    for (name, value) in query {
+        if name.is_empty() || name.bytes().any(|byte| byte.is_ascii_control()) {
+            return Err(ConnectorError::InvalidParams(
+                "Apple Ads Platform query names must be non-empty and printable".into(),
+            ));
+        }
+        match value {
+            Value::Null => {}
+            Value::Array(values) => {
+                for value in values {
+                    let value = value
+                        .as_str()
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| value.to_string());
+                    pairs.push((name.clone(), value));
+                }
+            }
+            Value::Object(_) => {
+                return Err(ConnectorError::InvalidParams(format!(
+                    "Apple Ads Platform query parameter `{name}` must be a scalar or array"
+                )))
+            }
+            value => pairs.push((
+                name,
+                value
+                    .as_str()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| value.to_string()),
+            )),
+        }
+    }
+    Ok(pairs)
+}
+
+async fn response_json(resp: reqwest::Response, service: &str) -> Result<Value, ConnectorError> {
+    let status = resp.status();
+    if status == StatusCode::NOT_FOUND {
+        return Err(ConnectorError::ResourceNotFound);
+    }
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(match status {
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
+                ConnectorError::Authentication(text)
+            }
+            _ => ConnectorError::Other(format!("{service} API returned HTTP {status}: {text}")),
+        });
+    }
+
+    let bytes = resp.bytes().await.map_err(ConnectorError::HttpRequest)?;
+    if bytes.is_empty() {
+        Ok(Value::Null)
+    } else {
+        serde_json::from_slice(&bytes)
+            .map_err(|e| ConnectorError::Other(format!("{service} API returned invalid JSON: {e}")))
+    }
+}
+
+fn platform_tool(name: &'static str, description: &'static str, schema: Value) -> Tool {
+    Tool {
+        name: Cow::Borrowed(name),
+        title: None,
+        description: Some(Cow::Borrowed(description)),
+        input_schema: Arc::new(schema.as_object().expect("schema object").clone()),
+        output_schema: None,
+        annotations: None,
+        icons: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn platform_request_helpers_reject_unsafe_paths_and_encode_queries() {
+        assert_eq!(
+            api_url(ASA_PLATFORM_BASE_URL, "/campaigns/query").unwrap(),
+            "https://api.ads.apple.com/v1/campaigns/query"
+        );
+        assert!(api_url(ASA_PLATFORM_BASE_URL, "https://example.com").is_err());
+        assert!(api_url(ASA_PLATFORM_BASE_URL, "/campaigns?next=1").is_err());
+        assert!(api_url(ASA_PLATFORM_BASE_URL, "/campaigns/../me").is_err());
+
+        let query = serde_json::from_value::<Map<String, Value>>(json!({
+            "type": "brand",
+            "ids": ["one", "two"],
+            "skip": null
+        }))
+        .unwrap();
+        assert_eq!(
+            query_pairs(query).unwrap(),
+            vec![
+                ("ids".to_string(), "one".to_string()),
+                ("ids".to_string(), "two".to_string()),
+                ("type".to_string(), "brand".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn platform_method_parser_is_strict() {
+        assert_eq!(parse_platform_method("post").unwrap(), Method::POST);
+        assert!(parse_platform_method("PATCH").is_err());
     }
 }
 
@@ -417,7 +624,7 @@ impl Connector for AppleSearchAdsConnector {
     }
 
     fn description(&self) -> &'static str {
-        "Apple Search Ads API v5 (keyword recommendations and reporting)."
+        "Apple Ads Platform API v1 plus legacy Apple Search Ads API v5 campaigns and reporting."
     }
 
     fn display_name(&self) -> &'static str {
@@ -458,29 +665,13 @@ impl Connector for AppleSearchAdsConnector {
                 website_url: None,
             },
             instructions: Some(
-                "Configure org_id, oauth_client_id, team_id, key_id, and private_key_path \
-(.p8 from Apple Search Ads). Then use `keyword_recommendations` for keyword discovery and \
-`report_*` tools for metrics."
+                "Configure oauth_client_id, team_id, key_id, and private_key_path (.p8). Set \
+ad_account_id for Apple Ads Platform v1 tools; set org_id for legacy v5 tools. Use \
+`platform_request` for any documented v1 endpoint, or the named v1 tools for reports, \
+insights, recommendations, Maps, creatives, and change history."
                     .to_string(),
             ),
         })
-    }
-
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: vec![],
-            next_cursor: None,
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        _request: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
     }
 
     async fn list_tools(
@@ -653,6 +844,96 @@ impl Connector for AppleSearchAdsConnector {
                 annotations: None,
                 icons: None,
             },
+            platform_tool(
+                "platform_request",
+                "Call any Apple Ads Platform API v1 endpoint with a relative path.",
+                json!({
+                    "type":"object",
+                    "properties":{
+                        "method":{"type":"string","enum":["GET","POST","PUT","DELETE"]},
+                        "path":{"type":"string","description":"Relative API path such as /campaigns/query"},
+                        "query":{"type":"object","description":"Optional scalar or array query parameters"},
+                        "body":{"type":"object","description":"Optional JSON request body"}
+                    },
+                    "required":["method","path"]
+                }),
+            ),
+            platform_tool(
+                "platform_query_campaigns",
+                "Query Apple Ads Platform v1 campaigns with filters, sorting, and pagination.",
+                json!({"type":"object","properties":{"body":{"type":"object"}},"required":["body"]}),
+            ),
+            platform_tool(
+                "platform_search_term_popularity",
+                "Query Apple Ads Platform v1 search-term popularity insights.",
+                json!({"type":"object","properties":{"body":{"type":"object"}},"required":["body"]}),
+            ),
+            platform_tool(
+                "platform_impression_share",
+                "Query Apple Ads Platform v1 impression-share insights, including single-digit metrics.",
+                json!({"type":"object","properties":{"body":{"type":"object"}},"required":["body"]}),
+            ),
+            platform_tool(
+                "platform_recommendations",
+                "Query Apple Ads Platform v1 daily-budget or target-CPA recommendations.",
+                json!({
+                    "type":"object",
+                    "properties":{
+                        "kind":{"type":"string","enum":["daily-budgets","target-cpas"]},
+                        "body":{"type":"object"}
+                    },
+                    "required":["kind","body"]
+                }),
+            ),
+            platform_tool(
+                "platform_report_apps",
+                "Query an Apple Ads Platform v1 App Store report.",
+                json!({
+                    "type":"object",
+                    "properties":{
+                        "level":{"type":"string","enum":["campaigns","adgroups","ads","keywords","searchterms"]},
+                        "body":{"type":"object"}
+                    },
+                    "required":["level","body"]
+                }),
+            ),
+            platform_tool(
+                "platform_report_brands",
+                "Query an Apple Ads Platform v1 Apple Maps brand report.",
+                json!({
+                    "type":"object",
+                    "properties":{
+                        "level":{"type":"string","enum":["campaigns","adgroups","ads","keywords","searchterms"]},
+                        "body":{"type":"object"}
+                    },
+                    "required":["level","body"]
+                }),
+            ),
+            platform_tool(
+                "platform_query_brands",
+                "Query Apple Maps business brands available to the ad account.",
+                json!({"type":"object","properties":{"body":{"type":"object"}},"required":["body"]}),
+            ),
+            platform_tool(
+                "platform_query_creatives",
+                "Query Apple Ads Platform v1 ad creatives.",
+                json!({"type":"object","properties":{"body":{"type":"object"}},"required":["body"]}),
+            ),
+            platform_tool(
+                "platform_query_locations",
+                "Query Apple Maps business locations for targeting.",
+                json!({"type":"object","properties":{"body":{"type":"object"}},"required":["body"]}),
+            ),
+            platform_tool(
+                "platform_change_history",
+                "Query Apple Ads Platform v1 change history grouped by transaction.",
+                json!({"type":"object","properties":{"body":{"type":"object"}},"required":["body"]}),
+            ),
+            platform_tool(
+                "platform_test_auth",
+                "Validate Apple Ads Platform v1 credentials and ad-account access.",
+                json!({"type":"object","properties":{}}),
+            ),
         ];
 
         Ok(ListToolsResult {
@@ -759,18 +1040,156 @@ impl Connector for AppleSearchAdsConnector {
                     .await?;
                 structured_result_with_text(&v, None)
             }
+            "platform_request" => {
+                let input: PlatformRequestInput =
+                    serde_json::from_value(Value::Object(args_map))
+                        .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
+                let method = parse_platform_method(&input.method)?;
+                let query = query_pairs(input.query)?;
+                let v = self
+                    .request_platform_json(method, &input.path, query, input.body)
+                    .await?;
+                structured_result_with_text(&v, None)
+            }
+            "platform_query_campaigns" => {
+                let input: PlatformBodyInput = serde_json::from_value(Value::Object(args_map))
+                    .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
+                let v = self
+                    .request_platform_json(
+                        Method::POST,
+                        "/campaigns/query",
+                        Vec::new(),
+                        Some(input.body),
+                    )
+                    .await?;
+                structured_result_with_text(&v, None)
+            }
+            "platform_search_term_popularity" => {
+                let input: PlatformBodyInput = serde_json::from_value(Value::Object(args_map))
+                    .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
+                let v = self
+                    .request_platform_json(
+                        Method::POST,
+                        "/insights/apps/search-term-popularity/query",
+                        Vec::new(),
+                        Some(input.body),
+                    )
+                    .await?;
+                structured_result_with_text(&v, None)
+            }
+            "platform_impression_share" => {
+                let input: PlatformBodyInput = serde_json::from_value(Value::Object(args_map))
+                    .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
+                let v = self
+                    .request_platform_json(
+                        Method::POST,
+                        "/insights/apps/impression-share/query",
+                        Vec::new(),
+                        Some(input.body),
+                    )
+                    .await?;
+                structured_result_with_text(&v, None)
+            }
+            "platform_recommendations" => {
+                let input: PlatformRecommendationsInput =
+                    serde_json::from_value(Value::Object(args_map))
+                        .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
+                let path = match input.kind.as_str() {
+                    "daily-budgets" => "/recommendations/daily-budgets/query",
+                    "target-cpas" => "/recommendations/target-cpas/query",
+                    _ => {
+                        return Err(ConnectorError::InvalidParams(
+                            "Recommendation kind must be daily-budgets or target-cpas".into(),
+                        ))
+                    }
+                };
+                let v = self
+                    .request_platform_json(Method::POST, path, Vec::new(), Some(input.body))
+                    .await?;
+                structured_result_with_text(&v, None)
+            }
+            "platform_report_apps" | "platform_report_brands" => {
+                let input: PlatformReportInput = serde_json::from_value(Value::Object(args_map))
+                    .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
+                let prefix = if request.name == "platform_report_apps" {
+                    "/reports/apps"
+                } else {
+                    "/reports/business-brands"
+                };
+                let path = match input.level.as_str() {
+                    "campaigns" | "adgroups" | "ads" | "keywords" | "searchterms" => {
+                        format!("{prefix}/{}/query", input.level)
+                    }
+                    _ => return Err(ConnectorError::InvalidParams(
+                        "Report level must be campaigns, adgroups, ads, keywords, or searchterms"
+                            .into(),
+                    )),
+                };
+                let v = self
+                    .request_platform_json(Method::POST, &path, Vec::new(), Some(input.body))
+                    .await?;
+                structured_result_with_text(&v, None)
+            }
+            "platform_query_brands" => {
+                let input: PlatformBodyInput = serde_json::from_value(Value::Object(args_map))
+                    .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
+                let v = self
+                    .request_platform_json(
+                        Method::POST,
+                        "/business-brands/query",
+                        Vec::new(),
+                        Some(input.body),
+                    )
+                    .await?;
+                structured_result_with_text(&v, None)
+            }
+            "platform_query_creatives" => {
+                let input: PlatformBodyInput = serde_json::from_value(Value::Object(args_map))
+                    .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
+                let v = self
+                    .request_platform_json(
+                        Method::POST,
+                        "/creatives/query",
+                        Vec::new(),
+                        Some(input.body),
+                    )
+                    .await?;
+                structured_result_with_text(&v, None)
+            }
+            "platform_query_locations" => {
+                let input: PlatformBodyInput = serde_json::from_value(Value::Object(args_map))
+                    .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
+                let v = self
+                    .request_platform_json(
+                        Method::POST,
+                        "/locations/query",
+                        Vec::new(),
+                        Some(input.body),
+                    )
+                    .await?;
+                structured_result_with_text(&v, None)
+            }
+            "platform_change_history" => {
+                let input: PlatformBodyInput = serde_json::from_value(Value::Object(args_map))
+                    .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
+                let v = self
+                    .request_platform_json(
+                        Method::POST,
+                        "/change-history/query",
+                        Vec::new(),
+                        Some(input.body),
+                    )
+                    .await?;
+                structured_result_with_text(&v, None)
+            }
+            "platform_test_auth" => {
+                let v = self
+                    .request_platform_json(Method::GET, "/me", Vec::new(), None)
+                    .await?;
+                structured_result_with_text(&json!({"ok": true, "response": v}), None)
+            }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn list_prompts(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![],
-            next_cursor: None,
-        })
     }
 
     async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
@@ -809,6 +1228,17 @@ impl Connector for AppleSearchAdsConnector {
     fn config_schema(&self) -> ConnectorConfigSchema {
         ConnectorConfigSchema {
             fields: vec![
+                Field {
+                    name: "ad_account_id".into(),
+                    label: "Apple Ads Platform Ad Account ID".into(),
+                    field_type: FieldType::Text,
+                    required: false,
+                    description: Some(
+                        "Apple Ads Platform v1 ad account id (ASA_AD_ACCOUNT_ID). Required for v1 tools."
+                            .into(),
+                    ),
+                    options: None,
+                },
                 Field {
                     name: "org_id".into(),
                     label: "Organization ID".into(),

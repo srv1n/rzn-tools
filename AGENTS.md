@@ -3,7 +3,6 @@
 ## Project Structure & Module Organization
 - `rzn_tools_core/` contains the core library, connector trait, registry, and shared utilities.
 - `rzn_tools_cli/` is the CLI binary; `rzn_tools_mcp/` is the MCP server binary.
-- `scrapable_derive/` holds the proc-macro for HTML parsing.
 - `docs/` houses connector and architecture docs; `packaging/` includes install scripts/formulas.
 - `vendor/` contains vendored dependencies; config lives in `Cargo.toml`, `.cargo/config.toml`, `clippy.toml`, and `rustfmt.toml`.
 
@@ -53,16 +52,3 @@ For plugin release work:
 - Publish to local `http://localhost:8082` first, then cloud `https://cloud.rzn.ai`, unless the user explicitly says otherwise.
 - The release script supports `cloud` directly and retains `prod` as a legacy alias.
 - If local or cloud publish fails at any stage, stop and report exactly what failed.
-
-<!-- tusker:epic-index:begin -->
-## Tusker
-
-Use Tusker for tracked repo work.
-
-- Task mechanics live in the installed `tusker` skill.
-- Project knowledge starts at `.tusker/SKILL.md`.
-- Start runnable work with `tusker next`; inspect named work with `tusker show <TASK-ID> --capsule`.
-- Do not read `.tusker/events`, `_generated`, `attempts`, `evidence`, `Attachments`, raw logs, or full task files unless the task explicitly requires it.
-- Keep proof compact: use capsules, path-scoped status/search, and command + PASS/FAIL summaries; put noisy logs in `.tusker/scratch/<TASK-ID>/`.
-- Record concise Tusker/product friction with `tusker feedback add`; skip routine progress reports.
-<!-- tusker:epic-index:end -->

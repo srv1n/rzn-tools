@@ -157,9 +157,9 @@ Use `rzn-tools <connector> --help` for all available options.
 ## Build Flags Recap
 
 - Enable connectors individually on CLI/MCP:
-  - `cargo build -p rzn_tools_cli --features "openai-search,serpapi-search"`
+  - `make build CARGO_ARGS='-p rzn_tools_cli --features "openai-search,serpapi-search"'`
 - macOS automation (macOS):
-  - `cargo build -p rzn_tools_core --features macos-automation`
+  - `make build CARGO_ARGS="-p rzn_tools_core --features macos-automation"`
 
 ---
 

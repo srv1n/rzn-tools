@@ -434,13 +434,6 @@ impl Connector for LocalFsConnector {
         false
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         Ok(AuthDetails::new())
     }
@@ -477,23 +470,6 @@ impl Connector for LocalFsConnector {
                 "Local filesystem connector for extracting text from documents. Supports PDF, EPUB, DOCX, HTML, Markdown, code, and text files.".to_string(),
             ),
         })
-    }
-
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: vec![],
-            next_cursor: None,
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        _request: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
     }
 
     async fn list_tools(
@@ -723,16 +699,6 @@ document. Example: path=\"~/spec.pdf\" query=\"threat model\" context_lines=2.",
             "search_content" => self.search_content(&args).await,
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn list_prompts(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![],
-            next_cursor: None,
-        })
     }
 
     async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {

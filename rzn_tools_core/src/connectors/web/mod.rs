@@ -540,14 +540,6 @@ impl Connector for WebConnector {
         false
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        // Define the capabilities according to what your connector supports.
-        ServerCapabilities {
-            tools: None,
-            ..Default::default() // Use default for other capabilities
-        }
-    }
-
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
         self.headers.clear();
 
@@ -1051,19 +1043,6 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
         })
     }
 
-    async fn list_resources(
-        &self,
-        request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        let _cursor = request.and_then(|r| r.cursor);
-        let resources = vec![];
-
-        Ok(ListResourcesResult {
-            resources,
-            next_cursor: None,
-        })
-    }
-
     async fn read_resource(
         &self,
         request: ReadResourceRequestParam,
@@ -1071,22 +1050,6 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
         let _uri_str = request.uri.as_str();
 
         Ok(vec![])
-    }
-
-    async fn list_prompts(
-        &self,
-        request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        let _cursor = request.and_then(|r| r.cursor);
-        let prompts = vec![];
-        Ok(ListPromptsResult {
-            prompts,
-            next_cursor: None,
-        })
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::ToolNotFound)
     }
 }
 

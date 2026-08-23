@@ -5,13 +5,14 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod cli;
 mod commands;
-mod feature_hints;
 mod output;
 
 #[cfg(feature = "tui")]
 mod tui;
 
-use cli::{Cli, CloudflareConfigureAction, Commands, ConfigureTarget};
+use cli::{Cli, Commands};
+#[cfg(feature = "serve")]
+use cli::{CloudflareConfigureAction, ConfigureTarget};
 use commands::*;
 use output::FormatError;
 use rzn_tools_core::UsageContext;
@@ -62,6 +63,7 @@ async fn main() {
                 }
                 Some(Commands::List) => list::run(&cli).await,
                 Some(Commands::Setup { connector }) => setup::run(&cli, connector.as_deref()).await,
+                #[cfg(feature = "serve")]
                 Some(Commands::Configure { target }) => match target {
                     ConfigureTarget::Cloudflare { action } => match action {
                         CloudflareConfigureAction::Guide => serve::cloudflare_guide(&cli).await,
@@ -83,6 +85,7 @@ async fn main() {
                         }
                     },
                 },
+                #[cfg(feature = "serve")]
                 Some(Commands::Serve {
                     bind,
                     allow_hosts,
@@ -143,6 +146,11 @@ async fn main() {
                 Some(Commands::Config { action }) => config::run(&cli, action.clone()).await,
                 Some(Commands::Connectors) => connectors::run(&cli).await,
                 Some(Commands::Tools { connector }) => tools::run(&cli, connector.as_deref()).await,
+                Some(Commands::Call {
+                    connector,
+                    tool,
+                    args,
+                }) => connectors::call(&cli, connector, tool, args).await,
                 Some(Commands::Ingest { action }) => ingest::run(&cli, action.clone()).await,
                 Some(Commands::Pricing {
                     connector,

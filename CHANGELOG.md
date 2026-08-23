@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Apple Ads: add Platform API v1 support alongside legacy v5, including guarded raw endpoint
+  calls, campaign queries, search-term popularity, impression-share insights, recommendations,
+  App Store and Apple Maps reports, brand/location/creative discovery, and change history.
+
+### Changed
+- CLI: restore first-class connector subcommands for the full connector set while retaining
+  `rzn-tools call <connector> <tool> --args '<JSON object>'` as a schema-driven escape hatch.
+
 ## [0.2.18] - 2026-08-01
 
 ### Added

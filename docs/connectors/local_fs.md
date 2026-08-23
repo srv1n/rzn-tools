@@ -1,46 +1,24 @@
-# Local File System Indexer — Design Spec
+# Local filesystem
 
-Status: Draft (Phase 1)
+Connector name: `localfs`
 
-## Overview
+This connector reads files and directories directly. It has no index, watcher,
+root allowlist, or path sandbox.
 
-Local‑only indexer and fetcher for documents under selected roots (Documents, Downloads, custom). Incremental updates via file watchers; fast search via embedded index.
+| Tool | Use |
+| --- | --- |
+| `list_files` | List one directory, with optional recursion and extension filters. |
+| `get_file_info` | Read file metadata. |
+| `extract_text` | Extract text from supported documents. |
+| `get_structure` | Read document structure. |
+| `get_section` | Read one document section. |
+| `search_content` | Search text in a path. |
 
-## Key Use Cases
+Supported extraction includes PDF, EPUB, DOCX, HTML, Markdown, source code, and
+plain text. Results are bounded. An unreadable path returns an error.
 
-- Search personal documents by filename/content with filters.
-- Fetch file content safely for RAG.
+Security: callers can supply paths. Run the process with only the filesystem
+permissions it needs. Do not expose this connector to untrusted MCP users.
 
-## MVP Scope (Tools)
-
-- `index_start`: build index for configured roots with ignore rules.
-- `search_files`: query with filters (ext, size, mtime).
-- `get_file`: guarded read with text extraction for common formats (txt, md, pdf via existing parsers).
-
-## Rust Crates / Deps
-
-- `ignore` (gitignore/.ignore support), `walkdir`, `notify` (watchers), `tantivy` (index), `rayon` (optional), `mime_guess`.
-
-## Data Model
-
-- `FsEntry` (path, name, size, mime, mtime, tags?).
-
-## Error Handling & Limits
-
-- Skip unreadable dirs; size caps; extension allow‑list for content extraction.
-
-## Security & Privacy
-
-- Local‑only; per‑folder allow‑list; never traverse outside configured roots.
-
-## Testing Plan
-
-- Fixture directories; acceptance: index small tree and search returns expected paths.
-
-## Implementation Checklist
-
-- [ ] Config schema for roots and ignore rules
-- [ ] Indexer + watcher
-- [ ] Search + guarded read
-- [ ] Docs and examples
+Code: `rzn_tools_core/src/connectors/localfs/mod.rs`
 

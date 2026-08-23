@@ -1,3 +1,13 @@
+---
+title: "X connector and xAI search parity"
+subject: x-and-xai-auth-and-parity
+status: draft
+capsule:
+  what: "Planned auth and operation parity work for the X connectors."
+  use_when: "Use when changing X or xAI search auth and operation coverage."
+  skip_when: "Skip when the change does not affect these connectors."
+---
+
 # X connector parity + xAI search parity
 
 Build out the existing `x` and `xai-search` connectors instead of inventing new connector families.

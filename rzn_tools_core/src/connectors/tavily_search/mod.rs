@@ -54,27 +54,11 @@ impl Connector for TavilySearchConnector {
         true
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn initialize(
         &self,
         _r: InitializeRequestParam,
     ) -> Result<InitializeResult, ConnectorError> {
         Ok(InitializeResult { protocol_version: ProtocolVersion::LATEST, capabilities: self.capabilities().await, server_info: Implementation { name: self.name().into(), version: "0.1.0".into(), title: None, icons: None, website_url: None }, instructions: Some("Use 'search' with topic (general|news), depth (basic|advanced) and include_answer.".into()) })
-    }
-    async fn list_resources(
-        &self,
-        _r: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: vec![],
-            next_cursor: None,
-        })
     }
     async fn read_resource(
         &self,
@@ -224,18 +208,6 @@ impl Connector for TavilySearchConnector {
         Ok(structured_result_with_text(&data, None)?)
     }
 
-    async fn list_prompts(
-        &self,
-        _r: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![],
-            next_cursor: None,
-        })
-    }
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::ToolNotFound)
-    }
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         let mut a = AuthDetails::new();
         if let Some(v) = &self.api_key {

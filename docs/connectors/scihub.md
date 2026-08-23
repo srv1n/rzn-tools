@@ -232,10 +232,10 @@ The SciHub connector is included in the `full` feature set:
 
 ```bash
 # Build with all connectors
-cargo build --release --package rzn_tools_cli --features "full"
+make build-release CARGO_ARGS="-p rzn_tools_cli --features full"
 
 # Or build with just scihub
-cargo build --release --package rzn_tools_cli --features "scihub"
+make build-release CARGO_ARGS="-p rzn_tools_cli --features scihub"
 ```
 
 ## Limitations

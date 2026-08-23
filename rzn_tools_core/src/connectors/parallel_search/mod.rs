@@ -249,13 +249,6 @@ impl Connector for ParallelSearchConnector {
         true
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn initialize(
         &self,
         _r: InitializeRequestParam,
@@ -288,15 +281,6 @@ Preferred tool flow:
 
 Use Exa instead when the task is entity-typed lookup (people, companies, papers, repos, tweets, filings), seed-based similarity, or a single grounded cited answer."#.into(),
             ),
-        })
-    }
-    async fn list_resources(
-        &self,
-        _r: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: vec![],
-            next_cursor: None,
         })
     }
     async fn read_resource(
@@ -624,18 +608,6 @@ Use Exa instead when the task is entity-typed lookup (people, companies, papers,
         structured_result_with_text(&data, None)
     }
 
-    async fn list_prompts(
-        &self,
-        _r: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![],
-            next_cursor: None,
-        })
-    }
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::ToolNotFound)
-    }
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         let mut a = AuthDetails::new();
         if let Some(v) = &self.api_key {

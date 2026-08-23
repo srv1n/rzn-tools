@@ -74,21 +74,6 @@ impl Connector for GmailConnector {
             ),
         })
     }
-    async fn list_resources(
-        &self,
-        _r: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: vec![],
-            next_cursor: None,
-        })
-    }
-    async fn read_resource(
-        &self,
-        _r: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
-    }
     async fn list_tools(
         &self,
         _r: Option<PaginatedRequestParam>,
@@ -297,15 +282,6 @@ impl Connector for GmailConnector {
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-    async fn list_prompts(
-        &self,
-        _r: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![],
-            next_cursor: None,
-        })
     }
     async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
         Err(ConnectorError::InvalidParams(

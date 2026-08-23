@@ -1,5 +1,9 @@
 # Connector Development Guide
 
+> Read [the current development guide](system/development.md) and
+> [connector guide](system/connectors.md) first. This page keeps the longer
+> implementation notes.
+
 This guide walks you through creating a new connector for rzn-tools. By the end, your connector will be fully integrated with the CLI, MCP server, federated search, and smart resolver.
 
 ## Table of Contents
@@ -35,7 +39,7 @@ Use this checklist when adding a new connector:
 ### Phase 2: CLI Integration
 - [ ] Forward feature flag in `rzn_tools_cli/Cargo.toml`
 - [ ] Forward feature flag in `rzn_tools_mcp/Cargo.toml`
-- [ ] Add to "full" and "all-connectors" feature lists
+- [ ] Add to the appropriate distribution profile(s), if any
 
 ### Phase 3: Smart Features (Optional but Recommended)
 - [ ] Add URL/ID patterns to Smart Resolver
@@ -817,7 +821,7 @@ required-features = ["examples", "myconnector"]
 Run with:
 
 ```bash
-cargo run --example myconnector --features "examples,myconnector"
+make run CARGO_ARGS='-p rzn_tools_core --example myconnector --features "examples,myconnector"'
 ```
 
 ---

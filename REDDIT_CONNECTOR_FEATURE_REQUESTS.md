@@ -1,8 +1,7 @@
 # Reddit connector — feature requests (from a media-archiver consumer)
 
-> Filed as a markdown drop because this repo has no Tusker vault yet (siblings like
-> `rzn-browser`, `backend`, `rznapp` do). Run `tusker init --yes` here and convert this into
-> a task if you want it tracked. Source project: a local Reddit subreddit media archiver
+> This is a feature request from a local Reddit media archiver. Track each item
+> as a separate task when you are ready. Source project: a local Reddit subreddit media archiver
 > (`~/Downloads/play/hoe`) that wanted to use `rzn-tools reddit` end-to-end but couldn't,
 > for the reasons below. Each item has file:line evidence in this repo.
 

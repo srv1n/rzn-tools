@@ -5,22 +5,26 @@ id: "project"
 project: "rzn-tools"
 title: "Project"
 status: "current"
-summary: "Durable project knowledge."
+summary: "Durable knowledge for the rzn-tools repository."
+capsule:
+  what: "Domain index for Project; routes agents to canon and owned knowledge files."
+  use_when: "Use when a task touches project behavior or needs the domain reading order."
+  skip_when: "Skip when another domain is narrower or task proof/gates are the target."
 source_of_truth:
   - "knowledge/domains/project/CANON.md"
 canonical_files:
   - "INDEX.md"
   - "CANON.md"
-created_at: "2026-07-10T04:06:27Z"
-updated_at: "2026-07-10T04:06:27Z"
-state_rev: "sha256:cbf223ab75be035e83bbc7676a47764532f451b67fb598c033d2be0a8f4ba44a"
+created_at: "2026-08-23T10:54:54Z"
+updated_at: "2026-08-23T10:54:54Z"
+state_rev: "sha256:934e30b5ee6758b5d8b6c5057ee8cb92abad9e2f3911ada41f67afb4d93859c9"
 ---
 
 # Project
 
 ## Summary
 
-Durable project knowledge.
+`rzn-tools` provides one CLI and MCP surface for many data sources.
 
 ## Read This When
 
@@ -34,16 +38,20 @@ Durable project knowledge.
 
 ## Runbooks
 
-- _None yet._
+- See `docs/system/operations.md` for install and run steps.
+- See `docs/system/development.md` for build and test steps.
 
 ## Interfaces
 
-- _No stable interfaces declared yet._
+- `rzn_tools_core::Connector`
+- `rzn-tools` CLI
+- `rzn-tools-mcp` MCP server
 
 ## Invariants
 
 - Keep durable truth in CANON.md.
 - Put procedural guidance in runbooks/.
+- Keep secrets out of the repository.
 
 ## Sources
 

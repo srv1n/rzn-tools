@@ -2,7 +2,7 @@
 
 # Rust entrypoint policy
 #
-# Use these targets from every checkout, including Tusker worktrees. sccache's
+# Use these targets from every checkout. sccache's
 # user-level cache is outside the repository, so worktrees share it.
 SCCACHE ?= sccache
 export RUSTC_WRAPPER := $(SCCACHE)

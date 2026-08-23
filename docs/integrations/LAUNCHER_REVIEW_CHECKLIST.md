@@ -25,10 +25,10 @@
 - Existing connectors still compile without adding metadata (defaults cover missing methods).
 
 ## Suggested Tests
-1. `cargo test -p rzn_tools_core --tests`
-2. `cargo test -p rzn_tools_core --tests --features "arxiv"`
+1. `make test CARGO_ARGS="-p rzn_tools_core --tests"`
+2. `make test CARGO_ARGS='-p rzn_tools_core --tests --features arxiv'`
 3. Optional (feature‑scoped):
-   `cargo test -p rzn_tools_core --tests --features "hackernews,youtube,reddit,wikipedia"`
+   `make test CARGO_ARGS='-p rzn_tools_core --tests --features "hackernews,youtube,reddit,wikipedia"'`
 
 ## Questions / Decisions to Confirm
 - Should auth probing be skipped for any additional connectors beyond the personal‑data list?

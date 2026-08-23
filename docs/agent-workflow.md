@@ -1,6 +1,6 @@
-# Agent workflow
+# Contribution workflow
 
-The goal is not to make contribution harder. The goal is to make sloppy contribution harder.
+This workflow keeps changes small and reviewable.
 
 ## Principles
 
@@ -10,25 +10,25 @@ The goal is not to make contribution harder. The goal is to make sloppy contribu
 - Contributors must understand their own changes.
 - Raw transcripts are optional appendix material, not required reading.
 
-## Expected flow
+## Flow
 
 ```text
-idea / report
+idea or report
    ↓
-structured issue
+clear task
    ↓
-approval or maintainer signal
+review signal
    ↓
 implementation
    ↓
-PR summary + evidence
+change summary and evidence
    ↓
 review
 ```
 
-## What we want from contributors
+## Before review
 
-Before opening a PR, contributors should be able to explain:
+Before review, explain:
 
 - what changed
 - why it changed
@@ -36,19 +36,11 @@ Before opening a PR, contributors should be able to explain:
 - what the risk is
 - what a reviewer should focus on
 
-If AI was used, disclose it. If the contributor cannot explain the final behavior without leaning on the tool, the work is not ready.
+If an assistant helped, say so. The author must understand the final behavior.
 
-For broad, high-risk, or agent-heavy changes, generate an explainer packet before review:
+## Maintainer checks
 
-```bash
-tusker packet <TASK-ID> --for explainer --write
-```
-
-The explainer packet is for human understanding. It does not replace evidence, tests, or reviewer approval.
-
-## What maintainers should enforce
-
-- keep new features or architecture discussion out of surprise PRs
-- reject refactor-only churn unless requested
-- ask for evidence on user-visible changes
-- keep the bar proportional to risk
+- Keep feature and architecture work out of surprise changes.
+- Reject refactor-only churn unless it is requested.
+- Ask for evidence for user-visible changes.
+- Match the check to the risk.

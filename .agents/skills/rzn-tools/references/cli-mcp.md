@@ -97,18 +97,18 @@ Macro tools are feature-gated with `llm-macros`. They combine multi-step flows s
 Fast checks:
 
 ```bash
-cargo check -p rzn_tools_cli
-cargo check -p rzn_tools_mcp --features full
-cargo run -p rzn_tools_cli -- list --output json
-cargo run -p rzn_tools_cli -- tools --output json
-cargo run -p rzn_tools_cli -- skills status --scope project --output json
+make check CARGO_ARGS="-p rzn_tools_cli"
+make check CARGO_ARGS="-p rzn_tools_mcp --features full"
+make run CARGO_ARGS="-p rzn_tools_cli -- list --output json"
+make run CARGO_ARGS="-p rzn_tools_cli -- tools --output json"
+make run CARGO_ARGS="-p rzn_tools_cli -- skills status --scope project --output json"
 ```
 
 Before release or broad CLI/MCP changes:
 
 ```bash
-cargo fmt --all
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --workspace
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+make fmt
+make clippy CARGO_ARGS="--all-targets --all-features -- -D warnings"
+make test CARGO_ARGS="--workspace"
+RUSTDOCFLAGS="-D warnings" make doc CARGO_ARGS="--workspace"
 ```

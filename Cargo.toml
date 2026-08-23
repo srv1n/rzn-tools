@@ -4,7 +4,6 @@ members = [
     "rzn_tools_core",
     "rzn_tools_cli",
     "rzn_tools_mcp",
-    "scrapable_derive",
 ]
 default-members = ["rzn_tools_cli"]
 
@@ -46,3 +45,12 @@ overflow-checks = false
 debug = false      # Disable debug info
 rpath = false      # Disable rpath
 incremental = false # Disable incremental compilation
+
+# Faster local release iterations. Distribution builds continue to use
+# `release`, which prioritizes size.
+[profile.release-fast]
+inherits = "release"
+opt-level = 2
+lto = false
+codegen-units = 16
+incremental = true

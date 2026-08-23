@@ -914,14 +914,6 @@ impl Connector for YouTubeConnector {
         ]
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        // Define the capabilities according to what your connector supports.
-        ServerCapabilities {
-            tools: None,
-            ..Default::default() // Use default for other capabilities
-        }
-    }
-
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         Ok(AuthDetails::new())
     }
@@ -996,18 +988,6 @@ transcript work. Use `search` to discover videos first, `list` for recent channe
 uploads, and `resolve_channel` only when you need a stable UC... channel id."
                     .to_string(),
             ),
-        })
-    }
-
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        let resources = vec![];
-
-        Ok(ListResourcesResult {
-            resources,
-            next_cursor: None,
         })
     }
 
@@ -1973,16 +1953,6 @@ uploads, and `resolve_channel` only when you need a stable UC... channel id."
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn list_prompts(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![], // No prompts for now.  Add if you have use cases.
-            next_cursor: None,
-        })
     }
 
     async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {

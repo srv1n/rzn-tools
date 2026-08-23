@@ -1318,13 +1318,6 @@ impl Connector for HackerNewsConnector {
         }]
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         Ok(AuthDetails::new())
     }
@@ -1367,23 +1360,6 @@ impl Connector for HackerNewsConnector {
                 "Canonical tools for LLMs: use 'get_thread' to fetch a thread, 'search' to search by relevance, 'search_recent' for chronological search, and 'list_threads' for top/new/best/ask/show/job feeds. 'get_thread' defaults to compact plain-text output with a bounded comment list. Legacy aliases ('get', 'get_post', 'search_stories', 'search_by_date', 'get_stories') remain available for compatibility.".to_string(),
             ),
         })
-    }
-
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: vec![],
-            next_cursor: None,
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        _request: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
     }
 
     async fn list_tools(
@@ -2511,16 +2487,6 @@ impl Connector for HackerNewsConnector {
             }
             _ => Err(ConnectorError::ToolNotFound),
         }
-    }
-
-    async fn list_prompts(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![],
-            next_cursor: None,
-        })
     }
 
     async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {

@@ -108,13 +108,6 @@ impl Connector for OpenAIWebSearchConnector {
         true
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn initialize(
         &self,
         _request: InitializeRequestParam,
@@ -130,16 +123,6 @@ impl Connector for OpenAIWebSearchConnector {
                 website_url: None,
             },
             instructions: Some("Use the search tool to query the web via OpenAI.".to_string()),
-        })
-    }
-
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: vec![],
-            next_cursor: None,
         })
     }
 
@@ -283,20 +266,6 @@ sources. Example: query=\"What changed in SEC climate rules in 2025?\" limit=5."
             data["raw"] = value.clone();
         }
         Ok(structured_result_with_text(&data, None)?)
-    }
-
-    async fn list_prompts(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![],
-            next_cursor: None,
-        })
-    }
-
-    async fn get_prompt(&self, _name: &str) -> Result<Prompt, ConnectorError> {
-        Err(ConnectorError::ToolNotFound)
     }
 
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {

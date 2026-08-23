@@ -1,5 +1,10 @@
 # RZN Integrations Launcher Integration Specification
 
+> Historical implementation plan. The connector catalog, icons, examples,
+> `connectors/list`, and metadata conformance tests now exist. Use
+> [../system/architecture.md](../system/architecture.md) and
+> `rzn_tools_core/tests/system_metadata_conformance.rs` for current behavior.
+
 > **Purpose**: Detailed implementation spec for enhancements that enable dynamic launcher integration
 > **Priority**: HIGH - Required for RZN Desktop launcher integration
 > **Estimated Effort**: 2-3 days

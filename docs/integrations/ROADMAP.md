@@ -1,36 +1,21 @@
-# Integrations Roadmap
+# Integrations roadmap
 
-This repo aims to reach feature parity with popular “OpenAI connectors” by adding well-supported, feature‑gated adapters.
+This page lists work that is still missing. It is not a description of current
+connectors. See [../system/connectors.md](../system/connectors.md) for current
+behavior.
 
-Phased plan and selected crates:
+Implemented foundations include Microsoft Graph mail/calendar, Google Drive,
+Gmail, Calendar, People, GitHub, Atlassian, Slack, IMAP, SMTP, CalDAV, and the
+Apple personal-data connectors.
 
-- Phase 1
-  - Microsoft 365 via Microsoft Graph → `graph-rs-sdk`
-    - Coverage: Outlook Mail/Calendar, SharePoint/OneDrive, Teams
-  - Google Drive → `google-drive3` (+ `yup-oauth2`)
+Known product gaps include:
 
-- Phase 2
-  - Gmail → `google-gmail1`
-  - Google Calendar → `google-calendar3`
-  - Google Contacts (People API) → `google-people1`
+- Microsoft Graph OneDrive, Teams, and SharePoint tools
+- Notion, Dropbox, and Box connectors
+- consistent write-scope checks for Google and Microsoft tools
+- dedicated current pages for every implemented connector
+- normalized output for more indexable tools
+- federated global timeout and deduplication behavior
 
-- Phase 3
-  - Notion → `notion-client`
-
-- Phase 4
-  - Dropbox → `dropbox-sdk-rust`
-
-- Phase 5
-  - Box → REST/OpenAPI codegen (no mature Rust SDK)
-
-Prioritization factors:
-- Maintenance and release cadence of crates
-- API coverage and auth story (OAuth flows, refresh tokens)
-- Docs and examples quality
-- Rate limit/backoff + pagination/changes support
-
-Next up (Phase 1):
-- Ship minimal, end‑to‑end “list” operations for Graph and Drive
-- Land OAuth scaffolding and token persistence
-- Add examples and integration tests behind feature flags
-
+Add roadmap items only after code and existing connectors have been checked.
+Do not name a dependency before the implementation needs it.

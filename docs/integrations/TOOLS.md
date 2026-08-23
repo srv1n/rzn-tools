@@ -98,12 +98,10 @@ Examples:
 
 ```bash
 # Build CLI with productivity connectors only
-cargo build -p rzn_tools_cli \
-  --features "microsoft-graph,google-drive,google-gmail,google-calendar,google-people"
+make build CARGO_ARGS='-p rzn_tools_cli --features "microsoft-graph,google-drive,google-gmail,google-calendar,google-people"'
 
 # Build with macros enabled (composite tools)
-cargo build -p rzn_tools_cli \
-  --features "microsoft-graph,google-drive,google-gmail,google-calendar,google-people,llm-macros"
+make build CARGO_ARGS='-p rzn_tools_cli --features "microsoft-graph,google-drive,google-gmail,google-calendar,google-people,llm-macros"'
 ```
 
 JSON-RPC examples:

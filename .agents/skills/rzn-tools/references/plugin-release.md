@@ -53,7 +53,7 @@ target/release/rzn-tools-mcp
 The plugin build target expects full connector features:
 
 ```bash
-cargo build --release -p rzn_tools_mcp --features full
+make build-release CARGO_ARGS="-p rzn_tools_mcp --features full"
 ```
 
 The Makefile target for local ZIP building is:

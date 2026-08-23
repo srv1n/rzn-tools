@@ -24,7 +24,7 @@ export TG_SESSION_FILE="$HOME/.config/rzn-tools/telegram.session"  # optional
 3. Start the MCP server (example: build/run from source):
 
 ```bash
-cargo run -p rzn_tools_mcp --bin rzn-tools-mcp --features full  # or: --features telegram
+make run CARGO_ARGS="-p rzn_tools_mcp --features full --"
 ```
 
 4. In your MCP client, call:

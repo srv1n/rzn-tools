@@ -1,5 +1,8 @@
 # RZN Integrations Installation (`rzn-tools`)
 
+> Read [the current operations guide](docs/system/operations.md) first. This
+> page keeps the longer install and asset notes.
+
 The `rzn-tools` install for **RZN Integrations** now has two pieces:
 
 - the CLI binary
@@ -140,14 +143,14 @@ For Linux, swap the target triple:
 
 Windows release assets are published too, but the one-line shell installer is intentionally for macOS/Linux.
 
-## Build From Source Manually
+## Build From Source
 
-If you want the raw commands instead of `make install`:
+Use the repository Make targets:
 
 ```bash
-cargo build --release -p rzn_tools_cli --features full
-cargo build --release -p rzn_tools_core --features "examples,full" --examples
-cargo test -p rzn_tools_core --test system_metadata_conformance
+make build-release CARGO_ARGS="-p rzn_tools_cli --features full"
+make build-release CARGO_ARGS='-p rzn_tools_core --features "examples,full" --examples'
+make test CARGO_ARGS="-p rzn_tools_core --test system_metadata_conformance"
 
 mkdir -p ~/.local/bin ~/.local/share/rzn-tools
 cp target/release/rzn-tools ~/.local/bin/

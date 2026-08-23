@@ -56,11 +56,11 @@ CLI UX             MCP server/plugin runtime
 2. Read the current code around the target connector or command. This repo moves quickly; docs can lag.
 3. Make the narrowest code change that preserves the shared model across core, CLI, and MCP.
 4. Validate with the smallest useful command first, then broaden:
-   - `cargo fmt --all`
-   - `cargo check -p rzn_tools_cli --features "<feature>"`
-   - `cargo test -p rzn_tools_core <test-filter>`
-   - `cargo clippy --all-targets --all-features -- -D warnings`
-   - `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps`
+   - `make fmt`
+   - `make check CARGO_ARGS='-p rzn_tools_cli --features "<feature>"'`
+   - `make test CARGO_ARGS="-p rzn_tools_core <test-filter>"`
+   - `make clippy CARGO_ARGS="--all-targets --all-features -- -D warnings"`
+   - `RUSTDOCFLAGS="-D warnings" make doc CARGO_ARGS="--workspace"`
 
 Run `scripts/validate.sh` for a shell-only validation wrapper.
 
@@ -108,7 +108,8 @@ For indexable list/search/get tools, prefer `output_format: "raw" | "normalized_
 
 ## Gotchas
 
-- Release builds must use all features: `cargo build --release -p rzn_tools_cli --features full`.
+- Run Rust commands through Make targets. Release CLI builds use
+  `make build-release CARGO_ARGS="-p rzn_tools_cli --features full"`.
 - `rzn_tools_mcp` default features are intentionally empty; plugin/MCP release builds need `--features full`.
 - Connector names use hyphens publicly (`google-drive`) and module names use underscores (`google_drive`).
 - Register aliases when old names or common spellings exist (`semantic_scholar`, `gsc`, `x-cookies`, etc.).
@@ -134,9 +135,9 @@ For a broader pre-PR check:
 Use targeted feature checks during connector work:
 
 ```bash
-cargo check -p rzn_tools_cli --features "youtube,hackernews"
-cargo run -p rzn_tools_cli --features "youtube" -- youtube --help
-cargo run -p rzn_tools_cli --features "hackernews" -- tools hackernews --output json
+make check CARGO_ARGS='-p rzn_tools_cli --features "youtube,hackernews"'
+make run CARGO_ARGS='-p rzn_tools_cli --features youtube -- youtube --help'
+make run CARGO_ARGS='-p rzn_tools_cli --features hackernews -- tools hackernews --output json'
 ```
 
 ## Release Boundary

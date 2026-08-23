@@ -7,10 +7,10 @@
 
 ## Build & Run
 - Enable the feature flag when compiling the MCP server:
-  - `cargo build -p rzn_tools_mcp --features macos-automation`
+  - `make build CARGO_ARGS="-p rzn_tools_mcp --features macos-automation"`
 - Launch the server over stdio (debug build shown):
-  - `cargo run -p rzn_tools_mcp --features macos-automation`
-- For direct binaries, start `target/debug/mcp_server` (or `target/release/mcp_server`) and keep stdin/stdout wired to the MCP client.
+  - `make run CARGO_ARGS="-p rzn_tools_mcp --features macos-automation --"`
+- For direct binaries, start `target/debug/rzn-tools-mcp` and keep stdin/stdout wired to the MCP client.
 
 ## JSON-RPC Handshake
 - Initialize:

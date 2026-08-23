@@ -1,0 +1,13 @@
+{
+  "actor": "agent:sarav",
+  "at": "2026-08-23T10:54:54Z",
+  "event_kind": "created",
+  "id": "01M0Q44P0KXCYK9AMD3RBJSRAW",
+  "object": "project",
+  "object_kind": "domain",
+  "payload": {
+    "path": "knowledge/domains/project/INDEX.md"
+  },
+  "project": "rzn-tools",
+  "schema": "tusker.event/v1"
+}

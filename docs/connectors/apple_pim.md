@@ -1,52 +1,24 @@
-# Apple PIM (Notes, Reminders, Calendar) — Design Spec
+# Apple personal data connectors
 
-Status: Draft (Phase 1)
+These connectors use macOS Automation and privacy permissions. They do not use
+API-key credentials.
 
-## Overview
+| Connector | Advertised operations |
+| --- | --- |
+| `apple-mail` | List mailboxes/messages, get/search messages, create drafts, send. |
+| `apple-contacts` | List, get, and search contacts. |
+| `apple-messages` | List chats/history, send messages, manage local chat aliases. |
+| `apple-notes` | List, get, search, create, update, and append notes. |
+| `apple-reminders` | List/read reminders and create, update, complete, or delete them. |
 
-Extend the macOS automation connector with AppleScript/JXA tools for Notes, Reminders, and Calendar. macOS‑only; TCC prompts expected.
+Some old compatibility calls are implemented but hidden from `tools/list`.
+Use the advertised names for new work.
 
-## Key Use Cases
+Mail, Contacts, Notes, and Reminders need macOS Automation permission.
+Messages history also needs Full Disk Access. Read or write this data only
+after the user gives clear permission.
 
-- Search notes by title/content.
-- List upcoming reminders and calendar events.
+There is no Apple Calendar connector. Use `caldav` or `google-calendar`.
 
-## MVP Scope (Tools)
-
-- `notes_search`: query → list of notes (title, folder, snippet, modified, note id).
-- `notes_get`: id → full text (no attachments in MVP).
-- `reminders_list`: upcoming/past‑due with lists and due dates.
-- `calendar_list_events`: time window, calendars filter.
-
-## Implementation
-
-- Use existing `MacOsAutomationConnector` to run AppleScript/JXA via `/usr/bin/osascript`.
-- Provide built‑in scripts; return structured JSON where possible by `JSON.stringify` in JXA.
-
-## Rust Crates / Deps
-
-- Existing connector + `tokio::process`; optional `plist` for metadata.
-
-## Data Model
-
-- `NoteItem`, `ReminderItem`, `CalendarEvent` with provenance (`account`, `calendar`, `id`).
-
-## Error Handling & Limits
-
-- Handle permission errors with actionable messages; timeouts for long scripts.
-
-## Security & Privacy
-
-- Local‑only; redact note text in logs; allow folder/calendars allow‑lists.
-
-## Testing Plan
-
-- Sample notes/reminders/calendars; acceptance: search and fetch a note by id.
-
-## Implementation Checklist
-
-- [ ] AppleScript/JXA scripts packaged
-- [ ] Tools wired with schemas
-- [ ] TCC guidance in docs
-- [ ] Examples
+Code: `rzn_tools_core/src/connectors/apple_*`
 

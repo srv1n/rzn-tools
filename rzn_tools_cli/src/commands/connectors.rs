@@ -468,119 +468,114 @@ async fn call_tool(cli: &Cli, connector: &str, tool: &str, args: Map<String, Val
     output_tool_result(cli, connector, tool, &payload, meta_value.as_ref())
 }
 
+/// Call a discovered connector tool without duplicating its schema in the CLI.
+pub async fn call(cli: &Cli, connector: &str, tool: &str, raw_args: &str) -> Result<()> {
+    let args = parse_json_argument("--args", raw_args)?;
+    let args = args.as_object().cloned().ok_or_else(|| {
+        crate::commands::CommandError::InvalidInput(
+            "--args must be a JSON object; inspect `rzn-tools tools <connector>` for its shape"
+                .to_string(),
+        )
+    })?;
+    call_tool(cli, connector, tool, args).await
+}
+
+async fn handle_model_search(
+    cli: &Cli,
+    connector: &str,
+    query: String,
+    limit: u32,
+    model: Option<String>,
+    response_format: String,
+) -> Result<()> {
+    let mut args = Map::new();
+    args.insert("query".to_string(), json!(query));
+    args.insert("limit".to_string(), json!(limit));
+    if let Some(model) = model {
+        args.insert("model".to_string(), json!(model));
+    }
+    args.insert("response_format".to_string(), json!(response_format));
+    call_tool(cli, connector, "search", args).await
+}
+
 /// Handle OpenAI Search commands
 pub async fn handle_openai_search(cli: &Cli, tool: OpenaiSearchTools) -> Result<()> {
-    let (tool_name, args) = match tool {
+    match tool {
         OpenaiSearchTools::Search {
             query,
             limit,
             model,
             response_format,
-        } => {
-            let mut args = Map::new();
-            args.insert("query".to_string(), json!(query));
-            args.insert("limit".to_string(), json!(limit));
-            if let Some(m) = model {
-                args.insert("model".to_string(), json!(m));
-            }
-            args.insert("response_format".to_string(), json!(response_format));
-            ("search", args)
-        }
-    };
-
-    call_tool(cli, "openai-search", tool_name, args).await
+        } => handle_model_search(cli, "openai-search", query, limit, model, response_format).await,
+    }
 }
 
 /// Handle Anthropic Search commands
 pub async fn handle_anthropic_search(cli: &Cli, tool: AnthropicSearchTools) -> Result<()> {
-    let (tool_name, args) = match tool {
+    match tool {
         AnthropicSearchTools::Search {
             query,
             limit,
             model,
             response_format,
         } => {
-            let mut args = Map::new();
-            args.insert("query".to_string(), json!(query));
-            args.insert("limit".to_string(), json!(limit));
-            if let Some(m) = model {
-                args.insert("model".to_string(), json!(m));
-            }
-            args.insert("response_format".to_string(), json!(response_format));
-            ("search", args)
+            handle_model_search(
+                cli,
+                "anthropic-search",
+                query,
+                limit,
+                model,
+                response_format,
+            )
+            .await
         }
-    };
-
-    call_tool(cli, "anthropic-search", tool_name, args).await
+    }
 }
 
 /// Handle Gemini Search commands
 pub async fn handle_gemini_search(cli: &Cli, tool: GeminiSearchTools) -> Result<()> {
-    let (tool_name, args) = match tool {
+    match tool {
         GeminiSearchTools::Search {
             query,
             limit,
             model,
             response_format,
-        } => {
-            let mut args = Map::new();
-            args.insert("query".to_string(), json!(query));
-            args.insert("limit".to_string(), json!(limit));
-            if let Some(m) = model {
-                args.insert("model".to_string(), json!(m));
-            }
-            args.insert("response_format".to_string(), json!(response_format));
-            ("search", args)
-        }
-    };
-
-    call_tool(cli, "gemini-search", tool_name, args).await
+        } => handle_model_search(cli, "gemini-search", query, limit, model, response_format).await,
+    }
 }
 
 /// Handle Perplexity Search commands
 pub async fn handle_perplexity_search(cli: &Cli, tool: PerplexitySearchTools) -> Result<()> {
-    let (tool_name, args) = match tool {
+    match tool {
         PerplexitySearchTools::Search {
             query,
             limit,
             model,
             response_format,
         } => {
-            let mut args = Map::new();
-            args.insert("query".to_string(), json!(query));
-            args.insert("limit".to_string(), json!(limit));
-            if let Some(m) = model {
-                args.insert("model".to_string(), json!(m));
-            }
-            args.insert("response_format".to_string(), json!(response_format));
-            ("search", args)
+            handle_model_search(
+                cli,
+                "perplexity-search",
+                query,
+                limit,
+                model,
+                response_format,
+            )
+            .await
         }
-    };
-
-    call_tool(cli, "perplexity-search", tool_name, args).await
+    }
 }
 
 /// Handle xAI Search commands
 pub async fn handle_xai_search(cli: &Cli, tool: XaiSearchTools) -> Result<()> {
-    let (tool_name, args) = match tool {
+    match tool {
         XaiSearchTools::Search {
             query,
             limit,
             model,
             response_format,
-        } => {
-            let mut args = Map::new();
-            args.insert("query".to_string(), json!(query));
-            args.insert("limit".to_string(), json!(limit));
-            if let Some(m) = model {
-                args.insert("model".to_string(), json!(m));
-            }
-            args.insert("response_format".to_string(), json!(response_format));
-            ("search", args)
-        }
-    };
-
-    call_tool(cli, "xai-search", tool_name, args).await
+        } => handle_model_search(cli, "xai-search", query, limit, model, response_format).await,
+    }
 }
 
 /// Handle Exa commands
@@ -3676,6 +3671,77 @@ pub async fn handle_apple_search_ads(cli: &Cli, tool: AppleSearchAdsTools) -> Re
             args.insert("body".to_string(), parse_body_json(&body)?);
             ("create_campaign", args)
         }
+        AppleSearchAdsTools::PlatformRequest {
+            method,
+            path,
+            query,
+            body,
+        } => {
+            let mut args = Map::new();
+            args.insert("method".to_string(), json!(method));
+            args.insert("path".to_string(), json!(path));
+            if let Some(query) = query {
+                args.insert("query".to_string(), parse_body_json(&query)?);
+            }
+            if let Some(body) = body {
+                args.insert("body".to_string(), parse_body_json(&body)?);
+            }
+            ("platform_request", args)
+        }
+        AppleSearchAdsTools::PlatformQueryCampaigns { body } => {
+            let mut args = Map::new();
+            args.insert("body".to_string(), parse_body_json(&body)?);
+            ("platform_query_campaigns", args)
+        }
+        AppleSearchAdsTools::PlatformSearchTermPopularity { body } => {
+            let mut args = Map::new();
+            args.insert("body".to_string(), parse_body_json(&body)?);
+            ("platform_search_term_popularity", args)
+        }
+        AppleSearchAdsTools::PlatformImpressionShare { body } => {
+            let mut args = Map::new();
+            args.insert("body".to_string(), parse_body_json(&body)?);
+            ("platform_impression_share", args)
+        }
+        AppleSearchAdsTools::PlatformRecommendations { kind, body } => {
+            let mut args = Map::new();
+            args.insert("kind".to_string(), json!(kind));
+            args.insert("body".to_string(), parse_body_json(&body)?);
+            ("platform_recommendations", args)
+        }
+        AppleSearchAdsTools::PlatformReportApps { level, body } => {
+            let mut args = Map::new();
+            args.insert("level".to_string(), json!(level));
+            args.insert("body".to_string(), parse_body_json(&body)?);
+            ("platform_report_apps", args)
+        }
+        AppleSearchAdsTools::PlatformReportBrands { level, body } => {
+            let mut args = Map::new();
+            args.insert("level".to_string(), json!(level));
+            args.insert("body".to_string(), parse_body_json(&body)?);
+            ("platform_report_brands", args)
+        }
+        AppleSearchAdsTools::PlatformQueryBrands { body } => {
+            let mut args = Map::new();
+            args.insert("body".to_string(), parse_body_json(&body)?);
+            ("platform_query_brands", args)
+        }
+        AppleSearchAdsTools::PlatformQueryCreatives { body } => {
+            let mut args = Map::new();
+            args.insert("body".to_string(), parse_body_json(&body)?);
+            ("platform_query_creatives", args)
+        }
+        AppleSearchAdsTools::PlatformQueryLocations { body } => {
+            let mut args = Map::new();
+            args.insert("body".to_string(), parse_body_json(&body)?);
+            ("platform_query_locations", args)
+        }
+        AppleSearchAdsTools::PlatformChangeHistory { body } => {
+            let mut args = Map::new();
+            args.insert("body".to_string(), parse_body_json(&body)?);
+            ("platform_change_history", args)
+        }
+        AppleSearchAdsTools::PlatformTestAuth => ("platform_test_auth", Map::new()),
         AppleSearchAdsTools::TestAuth => ("test_auth", Map::new()),
     };
 

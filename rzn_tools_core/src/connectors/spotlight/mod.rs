@@ -260,13 +260,6 @@ impl crate::Connector for SpotlightConnector {
         false
     }
 
-    async fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            tools: None,
-            ..Default::default()
-        }
-    }
-
     async fn get_auth_details(&self) -> Result<AuthDetails, ConnectorError> {
         Ok(AuthDetails::new())
     }
@@ -308,33 +301,6 @@ impl crate::Connector for SpotlightConnector {
                  search_by_name for filename search, or search_by_kind for type-specific searches."
                     .to_string(),
             ),
-        })
-    }
-
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListResourcesResult, ConnectorError> {
-        Ok(ListResourcesResult {
-            resources: vec![],
-            next_cursor: None,
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        _request: ReadResourceRequestParam,
-    ) -> Result<Vec<ResourceContents>, ConnectorError> {
-        Err(ConnectorError::ResourceNotFound)
-    }
-
-    async fn list_prompts(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-    ) -> Result<ListPromptsResult, ConnectorError> {
-        Ok(ListPromptsResult {
-            prompts: vec![],
-            next_cursor: None,
         })
     }
 

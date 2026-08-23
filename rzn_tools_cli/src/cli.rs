@@ -10,9 +10,6 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
   rzn-tools tools youtube                     Show tools for a specific connector
   rzn-tools search youtube \"rust tutorial\"    Search YouTube videos
   rzn-tools hackernews search --query \"rust\"  Search Hacker News directly
-  rzn-tools configure cloudflare guide        Show Cloudflare tunnel setup help
-  rzn-tools serve                             Run the local MCP HTTP server
-  rzn-tools configure cloudflare tunnel --hostname rzn-tools-origin.example.com --tunnel-name rzn-tools-mcp
 
 \x1b[1;36mAuthentication:\x1b[0m
   rzn-tools setup                             Interactive setup wizard
@@ -97,6 +94,7 @@ pub enum Commands {
     },
 
     /// Configure hosting and proxy integration helpers
+    #[cfg(feature = "serve")]
     #[command(after_help = "\x1b[1;33mExamples:\x1b[0m
   rzn-tools configure cloudflare guide
   rzn-tools configure cloudflare doctor
@@ -107,6 +105,7 @@ pub enum Commands {
     },
 
     /// Run the native MCP HTTP server
+    #[cfg(feature = "serve")]
     #[command(after_help = "\x1b[1;33mExamples:\x1b[0m
   rzn-tools configure cloudflare guide
   rzn-tools configure cloudflare tunnel --hostname rzn-tools-origin.example.com --tunnel-name rzn-tools-mcp
@@ -277,6 +276,18 @@ pub enum Commands {
     Tools {
         /// Connector name to filter tools (omit to show all)
         connector: Option<String>,
+    },
+
+    /// Call any connector tool with the JSON schema shown by `rzn-tools tools <connector>`.
+    #[command(after_help = "Example:\n  rzn-tools call imap list_mailboxes --args '{}'")]
+    Call {
+        /// Connector name
+        connector: String,
+        /// Tool name from `rzn-tools tools <connector>`
+        tool: String,
+        /// JSON object matching the tool input schema
+        #[arg(long, default_value = "{}", value_name = "JSON_OBJECT")]
+        args: String,
     },
 
     /// Manage ingestion sources and run scheduled ingestion
@@ -766,14 +777,17 @@ pub enum Commands {
         tool: AppStoreConnectTools,
     },
 
-    /// Apple Search Ads API v5 (keyword recommendations and reporting)
-    #[command(name = "apple-search-ads", aliases = ["asa", "apple-searchads"])]
+    /// Apple Ads Platform API v1 plus legacy Search Ads API v5
+    #[command(name = "apple-search-ads", aliases = ["asa", "apple-searchads", "apple-ads"])]
     #[command(after_help = "\x1b[1;33mExamples:\x1b[0m
   rzn-tools setup apple-search-ads
   rzn-tools apple-search-ads list-campaigns --limit 10
   rzn-tools apple-search-ads keyword-recommendations --app-id 310633997 --storefront-countries US
+  rzn-tools apple-ads platform-query-campaigns --body '{\"pagination\":{\"pageSize\":20}}'
+  rzn-tools apple-ads platform-search-term-popularity --body '{\"filters\":[]}'
 
 \x1b[1;33mNotes:\x1b[0m
+  - v1 tools require an ad_account_id; v5 tools require an org_id
   - Requires OAuth client credentials + ES256 private key (.p8)")]
     AppleSearchAds {
         #[command(subcommand)]
@@ -1211,6 +1225,7 @@ pub enum OutputFormat {
 }
 
 #[derive(Subcommand, Clone)]
+#[cfg(feature = "serve")]
 pub enum ConfigureTarget {
     /// Save Cloudflare tunnel defaults for `rzn-tools serve`
     Cloudflare {
@@ -1220,6 +1235,7 @@ pub enum ConfigureTarget {
 }
 
 #[derive(Subcommand, Clone)]
+#[cfg(feature = "serve")]
 pub enum CloudflareConfigureAction {
     /// Show first-run setup help for rzn-tools behind Cloudflare Tunnel
     Guide,
@@ -3718,6 +3734,116 @@ pub enum AppleSearchAdsTools {
         #[arg(long)]
         body: String,
     },
+
+    /// Call any Apple Ads Platform API v1 endpoint
+    #[command(name = "platform-request")]
+    PlatformRequest {
+        /// HTTP method: GET, POST, PUT, or DELETE
+        #[arg(long)]
+        method: String,
+        /// Relative API path, for example /campaigns/query
+        #[arg(long)]
+        path: String,
+        /// Optional JSON object of query parameters
+        #[arg(long)]
+        query: Option<String>,
+        /// Optional JSON request body
+        #[arg(long)]
+        body: Option<String>,
+    },
+
+    /// Query Apple Ads Platform v1 campaigns
+    #[command(name = "platform-query-campaigns")]
+    PlatformQueryCampaigns {
+        /// JSON request body (stringified)
+        #[arg(long, default_value = "{}")]
+        body: String,
+    },
+
+    /// Query Apple Ads Platform v1 search-term popularity
+    #[command(name = "platform-search-term-popularity")]
+    PlatformSearchTermPopularity {
+        /// JSON request body (stringified)
+        #[arg(long)]
+        body: String,
+    },
+
+    /// Query Apple Ads Platform v1 impression share
+    #[command(name = "platform-impression-share")]
+    PlatformImpressionShare {
+        /// JSON request body (stringified)
+        #[arg(long)]
+        body: String,
+    },
+
+    /// Query Apple Ads Platform v1 recommendations
+    #[command(name = "platform-recommendations")]
+    PlatformRecommendations {
+        /// Recommendation kind: daily-budgets or target-cpas
+        #[arg(long)]
+        kind: String,
+        /// JSON request body (stringified)
+        #[arg(long)]
+        body: String,
+    },
+
+    /// Query an Apple Ads Platform v1 App Store report
+    #[command(name = "platform-report-apps")]
+    PlatformReportApps {
+        /// Report level: campaigns, adgroups, ads, keywords, or searchterms
+        #[arg(long)]
+        level: String,
+        /// JSON request body (stringified)
+        #[arg(long)]
+        body: String,
+    },
+
+    /// Query an Apple Ads Platform v1 Apple Maps brand report
+    #[command(name = "platform-report-brands")]
+    PlatformReportBrands {
+        /// Report level: campaigns, adgroups, ads, keywords, or searchterms
+        #[arg(long)]
+        level: String,
+        /// JSON request body (stringified)
+        #[arg(long)]
+        body: String,
+    },
+
+    /// Query Apple Maps business brands
+    #[command(name = "platform-query-brands")]
+    PlatformQueryBrands {
+        /// JSON request body (stringified)
+        #[arg(long, default_value = "{}")]
+        body: String,
+    },
+
+    /// Query Apple Ads Platform v1 ad creatives
+    #[command(name = "platform-query-creatives")]
+    PlatformQueryCreatives {
+        /// JSON request body (stringified)
+        #[arg(long, default_value = "{}")]
+        body: String,
+    },
+
+    /// Query Apple Maps business locations
+    #[command(name = "platform-query-locations")]
+    PlatformQueryLocations {
+        /// JSON request body (stringified)
+        #[arg(long, default_value = "{}")]
+        body: String,
+    },
+
+    /// Query Apple Ads Platform v1 change history
+    #[command(name = "platform-change-history")]
+    PlatformChangeHistory {
+        /// JSON request body (stringified)
+        #[arg(long)]
+        body: String,
+    },
+
+    /// Validate Apple Ads Platform v1 credentials and ad-account access
+    #[command(name = "platform-test-auth")]
+    PlatformTestAuth,
 
     /// Validate OAuth token + API access
     #[command(name = "test-auth")]

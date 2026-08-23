@@ -2,15 +2,17 @@
 
 This adds uniform "search" tools that call LLM vendors’ native, built-in web search features where available. Use them like any other connector:
 
-- List tools: `rzn tools openai-search` (or `anthropic-search`, `gemini-search`, `perplexity-search`)
-- Run a search: `rzn search openai-search "what happened with …"`
+- List tools: `rzn-tools tools openai-search` (or `anthropic-search`, `gemini-search`, `perplexity-search`)
+- Run a search: `rzn-tools search openai-search "what happened with …"`
 
-All tools accept at minimum: `{ query: string, limit?: number, model?: string }`.
+The LLM-provider tools accept a query and can accept a model override. Exact
+filter fields differ by provider. Use `rzn-tools tools <connector> --output
+json` for the current schema.
 
-## Uniform Parameters (applies to all search tools)
+## Common parameters
 
 - query: string — clear, natural-language question. Don’t append years unless the user asked.
-- max_results: integer (default varies by provider; we set 3–10). Keeps outputs small and LLM-friendly.
+- limit: integer. Keeps outputs small and LLM-friendly.
 - response_format: "concise" | "detailed" (default: concise)
   - concise: returns high-signal fields (answer, citations or results) and omits raw provider payload
   - detailed: includes the raw provider payload under `raw`
@@ -27,7 +29,7 @@ Notes:
 
 - OpenAI (Responses API): built-in `web_search` tool; model decides when to search and returns citations. Auth via `Authorization: Bearer OPENAI_API_KEY` (+ optional `OpenAI-Organization`, `OpenAI-Project`). Default model here: `o4-mini`.
 - Anthropic (Claude Web Search): enable `tools: [{ type: "web_search_20250305" }]`; Claude browses automatically and returns citations. Auth via headers `x-api-key` and `anthropic-version: 2023-06-01`. Default model: `claude-3-7-sonnet-latest`.
-- Google Gemini (Grounding with Google Search): enable the `googleSearch` tool in `tools` for Gemini models. Auth via API key (set `GEMINI_API_KEY` or `GOOGLE_API_KEY`). Default model: `gemini-1.5-pro-latest`.
+- Google Gemini (Grounding with Google Search): enable the `googleSearch` tool in `tools` for Gemini models. Auth via API key (set `GEMINI_API_KEY` or `GOOGLE_API_KEY`). Default model: `gemini-2.5-pro`.
 - Perplexity (Search API): chat completions with `online` browsing; responses include citations. Auth via `Authorization: Bearer PPLX_API_KEY`. Default model: `sonar-pro`.
 - xAI (Responses API tools): `POST /v1/responses` with built-in tools (`web_search`, `x_search`) and `search_mode` (`on`/`auto`/`off`). Auth via `Authorization: Bearer XAI_API_KEY`. Default model: `grok-4-fast`.
 
@@ -47,7 +49,7 @@ Notes on other vendors:
 
 ## Authentication and Config
 
-You can set credentials via `rzn config set <connector>` or environment variables.
+You can set credentials via `rzn-tools config set <connector>` or environment variables.
 
 - OpenAI: `OPENAI_API_KEY` (required), `OPENAI_ORG_ID` (optional), `OPENAI_PROJECT_ID` (optional)
 - Anthropic: `ANTHROPIC_API_KEY` (required)
@@ -68,7 +70,7 @@ All provider search tools return a structured payload:
 
 ```
 {
-  provider: "openai" | "anthropic" | "google-gemini" | "perplexity",
+  provider: "openai" | "anthropic" | "google-gemini" | "perplexity" | "xai",
   model: string,
   query: string,
   limit_hint: number,
