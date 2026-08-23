@@ -1723,10 +1723,6 @@ impl Connector for ImapConnector {
             auth.insert("username".to_string(), config.username.clone());
             auth.insert("security".to_string(), config.security.as_str().to_string());
             auth.insert(
-                "tls".to_string(),
-                (config.security != SecurityMode::Plaintext).to_string(),
-            );
-            auth.insert(
                 "skip_tls_verify".to_string(),
                 config.skip_tls_verify.to_string(),
             );
@@ -1759,18 +1755,7 @@ impl Connector for ImapConnector {
             .get("password")
             .ok_or_else(|| ConnectorError::InvalidInput("IMAP password is required".to_string()))?
             .to_string();
-        let security = if let Some(security) = details.get("security") {
-            SecurityMode::from_str(Some(security.as_str()))?
-        } else if let Some(tls) = details.get("tls") {
-            let tls_enabled = matches!(tls.as_str(), "true" | "1" | "yes" | "on");
-            if tls_enabled {
-                SecurityMode::Tls
-            } else {
-                SecurityMode::Plaintext
-            }
-        } else {
-            SecurityMode::from_str(None)?
-        };
+        let security = SecurityMode::from_str(details.get("security").map(String::as_str))?;
         let skip_tls_verify = details
             .get("skip_tls_verify")
             .map(|v| matches!(v.as_str(), "true" | "1" | "yes" | "on"))
@@ -1841,17 +1826,6 @@ impl Connector for ImapConnector {
                     field_type: FieldType::Secret,
                     required: true,
                     description: Some("Account password.".to_string()),
-                    options: None,
-                },
-                Field {
-                    name: "tls".to_string(),
-                    label: "Use TLS".to_string(),
-                    field_type: FieldType::Boolean,
-                    required: false,
-                    description: Some(
-                        "If provided (and 'security' is unset), choose between TLS and plaintext."
-                            .to_string(),
-                    ),
                     options: None,
                 },
                 Field {

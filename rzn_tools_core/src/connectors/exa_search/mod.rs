@@ -56,7 +56,6 @@ impl ExaSearchConnector {
             "query": query,
             "numResults": args
                 .get("limit")
-                .or_else(|| args.get("num_results"))
                 .and_then(|v| v.as_u64())
                 .unwrap_or(10),
         });
@@ -286,7 +285,6 @@ impl ExaSearchConnector {
             "url": url,
             "numResults": args
                 .get("limit")
-                .or_else(|| args.get("num_results"))
                 .and_then(|v| v.as_u64())
                 .unwrap_or(10),
         });
@@ -383,11 +381,7 @@ impl ExaSearchConnector {
         }
 
         // Number of search results to use
-        if let Some(num_results) = args
-            .get("limit")
-            .or_else(|| args.get("num_results"))
-            .and_then(|v| v.as_u64())
-        {
+        if let Some(num_results) = args.get("limit").and_then(|v| v.as_u64()) {
             body["numResults"] = json!(num_results);
         }
 
@@ -596,15 +590,11 @@ impl Connector for ExaSearchConnector {
                         "type": "string",
                         "description": "Search query. For people/company search, be descriptive: 'CTO at AI startups in NYC' or 'seed-stage fintech companies'"
                     },
-                    "num_results": {
+                    "limit": {
                         "type": "integer",
                         "default": 10,
                         "maximum": 100,
-                        "description": "Number of results (max 100)"
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Alias for num_results (preferred name across search providers)."
+                        "description": "Number of results (max 100)."
                     },
                     "type": {
                         "type": "string",
@@ -745,15 +735,11 @@ impl Connector for ExaSearchConnector {
                         "type": "string",
                         "description": "URL to find similar pages for"
                     },
-                    "num_results": {
+                    "limit": {
                         "type": "integer",
                         "default": 10,
                         "maximum": 100,
-                        "description": "Number of similar results to return"
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Alias for num_results (preferred name across search providers)."
+                        "description": "Number of similar results to return."
                     },
                     "category": {
                         "type": "string",
@@ -806,13 +792,9 @@ impl Connector for ExaSearchConnector {
                         "enum": ["precise", "detailed"],
                         "description": "precise=short factual answers, detailed=comprehensive summaries"
                     },
-                    "num_results": {
-                        "type": "integer",
-                        "description": "Number of search results to use for generating the answer"
-                    },
                     "limit": {
                         "type": "integer",
-                        "description": "Alias for num_results (preferred name across search providers)."
+                        "description": "Number of search results to use for generating the answer."
                     },
                     "category": {
                         "type": "string",

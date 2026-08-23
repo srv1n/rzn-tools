@@ -86,7 +86,6 @@ sources. Example: query=\"new EU AI Act enforcement dates\" limit=5.",
                 "properties": {
                     "query": {"type": "string"},
                     "limit": {"type": "integer", "default": 5},
-                    "max_results": {"type": "integer", "description": "Alias for limit (deprecated)."},
                     "model": {"type": "string", "description": "Perplexity model (e.g., sonar-pro)"},
                     "language": {"type": "string", "description": "BCP-47 language hint (e.g., en)"},
                     "region": {"type": "string", "description": "Region/country code (e.g., US)"},
@@ -125,11 +124,7 @@ sources. Example: query=\"new EU AI Act enforcement dates\" limit=5.",
                     .into(),
             )
         })?;
-        let limit = args
-            .get("limit")
-            .or_else(|| args.get("max_results"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(5) as usize;
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
         let model = args
             .get("model")
             .and_then(|v| v.as_str())

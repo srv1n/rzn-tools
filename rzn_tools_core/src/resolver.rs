@@ -330,7 +330,7 @@ fn build_default_patterns() -> Vec<InputPattern> {
         InputPattern {
             id: "hackernews_url",
             connector: "hackernews",
-            tool: "get",
+            tool: "get_thread",
             pattern: Regex::new(r"(?:https?://)?news\.ycombinator\.com/item\?id=(?P<item_id>\d+)").unwrap(),
             captures: &["item_id"],
             arg_mapping: &[("item_id", "id")],
@@ -340,7 +340,7 @@ fn build_default_patterns() -> Vec<InputPattern> {
         InputPattern {
             id: "hackernews_id",
             connector: "hackernews",
-            tool: "get",
+            tool: "get_thread",
             pattern: Regex::new(r"^(?:hn:|HN:)?(?P<item_id>\d{7,9})$").unwrap(),
             captures: &["item_id"],
             arg_mapping: &[("item_id", "id")],
@@ -619,7 +619,7 @@ fn build_default_patterns() -> Vec<InputPattern> {
         InputPattern {
             id: "twitter_profile_url",
             connector: "x",
-            tool: "get_profile",
+            tool: "get_user_by_username",
             pattern: Regex::new(r"(?:https?://)?(?:www\.)?(?:twitter\.com|x\.com)/(?P<username>[a-zA-Z0-9_]+)/?$").unwrap(),
             captures: &["username"],
             arg_mapping: &[("username", "username")],
@@ -629,7 +629,7 @@ fn build_default_patterns() -> Vec<InputPattern> {
         InputPattern {
             id: "twitter_handle",
             connector: "x",
-            tool: "get_profile",
+            tool: "get_user_by_username",
             pattern: Regex::new(r"^@(?P<username>[a-zA-Z0-9_]+)$").unwrap(),
             captures: &["username"],
             arg_mapping: &[("username", "username")],
@@ -971,6 +971,7 @@ mod tests {
             .resolve("https://news.ycombinator.com/item?id=38500000")
             .unwrap();
         assert_eq!(action.connector, "hackernews");
+        assert_eq!(action.tool, "get_thread");
         assert_eq!(action.arguments.get("id").unwrap(), "38500000");
     }
 

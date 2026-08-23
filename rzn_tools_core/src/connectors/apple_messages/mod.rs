@@ -37,82 +37,15 @@ impl AppleMessagesConnector {
 // ============================================================================
 
 #[derive(Debug, Serialize, Deserialize)]
-struct ChatInfo {
-    /// Participant phone numbers/emails (use with get_recent_messages)
-    participants: String,
-    /// Service type (iMessage, SMS)
-    service: String,
-    /// Internal chat ID (use with send_to_chat)
-    chat_id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 struct SendMessageResult {
     success: bool,
     message: String,
     alias: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ChatParticipant {
-    alias: String,
-    alias_source: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct RawChatParticipant {
-    id: String,
-}
-
 // ============================================================================
 // AppleScript Generators
 // ============================================================================
-
-#[cfg(target_os = "macos")]
-#[allow(dead_code)]
-fn script_list_chats() -> String {
-    r#"
-tell application "Messages"
-    set output to ""
-    repeat with c in chats
-        set chatId to ""
-        set chatService to ""
-        set participantList to ""
-        try
-            set chatId to id of c as text
-        end try
-        try
-            set rawService to name of service of c
-            if rawService is not missing value then
-                set chatService to rawService as text
-            end if
-        end try
-        -- Get participants (phone numbers/emails) - this is what users need
-        try
-            set chatParticipants to participants of c
-            repeat with p in chatParticipants
-                try
-                    set pHandle to handle of p as text
-                    if pHandle is not missing value and pHandle is not "" then
-                        if participantList is "" then
-                            set participantList to pHandle
-                        else
-                            set participantList to participantList & ", " & pHandle
-                        end if
-                    end if
-                end try
-            end repeat
-        end try
-        if chatId is not "" then
-            if output is not "" then set output to output & "|||"
-            set output to output & participantList & ":::" & chatService & ":::" & chatId
-        end if
-    end repeat
-    return output
-end tell
-"#
-    .to_string()
-}
 
 #[cfg(target_os = "macos")]
 fn script_send_message(recipient: &str, message: &str) -> String {
@@ -123,71 +56,6 @@ tell application "Messages"
     set targetBuddy to buddy "{}" of targetService
     send "{}" to targetBuddy
     return "Message sent successfully"
-end tell
-"#,
-        escape_applescript_string(recipient),
-        escape_applescript_string(message)
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn script_send_to_chat(chat_id: &str, message: &str) -> String {
-    format!(
-        r#"
-tell application "Messages"
-    set targetChat to chat id "{}"
-    send "{}" to targetChat
-    return "Message sent successfully"
-end tell
-"#,
-        escape_applescript_string(chat_id),
-        escape_applescript_string(message)
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn script_get_chat_participants(chat_id: &str) -> String {
-    format!(
-        r#"
-tell application "Messages"
-    set targetChat to chat id "{}"
-    set output to ""
-    repeat with p in participants of targetChat
-        set pId to ""
-        set pName to ""
-        try
-            set rawId to id of p
-            if rawId is not missing value then
-                set pId to rawId as text
-            end if
-        end try
-        try
-            set rawName to name of p
-            if rawName is not missing value then
-                set pName to rawName as text
-            end if
-        end try
-        if pId is not "" then
-            if output is not "" then set output to output & "|||"
-            set output to output & pId & ":::" & pName
-        end if
-    end repeat
-    return output
-end tell
-"#,
-        escape_applescript_string(chat_id)
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn script_start_new_chat(recipient: &str, message: &str) -> String {
-    format!(
-        r#"
-tell application "Messages"
-    set targetService to 1st service whose service type = iMessage
-    set targetBuddy to buddy "{}" of targetService
-    send "{}" to targetBuddy
-    return "Chat started and message sent"
 end tell
 "#,
         escape_applescript_string(recipient),
@@ -469,45 +337,6 @@ fn sql_literal(value: &str) -> String {
 // ============================================================================
 
 #[cfg(target_os = "macos")]
-#[allow(dead_code)]
-fn parse_chats(output: &str) -> Vec<ChatInfo> {
-    output
-        .split("|||")
-        .filter(|s| !s.is_empty())
-        .filter_map(|entry| {
-            let parts: Vec<&str> = entry.split(":::").collect();
-            if parts.len() >= 3 {
-                Some(ChatInfo {
-                    participants: parts[0].to_string(),
-                    service: parts[1].to_string(),
-                    chat_id: parts[2].to_string(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
-#[cfg(target_os = "macos")]
-fn parse_participants(output: &str) -> Vec<RawChatParticipant> {
-    output
-        .split("|||")
-        .filter(|s| !s.is_empty())
-        .filter_map(|entry| {
-            let parts: Vec<&str> = entry.split(":::").collect();
-            if parts.len() >= 2 && !parts[0].is_empty() {
-                Some(RawChatParticipant {
-                    id: parts[0].to_string(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
-#[cfg(target_os = "macos")]
 fn alias_source_label(source: &AliasSource) -> &'static str {
     match source {
         AliasSource::Auto => "auto",
@@ -589,23 +418,6 @@ fn sanitize_messages(
 }
 
 #[cfg(target_os = "macos")]
-fn sanitize_participants(
-    raw_participants: Vec<RawChatParticipant>,
-    aliases: &mut AliasStoreState,
-) -> Result<Vec<ChatParticipant>, ConnectorError> {
-    raw_participants
-        .into_iter()
-        .map(|participant| {
-            let alias_record = ensure_alias_record(aliases, &participant.id)?;
-            Ok(ChatParticipant {
-                alias: alias_record.alias,
-                alias_source: alias_source_label(&alias_record.source).to_string(),
-            })
-        })
-        .collect()
-}
-
-#[cfg(target_os = "macos")]
 fn resolve_chat_identifier(
     args: &serde_json::Map<String, serde_json::Value>,
     aliases: &AliasStoreState,
@@ -615,13 +427,6 @@ fn resolve_chat_identifier(
             ConnectorError::InvalidParams(format!("Unknown apple-messages alias '{alias}'"))
         })?;
         return Ok(Some(record.identifier));
-    }
-
-    if let Some(chat_identifier) = args.get("chat_identifier").and_then(|value| value.as_str()) {
-        if let Some(record) = aliases.resolve_alias(chat_identifier) {
-            return Ok(Some(record.identifier));
-        }
-        return Ok(Some(chat_identifier.to_string()));
     }
 
     Ok(None)
@@ -639,13 +444,7 @@ fn resolve_recipient_alias(
         return Ok(record.identifier);
     }
 
-    if let Some(recipient) = args.get("recipient").and_then(|value| value.as_str()) {
-        return Ok(recipient.to_string());
-    }
-
-    Err(ConnectorError::InvalidParams(
-        "Missing 'alias' or 'recipient'".to_string(),
-    ))
+    Err(ConnectorError::InvalidParams("Missing 'alias'".to_string()))
 }
 
 // ============================================================================
@@ -738,31 +537,6 @@ impl crate::Connector for AppleMessagesConnector {
                 annotations: None,
                 icons: None,
             },
-            Tool {
-                name: Cow::Borrowed("get_chat_participants"),
-                title: Some("Get Chat Participants".to_string()),
-                description: Some(Cow::Borrowed(
-                    "Get participants in a group chat. Returns privacy-safe aliases for chat participants. Use chat_id from trusted human flows only.",
-                )),
-                input_schema: Arc::new(
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "chat_id": {
-                                "type": "string",
-                                "description": "Chat ID obtained from list_chats. Required."
-                            }
-                        },
-                        "required": ["chat_id"]
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
             // Reading Messages (requires Full Disk Access)
             Tool {
                 name: Cow::Borrowed("get_recent_messages"),
@@ -777,10 +551,6 @@ impl crate::Connector for AppleMessagesConnector {
                             "alias": {
                                 "type": "string",
                                 "description": "Privacy-safe alias from list_chats/list_aliases."
-                            },
-                            "chat_identifier": {
-                                "type": "string",
-                                "description": "Deprecated raw chat identifier fallback. If it matches a known alias, it is treated as an alias."
                             },
                             "since": {
                                 "type": "string",
@@ -810,7 +580,7 @@ impl crate::Connector for AppleMessagesConnector {
                 name: Cow::Borrowed("send_message"),
                 title: Some("Send Message".to_string()),
                 description: Some(Cow::Borrowed(
-                    "Send an iMessage or SMS to a recipient. Prefer alias so raw phone numbers/emails stay outside normal tool use. Raw recipient is still accepted as a fallback.",
+                    "Send an iMessage or SMS to a configured alias.",
                 )),
                 input_schema: Arc::new(
                     json!({
@@ -820,86 +590,12 @@ impl crate::Connector for AppleMessagesConnector {
                                 "type": "string",
                                 "description": "Privacy-safe alias from list_chats/list_aliases."
                             },
-                            "recipient": {
-                                "type": "string",
-                                "description": "Deprecated raw phone number (with country code) or iMessage email fallback."
-                            },
                             "message": {
                                 "type": "string",
                                 "description": "Message text to send. Required."
                             }
                         },
-                        "required": ["message"],
-                        "anyOf": [
-                            { "required": ["alias"] },
-                            { "required": ["recipient"] }
-                        ]
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
-            Tool {
-                name: Cow::Borrowed("send_to_chat"),
-                title: Some("Send to Chat".to_string()),
-                description: Some(Cow::Borrowed(
-                    "Send a message to an existing chat by chat ID. Useful for group chats. Get chat_id from list_chats.",
-                )),
-                input_schema: Arc::new(
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "chat_id": {
-                                "type": "string",
-                                "description": "Chat ID from list_chats. Required."
-                            },
-                            "message": {
-                                "type": "string",
-                                "description": "Message text to send. Required."
-                            }
-                        },
-                        "required": ["chat_id", "message"]
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
-            Tool {
-                name: Cow::Borrowed("start_new_chat"),
-                title: Some("Start New Chat".to_string()),
-                description: Some(Cow::Borrowed(
-                    "Start a new conversation with an alias or raw recipient and send the first message. Creates the chat if it doesn't exist.",
-                )),
-                input_schema: Arc::new(
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "alias": {
-                                "type": "string",
-                                "description": "Privacy-safe alias from list_aliases."
-                            },
-                            "recipient": {
-                                "type": "string",
-                                "description": "Deprecated raw phone number or iMessage email fallback."
-                            },
-                            "message": {
-                                "type": "string",
-                                "description": "Initial message to send. Required."
-                            }
-                        },
-                        "required": ["message"],
-                        "anyOf": [
-                            { "required": ["alias"] },
-                            { "required": ["recipient"] }
-                        ]
+                        "required": ["alias", "message"]
                     })
                     .as_object()
                     .unwrap()
@@ -984,23 +680,6 @@ impl crate::Connector for AppleMessagesConnector {
             },
         ];
 
-        // Keep the surface small to reduce ambiguity and context bloat for agents.
-        // Back-compat: non-listed tools are still accepted in call_tool().
-        let tools = tools
-            .into_iter()
-            .filter(|t| {
-                matches!(
-                    t.name.as_ref(),
-                    "list_chats"
-                        | "get_recent_messages"
-                        | "send_message"
-                        | "list_aliases"
-                        | "upsert_alias"
-                        | "remove_alias"
-                )
-            })
-            .collect();
-
         Ok(ListToolsResult {
             tools,
             next_cursor: None,
@@ -1045,24 +724,6 @@ impl crate::Connector for AppleMessagesConnector {
                     };
 
                     structured_result_with_text(&output, None)
-                }
-
-                "get_chat_participants" => {
-                    let chat_id =
-                        args.get("chat_id")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                ConnectorError::InvalidParams("Missing 'chat_id'".to_string())
-                            })?;
-
-                    let output =
-                        run_applescript_output(&script_get_chat_participants(chat_id)).await?;
-                    let participants =
-                        sanitize_participants(parse_participants(&output), &mut alias_state)?;
-                    alias_store
-                        .save_state(&mut alias_state)
-                        .map_err(ConnectorError::Other)?;
-                    structured_result_with_text(&participants, None)
                 }
 
                 "get_recent_messages" => {
@@ -1126,46 +787,6 @@ impl crate::Connector for AppleMessagesConnector {
                         alias: alias_record.alias,
                     };
                     structured_result_with_text(&result, None)
-                }
-
-                "send_to_chat" => {
-                    let chat_id =
-                        args.get("chat_id")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                ConnectorError::InvalidParams("Missing 'chat_id'".to_string())
-                            })?;
-                    let message =
-                        args.get("message")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                ConnectorError::InvalidParams("Missing 'message'".to_string())
-                            })?;
-
-                    let output =
-                        run_applescript_output(&script_send_to_chat(chat_id, message)).await?;
-                    structured_result_with_text(&json!({"success": true, "message": output}), None)
-                }
-
-                "start_new_chat" => {
-                    let recipient = resolve_recipient_alias(&args, &alias_state)?;
-                    let message =
-                        args.get("message")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                ConnectorError::InvalidParams("Missing 'message'".to_string())
-                            })?;
-
-                    let output =
-                        run_applescript_output(&script_start_new_chat(&recipient, message)).await?;
-                    let alias_record = ensure_alias_record(&mut alias_state, &recipient)?;
-                    alias_store
-                        .save_state(&mut alias_state)
-                        .map_err(ConnectorError::Other)?;
-                    structured_result_with_text(
-                        &json!({"success": true, "message": output, "alias": alias_record.alias}),
-                        None,
-                    )
                 }
 
                 "list_aliases" => {

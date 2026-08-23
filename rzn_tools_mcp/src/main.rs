@@ -132,12 +132,6 @@ fn parse_connector_allowlist(value: &str) -> HashSet<String> {
         .map(str::trim)
         .filter(|entry| !entry.is_empty())
         .map(|entry| entry.to_ascii_lowercase().replace('_', "-"))
-        .map(|entry| match entry.as_str() {
-            "exa-search" => "exa".to_string(),
-            "youtube-transcripts" => "youtube".to_string(),
-            "parallel" => "parallel-search".to_string(),
-            _ => entry,
-        })
         .collect()
 }
 

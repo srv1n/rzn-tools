@@ -422,17 +422,17 @@ mod tests {
     }
 
     #[test]
-    fn smtp_security_parses_expected_aliases() {
+    fn smtp_security_parses_canonical_modes() {
         assert_eq!(
-            SmtpSecurity::from_str(Some("start_tls")).expect("starttls alias should parse"),
+            SmtpSecurity::from_str(Some("starttls")).expect("starttls should parse"),
             SmtpSecurity::StartTls
         );
         assert_eq!(
-            SmtpSecurity::from_str(Some("ssl")).expect("ssl alias should parse"),
+            SmtpSecurity::from_str(Some("tls")).expect("tls should parse"),
             SmtpSecurity::Tls
         );
         assert_eq!(
-            SmtpSecurity::from_str(Some("plain")).expect("plain alias should parse"),
+            SmtpSecurity::from_str(Some("plaintext")).expect("plaintext should parse"),
             SmtpSecurity::Plaintext
         );
     }
@@ -641,8 +641,6 @@ impl Connector for SmtpConnector {
 
         let security = if let Some(security) = details.get("security") {
             SmtpSecurity::from_str(Some(security.as_str()))?
-        } else if parse_bool(details.get("tls")) {
-            SmtpSecurity::Tls
         } else {
             SmtpSecurity::from_str(None)?
         };
@@ -732,7 +730,9 @@ impl Connector for SmtpConnector {
                     label: "Username".to_string(),
                     field_type: FieldType::Text,
                     required: true,
-                    description: Some("SMTP account username, usually an email address.".to_string()),
+                    description: Some(
+                        "SMTP account username, usually an email address.".to_string(),
+                    ),
                     options: None,
                 },
                 Field {
@@ -755,17 +755,6 @@ impl Connector for SmtpConnector {
                     },
                     required: false,
                     description: Some("Connection security mode.".to_string()),
-                    options: None,
-                },
-                Field {
-                    name: "tls".to_string(),
-                    label: "Use TLS".to_string(),
-                    field_type: FieldType::Boolean,
-                    required: false,
-                    description: Some(
-                        "Legacy toggle. If security is omitted, true selects tls and false keeps starttls."
-                            .to_string(),
-                    ),
                     options: None,
                 },
                 Field {

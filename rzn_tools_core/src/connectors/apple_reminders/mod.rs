@@ -1,7 +1,7 @@
 // Apple Reminders Connector - Native Reminders.app integration via AppleScript
 // macOS only - manage reminders synced with iCloud
 //
-// Full CRUD support for reminders including:
+// Reminder management including:
 // - Lists (folders)
 // - Tasks with due dates, priorities, notes
 // - Completion status
@@ -294,32 +294,6 @@ end tell
 }
 
 #[cfg(target_os = "macos")]
-fn script_delete_reminder(reminder_id: &str) -> String {
-    format!(
-        r#"
-tell application "Reminders"
-    delete reminder id "{}"
-    return "Reminder deleted successfully"
-end tell
-"#,
-        escape_applescript_string(reminder_id)
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn script_create_list(name: &str) -> String {
-    format!(
-        r#"
-tell application "Reminders"
-    set newList to make new list with properties {{name:"{}"}}
-    return id of newList
-end tell
-"#,
-        escape_applescript_string(name)
-    )
-}
-
-#[cfg(target_os = "macos")]
 fn script_search_reminders(query: &str, include_completed: bool, limit: usize) -> String {
     let filter = if include_completed {
         ""
@@ -362,58 +336,6 @@ end tell
         filter = filter,
         limit = limit
     )
-}
-
-#[cfg(target_os = "macos")]
-fn script_get_due_today() -> String {
-    r#"
-tell application "Reminders"
-    set today to current date
-    set todayStart to today - (time of today)
-    set todayEnd to todayStart + 1 * days
-
-    set output to ""
-    repeat with r in (reminders whose completed is false and due date >= todayStart and due date < todayEnd)
-        set rId to id of r
-        set rName to name of r
-        set rBody to body of r
-        if rBody is missing value then set rBody to ""
-        set rDueDate to due date of r as string
-        set rPriority to priority of r
-        set rList to name of container of r
-
-        if output is not "" then set output to output & "|||"
-        set output to output & rId & ":::" & rName & ":::" & rBody & ":::" & "false" & ":::" & "" & ":::" & rDueDate & ":::" & rPriority & ":::" & rList
-    end repeat
-    return output
-end tell
-"#
-    .to_string()
-}
-
-#[cfg(target_os = "macos")]
-fn script_get_overdue() -> String {
-    r#"
-tell application "Reminders"
-    set now to current date
-
-    set output to ""
-    repeat with r in (reminders whose completed is false and due date < now)
-        set rId to id of r
-        set rName to name of r
-        set rBody to body of r
-        if rBody is missing value then set rBody to ""
-        set rDueDate to due date of r as string
-        set rPriority to priority of r
-        set rList to name of container of r
-
-        if output is not "" then set output to output & "|||"
-        set output to output & rId & ":::" & rName & ":::" & rBody & ":::" & "false" & ":::" & "" & ":::" & rDueDate & ":::" & rPriority & ":::" & rList
-    end repeat
-    return output
-end tell
-"#
-    .to_string()
 }
 
 // ============================================================================
@@ -519,7 +441,7 @@ impl crate::Connector for AppleRemindersConnector {
     }
 
     fn description(&self) -> &'static str {
-        "Apple Reminders.app connector for macOS. Manage tasks and to-dos synced with iCloud. Create, complete, and organize reminders with due dates and priorities. Perfect for task management integration."
+        "Apple Reminders.app connector for macOS. Manage tasks and to-dos synced with iCloud. List, search, create, update, and complete reminders with due dates and priorities."
     }
 
     fn display_name(&self) -> &'static str {
@@ -584,31 +506,6 @@ impl crate::Connector for AppleRemindersConnector {
                 annotations: None,
                 icons: None,
             },
-            Tool {
-                name: Cow::Borrowed("create_list"),
-                title: Some("Create List".to_string()),
-                description: Some(Cow::Borrowed(
-                    "Create a new reminder list. Returns the new list's ID.",
-                )),
-                input_schema: Arc::new(
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "name": {
-                                "type": "string",
-                                "description": "Name for the new list. Required."
-                            }
-                        },
-                        "required": ["name"]
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
             // Reminder Listing
             Tool {
                 name: Cow::Borrowed("list_reminders"),
@@ -665,28 +562,6 @@ impl crate::Connector for AppleRemindersConnector {
                     .unwrap()
                     .clone(),
                 ),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
-            Tool {
-                name: Cow::Borrowed("get_due_today"),
-                title: Some("Get Due Today".to_string()),
-                description: Some(Cow::Borrowed(
-                    "Get all incomplete reminders due today. Useful for daily task review.",
-                )),
-                input_schema: Arc::new(json!({"type": "object", "properties": {}}).as_object().unwrap().clone()),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
-            Tool {
-                name: Cow::Borrowed("get_overdue"),
-                title: Some("Get Overdue".to_string()),
-                description: Some(Cow::Borrowed(
-                    "Get all incomplete reminders that are past their due date.",
-                )),
-                input_schema: Arc::new(json!({"type": "object", "properties": {}}).as_object().unwrap().clone()),
                 output_schema: None,
                 annotations: None,
                 icons: None,
@@ -842,50 +717,9 @@ impl crate::Connector for AppleRemindersConnector {
                 annotations: None,
                 icons: None,
             },
-            Tool {
-                name: Cow::Borrowed("delete_reminder"),
-                title: Some("Delete Reminder".to_string()),
-                description: Some(Cow::Borrowed(
-                    "Permanently delete a reminder. Use with caution.",
-                )),
-                input_schema: Arc::new(
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "reminder_id": {
-                                "type": "string",
-                                "description": "Reminder ID to delete. Required."
-                            }
-                        },
-                        "required": ["reminder_id"]
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
         ];
 
         // Keep the surface small to reduce ambiguity and context bloat for agents.
-        // Back-compat: non-listed tools are still accepted in call_tool().
-        let tools = tools
-            .into_iter()
-            .filter(|t| {
-                matches!(
-                    t.name.as_ref(),
-                    "list_lists"
-                        | "list_reminders"
-                        | "get_reminder"
-                        | "search"
-                        | "create_reminder"
-                        | "update_reminder"
-                        | "complete_reminder"
-                )
-            })
-            .collect();
 
         Ok(ListToolsResult {
             tools,
@@ -917,15 +751,6 @@ impl crate::Connector for AppleRemindersConnector {
                     structured_result_with_text(&lists, None)
                 }
 
-                "create_list" => {
-                    let name = args.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
-                        ConnectorError::InvalidParams("Missing 'name'".to_string())
-                    })?;
-
-                    let output = run_applescript_output(&script_create_list(name)).await?;
-                    structured_result_with_text(&json!({"success": true, "list_id": output}), None)
-                }
-
                 "list_reminders" => {
                     let list = args.get("list").and_then(|v| v.as_str());
                     let show_completed = args
@@ -954,18 +779,6 @@ impl crate::Connector for AppleRemindersConnector {
                         ConnectorError::Other("Failed to parse reminder".to_string())
                     })?;
                     structured_result_with_text(&reminder, None)
-                }
-
-                "get_due_today" => {
-                    let output = run_applescript_output(&script_get_due_today()).await?;
-                    let reminders = parse_reminders(&output);
-                    structured_result_with_text(&reminders, None)
-                }
-
-                "get_overdue" => {
-                    let output = run_applescript_output(&script_get_overdue()).await?;
-                    let reminders = parse_reminders(&output);
-                    structured_result_with_text(&reminders, None)
                 }
 
                 "search" => {
@@ -1053,19 +866,6 @@ impl crate::Connector for AppleRemindersConnector {
                     let output =
                         run_applescript_output(&script_complete_reminder(reminder_id, completed))
                             .await?;
-                    structured_result_with_text(&json!({"success": true, "message": output}), None)
-                }
-
-                "delete_reminder" => {
-                    let reminder_id = args
-                        .get("reminder_id")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| {
-                            ConnectorError::InvalidParams("Missing 'reminder_id'".to_string())
-                        })?;
-
-                    let output =
-                        run_applescript_output(&script_delete_reminder(reminder_id)).await?;
                     structured_result_with_text(&json!({"success": true, "message": output}), None)
                 }
 

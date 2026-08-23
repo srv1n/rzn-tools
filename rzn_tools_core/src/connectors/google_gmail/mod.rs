@@ -30,7 +30,7 @@ impl Connector for GmailConnector {
         "google-gmail"
     }
     fn description(&self) -> &'static str {
-        "Gmail connector (list messages)."
+        "Gmail messages and threads (read-only)."
     }
 
     fn display_name(&self) -> &'static str {

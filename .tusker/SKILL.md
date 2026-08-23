@@ -5,6 +5,10 @@ name: "project-knowledge"
 project: "rzn-tools"
 status: "current"
 description: "Route agents through this repository's V7 domain canon without publishing task proof or runtime state."
+capsule:
+  skip_when: []
+  use_when: []
+  what: ""
 operator_skill: "tusker"
 source_of_truth:
   - "knowledge/domains"
@@ -12,14 +16,14 @@ canonical_files:
   - "SKILL.md"
   - "knowledge/domains/*/INDEX.md"
   - "knowledge/domains/*/CANON.md"
-created_at: "2026-07-10T04:06:27Z"
-updated_at: "2026-07-10T04:06:27Z"
-state_rev: "sha256:06ce0cfd7cf9035d81889a90a8d4faf2d35bf9bae6fb19c17d6c7aed8536b7d8"
+created_at: "2026-08-23T10:54:54Z"
+updated_at: "2026-08-23T10:54:55Z"
+state_rev: "sha256:389d0aa8329c4e17c4c6d0ff4f0e2958545d4bedcbafc6d29d63e6489617506a"
 ---
 
 # Project Knowledge Skill
 
-This is a generated V7 project knowledge skill. Use it after the Tusker operator skill when you need repository-specific context.
+This is the project knowledge skill for this repository. Use it after the Tusker operator skill when repository-specific canon is needed.
 
 ## Read This When
 
@@ -46,9 +50,9 @@ Task agents must run `tusker packet <TASK-ID> --for agent`, then read only the r
 
 ## Domains
 
-| Intent | Read first | Canon | Notes |
+| Domain | Read when | Read first | Canon |
 |---|---|---|---|
-| Durable project knowledge. | `knowledge/domains/project/INDEX.md` | `knowledge/domains/project/CANON.md` | Project |
+| Project | Durable project knowledge. | `knowledge/domains/project/INDEX.md` | `knowledge/domains/project/CANON.md` |
 
 ## Repo Command Policy
 

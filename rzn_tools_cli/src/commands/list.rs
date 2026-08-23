@@ -34,15 +34,16 @@ pub async fn run(cli: &Cli) -> Result<()> {
         println!(
             "{} If you built from source, enable connector features (or use {}):",
             "Tip:".green().bold(),
-            "--features full".cyan()
+            "--features server-full".cyan()
         );
         println!(
             "  {}",
-            "cargo build --release -p rzn_tools_cli --features default-connectors".cyan()
+            "make build-release CARGO_ARGS=\"-p rzn_tools_cli --features default-connectors\""
+                .cyan()
         );
         println!(
             "  {}",
-            "cargo build --release -p rzn_tools_cli --features full".cyan()
+            "make build-release CARGO_ARGS=\"-p rzn_tools_cli --features server-full\"".cyan()
         );
         return Ok(());
     }
@@ -106,28 +107,16 @@ pub async fn create_registry(auth_profile: Option<&str>) -> Result<ProviderRegis
     // Load saved credentials from auth store and set them on each connector
     let auth_store = FileAuthStore::new_default();
     for provider_info in registry.list_providers() {
-        let provider_candidates: &[&str] = match provider_info.name.as_str() {
-            // Back-compat: older versions stored browser-cookie auth under "x".
-            "x-browser" => &["x-browser", "x"],
-            // Back-compat: older versions stored API bearer auth under "x-api".
-            "x" => &["x", "x-api"],
-            _ => &[&provider_info.name],
-        };
-
         let profile = match auth_profile {
             Some(p) => Some(p.to_string()),
-            None => provider_candidates
-                .iter()
-                .find_map(|name| auth_store.resolve_profile_for_provider(name)),
+            None => auth_store.resolve_profile_for_provider(&provider_info.name),
         };
         let Some(profile) = profile else {
             continue;
         };
 
-        let auth = provider_candidates.iter().find_map(|name| {
-            let key = FileAuthStore::key_for_profile(name, &profile);
-            auth_store.load(&key)
-        });
+        let key = FileAuthStore::key_for_profile(&provider_info.name, &profile);
+        let auth = auth_store.load(&key);
         let Some(auth) = auth else {
             continue;
         };

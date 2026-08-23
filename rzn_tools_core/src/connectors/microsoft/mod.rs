@@ -59,7 +59,7 @@ impl Connector for GraphConnector {
     }
 
     fn description(&self) -> &'static str {
-        "Microsoft 365 via Microsoft Graph: Outlook Mail/Calendar, SharePoint/Drive, and Teams (scaffold)."
+        "Microsoft Graph Outlook mail and calendar, including drafts, sends, and attachments."
     }
 
     fn display_name(&self) -> &'static str {

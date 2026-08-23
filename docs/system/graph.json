@@ -1,0 +1,97 @@
+{
+  "nodes": [
+    {
+      "subject": "architecture",
+      "kind": "canonical",
+      "path": "docs/system/architecture.md",
+      "title": "Architecture",
+      "status": "canonical"
+    },
+    {
+      "subject": "cli",
+      "kind": "canonical",
+      "path": "docs/system/cli.md",
+      "title": "CLI",
+      "status": "canonical"
+    },
+    {
+      "subject": "connectors",
+      "kind": "canonical",
+      "path": "docs/system/connectors.md",
+      "title": "Connectors",
+      "status": "canonical"
+    },
+    {
+      "subject": "development",
+      "kind": "canonical",
+      "path": "docs/system/development.md",
+      "title": "Development",
+      "status": "canonical"
+    },
+    {
+      "subject": "mcp",
+      "kind": "canonical",
+      "path": "docs/system/mcp.md",
+      "title": "MCP",
+      "status": "canonical"
+    },
+    {
+      "subject": "operations",
+      "kind": "canonical",
+      "path": "docs/system/operations.md",
+      "title": "Operations",
+      "status": "canonical"
+    },
+    {
+      "subject": "overview",
+      "kind": "canonical",
+      "path": "docs/system/00-overview.md",
+      "title": "System overview",
+      "status": "canonical"
+    },
+    {
+      "subject": "security",
+      "kind": "canonical",
+      "path": "docs/system/security.md",
+      "title": "Security",
+      "status": "canonical"
+    }
+  ],
+  "edges": [
+    {
+      "from": "architecture",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "cli",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "connectors",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "development",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "mcp",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "operations",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "security",
+      "to": "overview",
+      "kind": "part_of"
+    }
+  ]
+}

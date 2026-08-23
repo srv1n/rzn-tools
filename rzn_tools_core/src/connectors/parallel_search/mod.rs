@@ -281,7 +281,6 @@ impl Connector for ParallelSearchConnector {
                         "default": 10,
                         "description": "Maximum results to return"
                     },
-                    "max_results": {"type": "integer", "description": "Alias for limit (deprecated)."},
                     "after_date": {
                         "type": "string",
                         "description": "Only include content published after this date. Format: YYYY-MM-DD. Example: '2024-01-01'"
@@ -477,11 +476,7 @@ impl Connector for ParallelSearchConnector {
             vec![query.to_string()]
         };
 
-        let max_results = args
-            .get("limit")
-            .or_else(|| args.get("max_results"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(10) as usize;
+        let max_results = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
 
         let include_domains = args
             .get("include_domains")

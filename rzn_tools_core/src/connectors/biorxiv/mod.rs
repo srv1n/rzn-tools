@@ -589,7 +589,7 @@ server=\"biorxiv\" doi=\"10.1101/2024.01.01.000000\".",
                     Some(serde_json::to_string(&data)?),
                 )?)
             }
-            "get" | "get_preprint_by_doi" => {
+            "get" => {
                 let args: GetByDoiArgs = serde_json::from_value(
                     serde_json::to_value(request.arguments.unwrap_or_default())
                         .map_err(ConnectorError::SerdeJson)?,

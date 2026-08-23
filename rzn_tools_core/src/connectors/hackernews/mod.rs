@@ -169,7 +169,7 @@ fn parse_usize_arg(value: &Value) -> Option<usize> {
 }
 
 fn resolve_hn_id(args: &serde_json::Map<String, Value>) -> Result<i64, ConnectorError> {
-    for key in ["id", "item_id", "story_id"] {
+    for key in ["id"] {
         if let Some(id) = args.get(key).and_then(parse_i64_arg) {
             return Ok(id);
         }
@@ -187,19 +187,19 @@ fn resolve_hn_id(args: &serde_json::Map<String, Value>) -> Result<i64, Connector
         }
     }
     Err(ConnectorError::InvalidParams(
-        "Missing 'id'. Provide id, item_id, story_id, item_ref, or url.".to_string(),
+        "Missing 'id'. Provide id, item_ref, or url.".to_string(),
     ))
 }
 
-fn parse_limit_alias(
+fn parse_bounded_usize(
     args: &serde_json::Map<String, Value>,
-    keys: &[&str],
+    key: &str,
     default: usize,
     min: usize,
     max: usize,
 ) -> usize {
-    keys.iter()
-        .find_map(|key| args.get(*key).and_then(parse_usize_arg))
+    args.get(key)
+        .and_then(parse_usize_arg)
         .unwrap_or(default)
         .clamp(min, max)
 }
@@ -681,7 +681,7 @@ fn comment_item_to_payload(
     Value::Object(map)
 }
 
-/// Response format - concise is the legacy token-saving shape.
+/// Response format. Concise is the compact shape.
 const CONCISE_STORY_FIELDS: &[&str] = &["id", "title", "text"];
 const CONCISE_COMMENT_FIELDS: &[&str] = &["text"];
 
@@ -1307,7 +1307,7 @@ impl Connector for HackerNewsConnector {
     fn url_patterns(&self) -> Vec<URLPatternSpec> {
         vec![URLPatternSpec {
             pattern: r"(?:https?://)?news\.ycombinator\.com/item\?id=(\d+)".to_string(),
-            default_tool: "get".to_string(),
+            default_tool: "get_thread".to_string(),
             description: "Fetch a Hacker News story by ID".to_string(),
             param_extraction: vec![URLParamExtraction {
                 capture_group: 1,
@@ -1350,13 +1350,12 @@ impl Connector for HackerNewsConnector {
                         "item_ref": { "type": "string", "description": "Normalized item_ref (for example hackernews:story:8863)." },
                         "url": { "type": "string", "description": "Hacker News item URL (for example https://news.ycombinator.com/item?id=8863)." },
                         "id": { "type": ["integer", "string"], "description": "Hacker News item ID. Numeric strings are accepted." },
-                        "item_id": { "type": ["integer", "string"], "description": "Alias for id. Numeric strings are accepted." },
                         "max_comments": { "type": ["integer", "string"], "description": "Maximum number of comments to include in compact output. Numeric strings are accepted.", "default": 20, "minimum": 0, "maximum": 500 },
                         "flatten": { "type": "boolean", "description": "Flatten comments into a single ordered list. Compact output always uses a flat list.", "default": true },
                         "response_format": {
                             "type": "string",
                             "enum": ["compact", "concise", "detailed"],
-                            "description": "'compact' is the LLM-friendly default. 'concise' preserves the older minimal nested shape. 'detailed' includes metadata fields.",
+                            "description": "'compact' is the LLM-friendly default. 'concise' returns a small nested shape. 'detailed' includes metadata fields.",
                             "default": "compact"
                         },
                         "output_format": {
@@ -1380,10 +1379,6 @@ impl Connector for HackerNewsConnector {
                         {
                             "description": "Compact thread by URL",
                             "input": { "url": "https://news.ycombinator.com/item?id=8863" }
-                        },
-                        {
-                            "description": "Compact thread by numeric string alias",
-                            "input": { "item_id": "8863", "response_format": "compact" }
                         },
                         {
                             "description": "Compact thread with more comments",
@@ -1414,7 +1409,6 @@ impl Connector for HackerNewsConnector {
                         "query": { "type": "string", "description": "Search query." },
                         "page": { "type": "integer", "description": "Result page number.", "default": 0 },
                         "limit": { "type": "integer", "description": "Maximum number of results.", "default": 10, "minimum": 1, "maximum": 100 },
-                        "hitsPerPage": { "type": "integer", "description": "Legacy alias for limit." },
                         "tags": { "type": "string", "description": "Optional Algolia tags filter." },
                         "numericFilters": { "type": "string", "description": "Optional Algolia numeric filters." },
                         "cursor": {
@@ -1465,7 +1459,6 @@ impl Connector for HackerNewsConnector {
                         "query": { "type": "string", "description": "Search query." },
                         "page": { "type": "integer", "description": "Result page number.", "default": 0 },
                         "limit": { "type": "integer", "description": "Maximum number of results.", "default": 10, "minimum": 1, "maximum": 100 },
-                        "hitsPerPage": { "type": "integer", "description": "Legacy alias for limit." },
                         "tags": { "type": "string", "description": "Optional Algolia tags filter." },
                         "numericFilters": { "type": "string", "description": "Optional Algolia numeric filters." },
                         "cursor": {
@@ -1519,11 +1512,6 @@ impl Connector for HackerNewsConnector {
                             "description": "Canonical feed name.",
                             "default": "top"
                         },
-                        "story_type": {
-                            "type": "string",
-                            "enum": ["top", "new", "best", "ask", "show", "job"],
-                            "description": "Legacy alias for feed."
-                        },
                         "limit": { "type": "integer", "description": "Maximum number of threads to return.", "default": 10, "minimum": 1, "maximum": 100 },
                         "cursor": {
                             "type": ["string", "null"],
@@ -1570,303 +1558,6 @@ impl Connector for HackerNewsConnector {
                 annotations: None,
                 icons: None,
             },
-            Tool {
-                name: Cow::Borrowed("search_stories"),
-                title: None,
-                description: Some(Cow::Borrowed(
-                    "Legacy alias for 'search'. Search Hacker News via Algolia (relevance-ranked).",
-                )),
-                input_schema: Arc::new(json!({
-                    "type": "object",
-                    "properties": {
-                        "query": { "type": "string", "description": "The search query" },
-                        "page": { "type": "integer", "description": "Page number", "default": 0 },
-                        "hitsPerPage": { "type": "integer", "description": "Results per page", "default": 20 },
-                        "limit": { "type": "integer", "description": "Alias for hitsPerPage." },
-                        "tags": {
-                            "type": "string",
-                            "description": "Filter on specific tags (e.g., 'story', 'comment', 'poll', 'pollopt', 'show_hn', 'ask_hn', 'front_page', 'author_:USERNAME', 'story_:ID')"
-                        },
-                        "numericFilters": {
-                            "type": "string",
-                            "description": "Filter on numerical conditions (e.g., 'points>10', 'num_comments>5', 'created_at_i>1600000000')"
-                        },
-                        "cursor": {
-                            "type": ["string", "null"],
-                            "description": "Opaque pagination cursor from a previous normalized response."
-                        },
-                        "response_format": {
-                            "type": "string",
-                            "enum": ["compact", "detailed"],
-                            "description": "'compact' returns a clean list of thread summaries. 'detailed' returns the full Algolia payload.",
-                            "default": "detailed"
-                        },
-                        "output_format": {
-                            "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
-                            "default": "raw"
-                        }
-                    },
-                    "required": ["query"],
-                    "examples": [
-                        {
-                            "description": "Search AI discussions",
-                            "input": { "query": "transformer architecture", "hitsPerPage": 10 }
-                        },
-                        {
-                            "description": "Search recent Rust posts",
-                            "input": { "query": "rust programming", "tags": "story", "page": 0 }
-                        }
-                    ],
-                    "_meta": {
-                        "category": "search",
-                        "tags": ["news", "tech", "social"],
-                        "auth_required": false,
-                        "supports_output_format": true,
-                        "supports_cursor": true
-                    }
-                }).as_object().expect("Schema object").clone()),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
-            Tool {
-                name: Cow::Borrowed("search_by_date"),
-                title: None,
-                description: Some(Cow::Borrowed(
-                    "Legacy alias for 'search_recent'. Search recent Hacker News items in chronological order.",
-                )),
-                input_schema: Arc::new(json!({
-                    "type": "object",
-                    "properties": {
-                        "query": { "type": "string", "description": "The search query" },
-                        "page": { "type": "integer", "description": "Page number", "default": 0 },
-                        "hitsPerPage": { "type": "integer", "description": "Results per page", "default": 20 },
-                        "limit": { "type": "integer", "description": "Alias for hitsPerPage when using normalized output." },
-                        "tags": {
-                            "type": "string",
-                            "description": "Filter on specific tags (e.g., 'story', 'comment', 'poll', 'pollopt', 'show_hn', 'ask_hn', 'front_page', 'author_:USERNAME', 'story_:ID')"
-                        },
-                        "numericFilters": {
-                            "type": "string",
-                            "description": "Filter on numerical conditions (e.g., 'points>10', 'num_comments>5', 'created_at_i>1600000000')"
-                        },
-                        "cursor": {
-                            "type": ["string", "null"],
-                            "description": "Opaque pagination cursor from a previous normalized response."
-                        },
-                        "response_format": {
-                            "type": "string",
-                            "enum": ["compact", "detailed"],
-                            "description": "'compact' returns a clean list of thread summaries. 'detailed' returns the full Algolia payload.",
-                            "default": "detailed"
-                        },
-                        "output_format": {
-                            "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
-                            "default": "raw"
-                        }
-                    },
-                    "required": ["query"],
-                    "examples": [
-                        {
-                            "description": "Search most recent posts",
-                            "input": { "query": "open source", "hitsPerPage": 20 }
-                        },
-                        {
-                            "description": "Recent Ask HN",
-                            "input": { "query": "hiring", "tags": "ask_hn", "hitsPerPage": 10 }
-                        }
-                    ],
-                    "_meta": {
-                        "category": "search",
-                        "tags": ["news", "tech", "social"],
-                        "auth_required": false,
-                        "supports_output_format": true,
-                        "supports_cursor": true
-                    }
-                }).as_object().expect("Schema object").clone()),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
-            Tool {
-                name: Cow::Borrowed("get_stories"),
-                title: None,
-                description: Some(Cow::Borrowed(
-                    "Legacy alias for 'list_threads'. Top/new/best/ask/show/job stories by type.",
-                )),
-                input_schema: Arc::new(json!({
-                    "type": "object",
-                    "properties": {
-                        "story_type": {
-                            "type": "string",
-                            "enum": ["top", "new", "best", "ask", "show", "job"],
-                            "description": "Type of stories to fetch: 'top' (front page), 'new' (latest), 'best' (highest points), 'ask' (Ask HN), 'show' (Show HN), 'job' (job postings)",
-                            "default": "top"
-                        },
-                        "limit": { "type": "integer", "description": "Maximum number of stories to return (default: 10)", "default": 10 },
-                        "response_format": {
-                            "type": "string",
-                            "enum": ["compact", "concise", "detailed"],
-                            "description": "'compact' returns a clean list of thread summaries. 'concise' preserves the older minimal shape. 'detailed' includes metadata.",
-                            "default": "concise"
-                        },
-                        "cursor": {
-                            "type": ["string", "null"],
-                            "description": "Opaque pagination cursor from a previous normalized response."
-                        },
-                        "output_format": {
-                            "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
-                            "default": "raw"
-                        },
-                        "storyFields": {
-                            "type": ["array", "string"],
-                            "items": { "type": "string" },
-                            "description": "Optional list of additional story fields to include. Prefix with '-' to remove defaults. Defaults: ['title','text']. Only used when response_format is 'detailed'."
-                        },
-                        "commentFields": {
-                            "type": ["array", "string"],
-                            "items": { "type": "string" },
-                            "description": "Optional list of additional comment fields to include. Prefix with '-' to remove defaults. Defaults: ['text']. Only used when response_format is 'detailed'."
-                        }
-                    },
-                    "required": [],
-                    "examples": [
-                        {
-                            "description": "Top stories",
-                            "input": { "story_type": "top", "limit": 10 }
-                        },
-                        {
-                            "description": "Latest Ask HN",
-                            "input": { "story_type": "ask", "limit": 5 }
-                        }
-                    ],
-                    "_meta": {
-                        "category": "list",
-                        "tags": ["news", "tech", "social"],
-                        "auth_required": false,
-                        "supports_output_format": true,
-                        "supports_cursor": true
-                    }
-                }).as_object().expect("Schema object").clone()),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
-            Tool {
-                name: Cow::Borrowed("get"),
-                title: None,
-                description: Some(Cow::Borrowed(
-                    "Legacy alias for 'get_thread'. Story or comment by ID, with comments.",
-                )),
-                input_schema: Arc::new(json!({
-                    "type": "object",
-                    "properties": {
-                        "item_ref": { "type": "string", "description": "Normalized item_ref (e.g., hackernews:story:8863)." },
-                        "url": { "type": "string", "description": "Canonical HN URL (e.g., https://news.ycombinator.com/item?id=8863)." },
-                        "id": { "type": ["integer", "string"], "description": "The Hacker News item ID (e.g., 12345678) - numeric ID from the URL news.ycombinator.com/item?id=12345678. Numeric strings are accepted." },
-                        "item_id": { "type": ["integer", "string"], "description": "Alias for id. Numeric strings are accepted." },
-                        "max_comments": {
-                            "type": ["integer", "string"],
-                            "description": "Maximum number of comments to include in compact output. Numeric strings are accepted.",
-                            "default": 20,
-                            "minimum": 0,
-                            "maximum": 500
-                        },
-                        "flatten": {
-                            "type": "boolean",
-                            "description": "Return comments as a flat array instead of nested tree structure",
-                            "default": false
-                        },
-                        "response_format": {
-                            "type": "string",
-                            "enum": ["compact", "concise", "detailed"],
-                            "description": "'compact' is the LLM-friendly default for get_thread. 'concise' preserves the older minimal shape. 'detailed' includes metadata.",
-                            "default": "concise"
-                        },
-                        "output_format": {
-                            "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
-                            "default": "raw"
-                        },
-                        "storyFields": {
-                            "type": ["array", "string"],
-                            "items": { "type": "string" },
-                            "description": "Optional list of additional story fields to include. Prefix with '-' to remove defaults. Defaults: ['title','text']. Only used when response_format is 'detailed'."
-                        },
-                        "commentFields": {
-                            "type": ["array", "string"],
-                            "items": { "type": "string" },
-                            "description": "Optional list of additional comment fields to include. Prefix with '-' to remove defaults. Defaults: ['text']. Only used when response_format is 'detailed'."
-                        }
-                    },
-                    "examples": [
-                        {
-                            "description": "Get story by ID",
-                            "input": { "id": 8863, "flatten": true }
-                        },
-                        {
-                            "description": "Get story by numeric string alias",
-                            "input": { "item_id": "8863", "response_format": "compact" }
-                        },
-                        {
-                            "description": "Get story by URL",
-                            "input": { "url": "https://news.ycombinator.com/item?id=8863" }
-                        }
-                    ],
-                    "_meta": {
-                        "category": "read",
-                        "tags": ["news", "tech", "social"],
-                        "auth_required": false,
-                        "supports_output_format": true,
-                        "supports_cursor": false
-                    }
-                }).as_object().expect("Schema object").clone()),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
-            //  Tool {
-            //      name: Cow::Borrowed("get_user"),
-            //      description: Some(Cow::Borrowed("Get Hacker News user details by username")),
-            //      annotations: None,
-            //      input_schema: Arc::new(json!({
-            //          "type": "object",
-            //          "properties": {
-            //              "id": { "type": "string", "description": "The Hacker News username (case-sensitive)" }
-            //          },
-            //          "required": ["id"]
-            //      }).as_object().expect("Schema object").clone()),
-            //      output_schema: None,
-            //  },
-            //  Tool {
-            //      name: Cow::Borrowed("get_max_item_id"),
-            //      description: Some(Cow::Borrowed("Get the current largest item id on Hacker News")),
-            //      annotations: None,
-            //      input_schema: Arc::new(json!({
-            //          "type": "object",
-            //          "properties": {},
-            //          "required": []
-            //      }).as_object().expect("Schema object").clone()),
-            //      output_schema: None,
-            //  },
-            //  Tool {
-            //      name: Cow::Borrowed("get_updates"),
-            //      description: Some(Cow::Borrowed("Get the latest item and profile changes on Hacker News")),
-            //      annotations: None,
-            //      input_schema: Arc::new(json!({
-            //          "type": "object",
-            //          "properties": {},
-            //          "required": []
-            //      }).as_object().expect("Schema object").clone()),
-            //      output_schema: None,
-            //  }
         ];
 
         Ok(ListToolsResult {
@@ -1882,13 +1573,9 @@ impl Connector for HackerNewsConnector {
         let name = request.name.as_ref();
         let args = request.arguments.unwrap_or_default();
         match name {
-            "search" | "search_stories" => {
+            "search" => {
                 let output_format = parse_output_format(&args)?;
-                let response_format = if name == "search" {
-                    parse_hn_response_format(&args, "compact")
-                } else {
-                    parse_hn_response_format(&args, "detailed")
-                };
+                let response_format = parse_hn_response_format(&args, "compact");
                 let query = args.get("query").and_then(|v| v.as_str()).ok_or(
                     ConnectorError::InvalidParams("Missing 'query' parameter".to_string()),
                 )?;
@@ -1912,7 +1599,6 @@ impl Connector for HackerNewsConnector {
                 let hits_per_page = args
                     .get("limit")
                     .and_then(parse_i64_arg)
-                    .or_else(|| args.get("hitsPerPage").and_then(parse_i64_arg))
                     .unwrap_or(20)
                     .clamp(1, 100);
 
@@ -2000,7 +1686,7 @@ impl Connector for HackerNewsConnector {
                         next_cursor,
                         has_more,
                         Partial::complete(Some(ingest::limits_max_items(hits_per_page as u64))),
-                        Source::new("hackernews", "search_stories"),
+                        Source::new("hackernews", "search"),
                     );
                     return structured_result(&page_out);
                 }
@@ -2032,13 +1718,9 @@ impl Connector for HackerNewsConnector {
                 let text = serde_json::to_string(&result)?;
                 Ok(structured_result_with_text(&result, Some(text))?)
             }
-            "search_recent" | "search_by_date" => {
+            "search_recent" => {
                 let output_format = parse_output_format(&args)?;
-                let response_format = if name == "search_recent" {
-                    parse_hn_response_format(&args, "compact")
-                } else {
-                    parse_hn_response_format(&args, "detailed")
-                };
+                let response_format = parse_hn_response_format(&args, "compact");
                 let query = args.get("query").and_then(|v| v.as_str()).ok_or(
                     ConnectorError::InvalidParams("Missing 'query' parameter".to_string()),
                 )?;
@@ -2062,7 +1744,6 @@ impl Connector for HackerNewsConnector {
                 let hits_per_page = args
                     .get("limit")
                     .and_then(parse_i64_arg)
-                    .or_else(|| args.get("hitsPerPage").and_then(parse_i64_arg))
                     .unwrap_or(20)
                     .clamp(1, 100);
 
@@ -2144,7 +1825,7 @@ impl Connector for HackerNewsConnector {
                         next_cursor,
                         has_more,
                         Partial::complete(Some(ingest::limits_max_items(hits_per_page as u64))),
-                        Source::new("hackernews", "search_by_date"),
+                        Source::new("hackernews", "search_recent"),
                     );
                     return structured_result(&page_out);
                 }
@@ -2176,14 +1857,9 @@ impl Connector for HackerNewsConnector {
                 let text = serde_json::to_string(&result)?;
                 Ok(structured_result_with_text(&result, Some(text))?)
             }
-            // Consolidated get_stories tool - handles all story types
-            "list_threads" | "get_stories" => {
+            "list_threads" => {
                 let output_format = parse_output_format(&args)?;
-                let story_type = args
-                    .get("feed")
-                    .and_then(|v| v.as_str())
-                    .or_else(|| args.get("story_type").and_then(|v| v.as_str()))
-                    .unwrap_or("top");
+                let story_type = args.get("feed").and_then(|v| v.as_str()).unwrap_or("top");
                 let limit = args
                     .get("limit")
                     .and_then(parse_usize_arg)
@@ -2286,7 +1962,7 @@ impl Connector for HackerNewsConnector {
                         next_cursor,
                         has_more,
                         Partial::complete(Some(ingest::limits_max_items(limit as u64))),
-                        Source::new("hackernews", "get_stories"),
+                        Source::new("hackernews", "list_threads"),
                     );
                     return structured_result(&page);
                 }
@@ -2328,19 +2004,15 @@ impl Connector for HackerNewsConnector {
                 let text = serde_json::to_string(&stories)?;
                 Ok(structured_result_with_text(&stories, Some(text))?)
             }
-            "get_thread" | "get" | "get_post" => {
+            "get_thread" => {
                 let id = resolve_hn_id(&args)?;
                 let flatten = args
                     .get("flatten")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                let response_format = if name == "get_thread" {
-                    parse_hn_response_format(&args, "compact")
-                } else {
-                    parse_hn_response_format(&args, "concise")
-                };
+                let response_format = parse_hn_response_format(&args, "compact");
                 let output_format = parse_output_format(&args)?;
-                let max_comments = parse_limit_alias(&args, &["max_comments"], 20, 0, 500);
+                let max_comments = parse_bounded_usize(&args, "max_comments", 20, 0, 500);
 
                 // Use the Algolia items endpoint directly
                 let url = format!("https://hn.algolia.com/api/v1/items/{}", id);
@@ -2411,7 +2083,7 @@ impl Connector for HackerNewsConnector {
                     let normalized = NormalizedItemV1::new(
                         item,
                         Partial::complete(None),
-                        Source::new("hackernews", "get"),
+                        Source::new("hackernews", "get_thread"),
                     );
                     return structured_result(&normalized);
                 }
@@ -2574,30 +2246,21 @@ mod tests {
     }
 
     #[test]
-    fn resolve_hn_id_accepts_numeric_strings_and_aliases() {
+    fn resolve_hn_id_accepts_numeric_strings() {
         let args = json!({ "id": "47712656" })
             .as_object()
             .expect("args object")
             .clone();
         assert_eq!(resolve_hn_id(&args).expect("string id"), 47_712_656);
-
-        let alias_args = json!({ "item_id": "47712656" })
-            .as_object()
-            .expect("args object")
-            .clone();
-        assert_eq!(
-            resolve_hn_id(&alias_args).expect("item_id alias"),
-            47_712_656
-        );
     }
 
     #[test]
-    fn parse_limit_alias_accepts_numeric_strings() {
+    fn parse_bounded_usize_accepts_numeric_strings() {
         let args = json!({ "max_comments": "25" })
             .as_object()
             .expect("args object")
             .clone();
-        assert_eq!(parse_limit_alias(&args, &["max_comments"], 20, 0, 500), 25);
+        assert_eq!(parse_bounded_usize(&args, "max_comments", 20, 0, 500), 25);
     }
 
     #[tokio::test]
@@ -2605,7 +2268,7 @@ mod tests {
         let connector = HackerNewsConnector::new();
         let tools = connector.list_tools(None).await.expect("list tools").tools;
 
-        for tool_name in ["get_thread", "get"] {
+        for tool_name in ["get_thread"] {
             let tool = tools
                 .iter()
                 .find(|tool| tool.name.as_ref() == tool_name)
@@ -2620,11 +2283,6 @@ mod tests {
                 .get("id")
                 .and_then(|value| value.get("type"))
                 .expect("id type");
-            let item_id_types = props
-                .get("item_id")
-                .and_then(|value| value.get("type"))
-                .expect("item_id type");
-
             let has_string_type = |value: &Value| {
                 value
                     .as_array()
@@ -2634,10 +2292,6 @@ mod tests {
             assert!(
                 has_string_type(id_types),
                 "{tool_name} id schema should accept strings"
-            );
-            assert!(
-                has_string_type(item_id_types),
-                "{tool_name} item_id schema should accept strings"
             );
         }
     }

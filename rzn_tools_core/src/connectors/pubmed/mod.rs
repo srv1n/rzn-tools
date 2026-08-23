@@ -1185,7 +1185,7 @@ only need title+abstract_text. Example: pmid=\"34762503\".",
                     Ok(structured_result_with_text(&result, Some(text))?)
                 }
             }
-            "get" | "get_abstract" => {
+            "get" => {
                 let output_format = ingest::output_format_from_args(&args)?;
                 let pmid = resolve_pubmed_pmid(&args)?;
                 let response_format =

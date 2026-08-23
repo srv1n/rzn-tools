@@ -42,7 +42,7 @@ CLI UX             MCP server/plugin runtime
 - Prefer existing connector, CLI, and MCP patterns over new abstractions.
 - Keep changes feature-gated. Connector features must be forwarded through `rzn_tools_cli` and `rzn_tools_mcp`.
 - Do not access personal-data connectors (`mail`, `notes`, `messages`, `reminders`, `contacts`) without explicit user permission.
-- For user-facing behavior, update docs and `CHANGELOG.md` when the change is visible.
+- For user-facing behavior, update `docs/system/` when the change is visible.
 - Use shell/direct CLI commands for helper scripts. Do not add Python scripts to this skill.
 - If plugin release work is requested, building a ZIP is not done. Backend register/publish notification is required.
 
@@ -56,11 +56,11 @@ CLI UX             MCP server/plugin runtime
 2. Read the current code around the target connector or command. This repo moves quickly; docs can lag.
 3. Make the narrowest code change that preserves the shared model across core, CLI, and MCP.
 4. Validate with the smallest useful command first, then broaden:
-   - `cargo fmt --all`
-   - `cargo check -p rzn_tools_cli --features "<feature>"`
-   - `cargo test -p rzn_tools_core <test-filter>`
-   - `cargo clippy --all-targets --all-features -- -D warnings`
-   - `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps`
+   - `make fmt`
+   - `make check CARGO_ARGS='-p rzn_tools_cli --features "<feature>"'`
+   - `make test CARGO_ARGS="-p rzn_tools_core <test-filter>"`
+   - `make clippy CARGO_ARGS="--all-targets --all-features -- -D warnings"`
+   - `RUSTDOCFLAGS="-D warnings" make doc CARGO_ARGS="--workspace"`
 
 Run `scripts/validate.sh` for a shell-only validation wrapper.
 
@@ -88,7 +88,7 @@ Minimum code touchpoints:
 - `rzn_tools_core/Cargo.toml`
 - `rzn_tools_cli/Cargo.toml`
 - `rzn_tools_mcp/Cargo.toml`
-- `README.md` and/or `docs/connectors/<name>.md`
+- `docs/system/connectors.md`
 
 Add a direct CLI subcommand in `rzn_tools_cli/src/cli.rs` and command dispatch only when the connector needs a polished user-facing CLI. Otherwise, the generic `tools`, `search`, `get`, and MCP surfaces may be enough.
 
@@ -108,10 +108,11 @@ For indexable list/search/get tools, prefer `output_format: "raw" | "normalized_
 
 ## Gotchas
 
-- Release builds must use all features: `cargo build --release -p rzn_tools_cli --features full`.
-- `rzn_tools_mcp` default features are intentionally empty; plugin/MCP release builds need `--features full`.
+- Run Rust commands through Make targets. Portable release builds use
+  `make build-release CARGO_ARGS="-p rzn_tools_cli --features server-full"`.
+- `rzn_tools_mcp` default features are empty. Plugin and MCP release builds use `server-full`.
 - Connector names use hyphens publicly (`google-drive`) and module names use underscores (`google_drive`).
-- Register aliases when old names or common spellings exist (`semantic_scholar`, `gsc`, `x-cookies`, etc.).
+- Use one public name for each connector and tool.
 - Personal-data connectors require explicit user permission before testing against real local data.
 - Admin/watch/subscribe tools should stay hidden unless `RZN_SHOW_ADMIN_TOOLS=1`.
 - If a normalized tool supports paging, `next_cursor` must be top-level and `has_more` must match cursor presence.
@@ -134,9 +135,9 @@ For a broader pre-PR check:
 Use targeted feature checks during connector work:
 
 ```bash
-cargo check -p rzn_tools_cli --features "youtube,hackernews"
-cargo run -p rzn_tools_cli --features "youtube" -- youtube --help
-cargo run -p rzn_tools_cli --features "hackernews" -- tools hackernews --output json
+make check CARGO_ARGS='-p rzn_tools_cli --features "youtube,hackernews"'
+make run CARGO_ARGS='-p rzn_tools_cli --features youtube -- youtube --help'
+make run CARGO_ARGS='-p rzn_tools_cli --features hackernews -- tools hackernews --output json'
 ```
 
 ## Release Boundary

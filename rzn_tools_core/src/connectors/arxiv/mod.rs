@@ -55,7 +55,7 @@ pub enum ResponseFormat {
 #[derive(Debug, Deserialize)]
 struct SearchPapersArgs {
     query: String,
-    #[serde(default = "default_limit", alias = "max_results")]
+    #[serde(default = "default_limit")]
     limit: i32,
     #[serde(default = "default_start")]
     start: i32,
@@ -644,10 +644,6 @@ impl Connector for ArxivConnector {
                             "type": "integer",
                             "description": "Maximum number of results to return (default: 10). Keep this small for concise output."
                         },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Deprecated alias for limit."
-                        },
                         "cursor": {
                             "type": ["string", "null"],
                             "description": "Opaque cursor from a previous response."
@@ -774,7 +770,7 @@ impl Connector for ArxivConnector {
         request: CallToolRequestParam,
     ) -> Result<CallToolResult, ConnectorError> {
         match request.name.as_ref() {
-            "search" | "search_papers" => {
+            "search" => {
                 let args_value = serde_json::to_value(request.arguments.unwrap_or_default())
                     .map_err(ConnectorError::SerdeJson)?;
                 let mut args: SearchPapersArgs = serde_json::from_value(args_value.clone())
@@ -865,7 +861,7 @@ impl Connector for ArxivConnector {
                 let text = serde_json::to_string(&data).map_err(ConnectorError::SerdeJson)?;
                 Ok(structured_result_with_text(&data, Some(text))?)
             }
-            "get" | "get_paper_details" => {
+            "get" => {
                 let args: GetPaperDetailsArgs = serde_json::from_value(
                     serde_json::to_value(request.arguments.unwrap_or_default())
                         .map_err(ConnectorError::SerdeJson)?,
@@ -904,7 +900,7 @@ impl Connector for ArxivConnector {
                     Err(err) => Err(err),
                 }
             }
-            "get_pdf_url" | "get_paper_pdf" => {
+            "get_pdf_url" => {
                 let args: GetPaperDetailsArgs = serde_json::from_value(
                     serde_json::to_value(request.arguments.unwrap_or_default())
                         .map_err(ConnectorError::SerdeJson)?,

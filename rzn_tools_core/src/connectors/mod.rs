@@ -57,7 +57,7 @@ pub mod spotlight;
 pub mod telegram;
 #[cfg(feature = "weather")]
 pub mod weather;
-#[cfg(any(feature = "web", feature = "web-lite"))]
+#[cfg(feature = "web")]
 pub mod web;
 #[cfg(feature = "whatsapp")]
 pub mod whatsapp;

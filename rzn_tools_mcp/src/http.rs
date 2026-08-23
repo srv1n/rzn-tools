@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     convert::Infallible,
     io,
     net::SocketAddr,
@@ -70,7 +70,6 @@ impl HttpServer {
                 handler: Arc::new(handler),
                 sessions: Arc::new(RwLock::new(HashSet::new())),
                 cached_init: Arc::new(RwLock::new(None)),
-                tool_aliases: Arc::new(RwLock::new(HashMap::new())),
                 bind: config.bind,
                 allowed_hosts: Arc::new(config.allowed_hosts),
             },
@@ -93,7 +92,7 @@ impl HttpServer {
         });
 
         let init_response = self.state.handler.handle_request(initialize).await;
-        let Some(mut result) = init_response
+        let Some(result) = init_response
             .get("result")
             .and_then(Value::as_object)
             .cloned()
@@ -103,21 +102,7 @@ impl HttpServer {
                 init_response
             )));
         };
-        decorate_initialize_result(&mut result);
         *self.state.cached_init.write().await = Some(result);
-
-        let tools_response = self
-            .state
-            .handler
-            .handle_request(json!({
-                "jsonrpc": "2.0",
-                "id": "__http_tools__",
-                "method": "tools/list",
-                "params": {}
-            }))
-            .await;
-        let aliases = build_tool_aliases(&tools_response);
-        *self.state.tool_aliases.write().await = aliases;
 
         Ok(())
     }
@@ -149,7 +134,6 @@ struct AppState {
     handler: Arc<JsonRpcHandler>,
     sessions: Arc<RwLock<HashSet<String>>>,
     cached_init: Arc<RwLock<Option<Map<String, Value>>>>,
-    tool_aliases: Arc<RwLock<HashMap<String, String>>>,
     bind: SocketAddr,
     allowed_hosts: Arc<Option<HashSet<String>>>,
 }
@@ -165,14 +149,12 @@ async fn healthz() -> impl IntoResponse {
 
 async fn readyz(State(state): State<AppState>) -> impl IntoResponse {
     let cached_init = state.cached_init.read().await;
-    let tool_aliases = state.tool_aliases.read().await;
 
     (
         StatusCode::OK,
         axum::Json(json!({
             "ok": cached_init.is_some(),
             "bind": state.bind.to_string(),
-            "tool_aliases": tool_aliases.len(),
         })),
     )
 }
@@ -272,11 +254,6 @@ async fn handle_post(state: AppState, headers: HeaderMap, body: Bytes) -> Respon
         return StatusCode::ACCEPTED.into_response();
     }
 
-    let mut request = request;
-    if method == "tools/call" {
-        resolve_tool_alias(&state, &mut request).await;
-    }
-
     if is_notification {
         let _ = state.handler.handle_request(request).await;
         return StatusCode::ACCEPTED.into_response();
@@ -284,8 +261,6 @@ async fn handle_post(state: AppState, headers: HeaderMap, body: Bytes) -> Respon
 
     let response = state.handler.handle_request(request).await;
     if method == "tools/list" {
-        let aliases = build_tool_aliases(&response);
-        *state.tool_aliases.write().await = aliases;
         let response = curate_http_tool_catalog(response);
         return json_or_sse_response(StatusCode::OK, response, wants_sse, None);
     }
@@ -303,11 +278,10 @@ async fn cached_or_live_initialize(state: &AppState, request: &Value) -> Value {
     }
 
     let response = state.handler.handle_request(request.clone()).await;
-    if let Some(mut result) = response.get("result").and_then(Value::as_object).cloned() {
-        decorate_initialize_result(&mut result);
+    if let Some(result) = response.get("result").and_then(Value::as_object).cloned() {
         *state.cached_init.write().await = Some(result);
     }
-    decorate_initialize_response(response)
+    response
 }
 
 fn parse_request(body: &[u8]) -> Result<Value, Value> {
@@ -445,63 +419,6 @@ fn host_only(host: &str) -> String {
     host.to_ascii_lowercase()
 }
 
-async fn resolve_tool_alias(state: &AppState, request: &mut Value) {
-    let Some(params) = request.get_mut("params").and_then(Value::as_object_mut) else {
-        return;
-    };
-    let Some(requested_name) = params.get("name").and_then(Value::as_str) else {
-        return;
-    };
-
-    let aliases = state.tool_aliases.read().await;
-    let normalized = normalize_name(requested_name);
-    if let Some(resolved) = aliases
-        .get(requested_name)
-        .or_else(|| aliases.get(&normalized))
-        .cloned()
-    {
-        params.insert("name".to_string(), Value::String(resolved));
-    }
-}
-
-fn build_tool_aliases(response: &Value) -> HashMap<String, String> {
-    let Some(tools) = response
-        .get("result")
-        .and_then(|result| result.get("tools"))
-        .and_then(Value::as_array)
-    else {
-        return HashMap::new();
-    };
-
-    let mut alias_map = HashMap::new();
-
-    for tool in tools {
-        let Some(canonical) = tool.get("name").and_then(Value::as_str) else {
-            continue;
-        };
-
-        alias_map.insert(canonical.to_string(), canonical.to_string());
-        alias_map.insert(normalize_name(canonical), canonical.to_string());
-        let http_name = http_catalog_name(canonical);
-        alias_map.insert(http_name.clone(), canonical.to_string());
-        alias_map.insert(normalize_name(&http_name), canonical.to_string());
-
-        let parts: Vec<&str> = canonical.split('/').collect();
-        if parts.len() == 2 {
-            let connector = parts[0];
-            let normalized_tool = normalize_name(parts[1]);
-            for alias in connector_aliases(connector) {
-                alias_map.insert(
-                    format!("{}_{}", alias, normalized_tool),
-                    canonical.to_string(),
-                );
-            }
-        }
-    }
-
-    alias_map
-}
-
 fn curate_http_tool_catalog(mut response: Value) -> Value {
     let Some(tools) = response
         .get_mut("result")
@@ -511,12 +428,7 @@ fn curate_http_tool_catalog(mut response: Value) -> Value {
         return response;
     };
 
-    let curated = tools
-        .iter()
-        .filter(|tool| !should_hide_http_tool(tool))
-        .cloned()
-        .map(rewrite_http_tool_name)
-        .collect::<Vec<_>>();
+    let curated = tools.iter().cloned().map(rewrite_http_tool_name).collect();
     *tools = curated;
     response
 }
@@ -538,65 +450,6 @@ fn rewrite_http_tool_name(mut tool: Value) -> Value {
 
 fn http_catalog_name(name: &str) -> String {
     name.replace('/', ".")
-}
-
-fn should_hide_http_tool(tool: &Value) -> bool {
-    let name = tool.get("name").and_then(Value::as_str).unwrap_or_default();
-    if name.starts_with("auth/") || name.starts_with("web_search/") {
-        return true;
-    }
-
-    tool.get("description")
-        .and_then(Value::as_str)
-        .is_some_and(|description| description.starts_with("Legacy alias for"))
-}
-
-fn decorate_initialize_response(mut response: Value) -> Value {
-    let Some(result) = response.get_mut("result").and_then(Value::as_object_mut) else {
-        return response;
-    };
-    decorate_initialize_result(result);
-    response
-}
-
-fn decorate_initialize_result(result: &mut Map<String, Value>) {
-    const HTTP_CATALOG_NOTE: &str =
-        "HTTP catalog is curated for agents and uses spec-friendly dotted tool names like \
-`youtube.get`. Auth setup helpers and duplicate compatibility aliases \
-(e.g. `youtube_transcripts.*`, `web_search.*`) are hidden to reduce tool-selection \
-ambiguity; they remain callable for backwards compatibility.";
-
-    match result.get_mut("instructions") {
-        Some(Value::String(instructions)) if !instructions.contains(HTTP_CATALOG_NOTE) => {
-            instructions.push(' ');
-            instructions.push_str(HTTP_CATALOG_NOTE);
-        }
-        Some(Value::String(_)) => {}
-        _ => {
-            result.insert(
-                "instructions".to_string(),
-                Value::String(HTTP_CATALOG_NOTE.to_string()),
-            );
-        }
-    }
-}
-
-fn connector_aliases(connector: &str) -> &'static [&'static str] {
-    match connector {
-        "hackernews" => &["hn"],
-        "youtube" => &["yt"],
-        "pubmed" => &["pm"],
-        "x-browser" => &["x", "twitter", "xbrowser", "x_browser"],
-        _ => &[],
-    }
-}
-
-fn normalize_name(value: &str) -> String {
-    value
-        .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect()
 }
 
 fn new_session_id() -> String {
@@ -633,37 +486,8 @@ async fn shutdown_signal() {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_tool_aliases, curate_http_tool_catalog, decorate_initialize_response, host_only,
-        http_catalog_name,
-    };
+    use super::{curate_http_tool_catalog, host_only, http_catalog_name};
     use serde_json::{json, Value};
-
-    #[test]
-    fn builds_aliases_for_prefixed_tools() {
-        let aliases = build_tool_aliases(&json!({
-            "result": {
-                "tools": [
-                    { "name": "hackernews/get_thread" },
-                    { "name": "youtube/search" }
-                ]
-            }
-        }));
-
-        assert_eq!(
-            aliases.get("hn_getthread"),
-            Some(&"hackernews/get_thread".to_string())
-        );
-        assert_eq!(
-            aliases.get("youtube.search"),
-            Some(&"youtube/search".to_string())
-        );
-        // Bare-name routing (`search` -> `youtube/search`) was removed:
-        // it was registry-dependent (adding another `search` tool would
-        // silently change behavior). Agents see the canonical name in
-        // tools/list and should call it explicitly.
-        assert!(aliases.get("search").is_none());
-    }
 
     #[test]
     fn strips_simple_host_ports() {
@@ -672,18 +496,12 @@ mod tests {
     }
 
     #[test]
-    fn curates_http_catalog_to_canonical_agent_tools() {
-        // With alias-listing removed in mcp_server, `youtube_transcripts/*`
-        // should not appear in upstream listings. This test still feeds one
-        // in to verify HTTP curation treats it defensively if it ever leaks
-        // through (e.g. from a non-rzn MCP server) — but without asserting
-        // it's preserved.
+    fn renders_http_catalog_with_dotted_names() {
         let curated = curate_http_tool_catalog(json!({
             "result": {
                 "tools": [
                     { "name": "youtube/get", "description": "Fetch one YouTube video plus transcript/chapters." },
                     { "name": "hackernews/get_thread", "description": "Fetch a Hacker News thread by ID or URL." },
-                    { "name": "hackernews/get", "description": "Legacy alias for 'get_thread'. Story or comment by ID, with comments." },
                     { "name": "auth/youtube/set", "description": "Set credentials for youtube." }
                 ]
             }
@@ -696,26 +514,10 @@ mod tests {
             .filter_map(|tool| tool.get("name").and_then(Value::as_str))
             .collect::<Vec<_>>();
 
-        assert_eq!(tool_names, vec!["youtube.get", "hackernews.get_thread"]);
-    }
-
-    #[test]
-    fn decorates_initialize_response_with_http_catalog_note() {
-        let response = decorate_initialize_response(json!({
-            "jsonrpc": "2.0",
-            "result": {
-                "instructions": "Base instructions."
-            },
-            "id": 1
-        }));
-
-        let instructions = response["result"]["instructions"]
-            .as_str()
-            .expect("instructions string");
-        assert!(instructions.contains("Base instructions."));
-        assert!(instructions.contains("HTTP catalog is curated for agents"));
-        assert!(instructions.contains("youtube.get"));
-        assert!(instructions.contains("hidden to reduce tool-selection ambiguity"));
+        assert_eq!(
+            tool_names,
+            vec!["youtube.get", "hackernews.get_thread", "auth.youtube.set"]
+        );
     }
 
     #[test]

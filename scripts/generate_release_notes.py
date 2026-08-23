@@ -171,7 +171,7 @@ def llm_summary(
             "Return markdown only. Use exactly these sections: `## Highlights` and "
             "`## What's In This Release`. Keep it under 350 words. Prioritize user-visible "
             "features, release automation changes, packaging/installer changes, and new "
-            "connectors. If commit subjects still use legacy names, describe the current "
+            "connectors. Describe the current "
             "product as `rzn-tools` instead of repeating stale branding. "
             "Do not invent features not supported by the commits or changelog excerpt."
         ),

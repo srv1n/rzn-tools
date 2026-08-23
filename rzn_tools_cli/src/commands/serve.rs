@@ -18,16 +18,7 @@ use crate::{
 };
 
 const DEFAULT_BIND: &str = "127.0.0.1:8000";
-const CURRENT_CONNECTOR_DEFAULTS_VERSION: u8 = 2;
 const DEFAULT_EXPOSED_CONNECTORS: &[&str] = &["youtube", "hackernews", "pubmed", "reddit"];
-const LEGACY_DEFAULT_EXPOSED_CONNECTORS: &[&str] = &[
-    "youtube",
-    "hackernews",
-    "pubmed",
-    "parallel-search",
-    "exa",
-    "reddit",
-];
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct ServeConfigFile {
@@ -37,8 +28,6 @@ struct ServeConfigFile {
     allowed_hosts: Vec<String>,
     #[serde(default)]
     exposed_connectors: Vec<String>,
-    #[serde(default)]
-    connector_defaults_version: Option<u8>,
     #[serde(default)]
     expose_all_connectors: bool,
     #[serde(default)]
@@ -654,7 +643,7 @@ fn normalize_connector_name(value: &str) -> Result<String> {
         ));
     }
 
-    Ok(canonical_connector_name(&normalized).to_string())
+    Ok(normalized)
 }
 
 fn push_unique_connector(connectors: &mut Vec<String>, connector: &str) {
@@ -670,33 +659,6 @@ fn default_exposed_connectors() -> Vec<String> {
         .collect()
 }
 
-fn legacy_default_exposed_connectors() -> Vec<String> {
-    LEGACY_DEFAULT_EXPOSED_CONNECTORS
-        .iter()
-        .map(|connector| (*connector).to_string())
-        .collect()
-}
-
-fn migrate_legacy_default_connectors(config: &mut ServeConfigFile) -> bool {
-    if config.expose_all_connectors || config.connector_defaults_version.is_some() {
-        return false;
-    }
-
-    let configured = config
-        .exposed_connectors
-        .iter()
-        .map(|connector| canonical_connector_name(connector).to_string())
-        .collect::<Vec<_>>();
-
-    if configured != legacy_default_exposed_connectors() {
-        return false;
-    }
-
-    config.exposed_connectors = default_exposed_connectors();
-    config.connector_defaults_version = Some(CURRENT_CONNECTOR_DEFAULTS_VERSION);
-    true
-}
-
 fn effective_exposed_connectors(config: &ServeConfigFile) -> Vec<String> {
     if config.expose_all_connectors {
         return Vec::new();
@@ -707,7 +669,7 @@ fn effective_exposed_connectors(config: &ServeConfigFile) -> Vec<String> {
     config
         .exposed_connectors
         .iter()
-        .map(|connector| canonical_connector_name(connector).to_string())
+        .map(ToString::to_string)
         .collect()
 }
 
@@ -720,16 +682,6 @@ fn normalized_connectors_for_http(config: &ServeConfigFile) -> Option<HashSet<St
         .into_iter()
         .collect::<HashSet<_>>();
     Some(connectors)
-}
-
-fn canonical_connector_name(value: &str) -> &str {
-    match value {
-        "exa-search" => "exa",
-        "youtube-transcripts" => "youtube",
-        "youtube-transcript" => "youtube",
-        "parallel" => "parallel-search",
-        other => other,
-    }
 }
 
 async fn available_connector_names() -> Result<Vec<String>> {
@@ -811,12 +763,8 @@ fn load_config() -> Result<ServeConfigFile> {
         return Ok(ServeConfigFile::default());
     }
     let data = fs::read_to_string(&path)?;
-    let mut config: ServeConfigFile = serde_json::from_str(&data)
+    let config: ServeConfigFile = serde_json::from_str(&data)
         .map_err(|error| CommandError::InvalidConfig(format!("{}: {}", path.display(), error)))?;
-
-    if migrate_legacy_default_connectors(&mut config) {
-        save_config(&path, &config)?;
-    }
 
     Ok(config)
 }
@@ -825,11 +773,7 @@ fn save_config(path: &Path, config: &ServeConfigFile) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut config = config.clone();
-    config
-        .connector_defaults_version
-        .get_or_insert(CURRENT_CONNECTOR_DEFAULTS_VERSION);
-    let payload = serde_json::to_string_pretty(&config)
+    let payload = serde_json::to_string_pretty(config)
         .map_err(|error| CommandError::InvalidConfig(error.to_string()))?;
     fs::write(path, payload)?;
     Ok(())
@@ -1181,9 +1125,8 @@ async fn probe_origin(
 mod tests {
     use super::{
         default_exposed_connectors, effective_exposed_connectors, ingress_service_for_hostname,
-        legacy_default_exposed_connectors, migrate_legacy_default_connectors, normalize_hostname,
-        normalize_tunnel_name, normalized_hosts, service_targets_bind, should_autostart_tunnel,
-        CloudflareTunnelConfig, CloudflaredConfigFile, ServeConfigFile,
+        normalize_hostname, normalize_tunnel_name, normalized_hosts, service_targets_bind,
+        should_autostart_tunnel, CloudflareTunnelConfig, CloudflaredConfigFile, ServeConfigFile,
     };
 
     #[test]
@@ -1201,50 +1144,6 @@ mod tests {
         assert_eq!(
             effective_exposed_connectors(&config),
             vec!["youtube", "hackernews", "pubmed", "reddit"]
-        );
-    }
-
-    #[test]
-    fn migrates_legacy_persisted_default_connectors() {
-        let mut config = ServeConfigFile {
-            bind: None,
-            allowed_hosts: Vec::new(),
-            exposed_connectors: legacy_default_exposed_connectors(),
-            connector_defaults_version: None,
-            expose_all_connectors: false,
-            cloudflare: None,
-        };
-
-        assert!(migrate_legacy_default_connectors(&mut config));
-        assert_eq!(
-            effective_exposed_connectors(&config),
-            vec!["youtube", "hackernews", "pubmed", "reddit"]
-        );
-        assert_eq!(config.connector_defaults_version, Some(2));
-    }
-
-    #[test]
-    fn preserves_explicit_current_connector_selection() {
-        let mut config = ServeConfigFile {
-            bind: None,
-            allowed_hosts: Vec::new(),
-            exposed_connectors: legacy_default_exposed_connectors(),
-            connector_defaults_version: Some(2),
-            expose_all_connectors: false,
-            cloudflare: None,
-        };
-
-        assert!(!migrate_legacy_default_connectors(&mut config));
-        assert_eq!(
-            effective_exposed_connectors(&config),
-            vec![
-                "youtube",
-                "hackernews",
-                "pubmed",
-                "parallel-search",
-                "exa",
-                "reddit"
-            ]
         );
     }
 
@@ -1284,7 +1183,6 @@ mod tests {
             bind: None,
             allowed_hosts: Vec::new(),
             exposed_connectors: Vec::new(),
-            connector_defaults_version: None,
             expose_all_connectors: false,
             cloudflare: Some(CloudflareTunnelConfig {
                 hostname: "example.com".to_string(),

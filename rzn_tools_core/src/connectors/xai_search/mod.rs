@@ -86,16 +86,8 @@ impl XaiSearchConnector {
         Ok(XSearchOptions {
             allowed_x_handles,
             excluded_x_handles,
-            from_date: args
-                .get("from_date")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-                .or_else(|| filters.since.clone()),
-            to_date: args
-                .get("to_date")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-                .or_else(|| filters.until.clone()),
+            from_date: filters.since.clone(),
+            to_date: filters.until.clone(),
             enable_image_understanding: args
                 .get("enable_image_understanding")
                 .and_then(|v| v.as_bool())
@@ -108,20 +100,17 @@ impl XaiSearchConnector {
     }
 
     fn build_x_search_prompt_clause(
-        args: &serde_json::Map<String, Value>,
         filters: &crate::utils::SearchFilters,
         options: &XSearchOptions,
     ) -> String {
         let mut clause = build_filters_clause(filters);
         let mut parts = Vec::new();
 
-        if args.contains_key("from_date") || args.contains_key("to_date") {
-            if let Some(v) = &options.from_date {
-                parts.push(format!("from_date={}", v));
-            }
-            if let Some(v) = &options.to_date {
-                parts.push(format!("to_date={}", v));
-            }
+        if let Some(v) = &options.from_date {
+            parts.push(format!("from_date={}", v));
+        }
+        if let Some(v) = &options.to_date {
+            parts.push(format!("to_date={}", v));
         }
         if !options.allowed_x_handles.is_empty() {
             parts.push(format!("allowed_x_handles={:?}", options.allowed_x_handles));
@@ -314,14 +303,11 @@ Example: query=\"today's Bitcoin price\" sources=[\"web\"] limit=5.",
                     },
                     "mode": {"type": "string", "enum": ["auto", "on", "off"], "default": "auto", "description": "Search mode"},
                     "limit": {"type": "integer", "default": 5, "description": "Approximate citations to include (default 5)."},
-                    "max_results": {"type": "integer", "description": "Alias for limit (deprecated)."},
                     "model": {"type": "string", "description": "xAI model (e.g., grok-4-fast)"},
                     "language": {"type": "string", "description": "BCP-47 language hint (e.g., en)"},
                     "region": {"type": "string", "description": "Region/country code (e.g., US)"},
                     "since": {"type": "string", "description": "Earliest date (YYYY-MM-DD)"},
                     "until": {"type": "string", "description": "Latest date (YYYY-MM-DD)"},
-                    "from_date": {"type": "string", "description": "x_search alias for since (YYYY-MM-DD)"},
-                    "to_date": {"type": "string", "description": "x_search alias for until (YYYY-MM-DD)"},
                     "include_domains": {"type": "array", "items": {"type": "string"}},
                     "exclude_domains": {"type": "array", "items": {"type": "string"}},
                     "date_preset": {"type": "string", "description": "last_24_hours|last_7_days|last_30_days|this_month|past_year"},
@@ -367,11 +353,7 @@ Example: query=\"today's Bitcoin price\" sources=[\"web\"] limit=5.",
             })
             .unwrap_or_else(|| vec!["web".to_string()]);
         let mode = args.get("mode").and_then(|v| v.as_str()).unwrap_or("auto");
-        let limit = args
-            .get("limit")
-            .or_else(|| args.get("max_results"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(5) as usize;
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
         let model = args
             .get("model")
             .and_then(|v| v.as_str())
@@ -398,7 +380,7 @@ Example: query=\"today's Bitcoin price\" sources=[\"web\"] limit=5.",
         );
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
-        let filters_clause = Self::build_x_search_prompt_clause(&args, &filters, &x_options);
+        let filters_clause = Self::build_x_search_prompt_clause(&filters, &x_options);
 
         let body = json!({
             "model": model,
@@ -523,16 +505,19 @@ mod tests {
     }
 
     #[test]
-    fn resolve_x_search_options_prefers_aliases_and_flags() {
+    fn resolve_x_search_options_uses_canonical_filters_and_flags() {
         let args = map_from(&[
             ("allowed_x_handles", json!(["one", "two"])),
-            ("from_date", json!("2025-10-01")),
-            ("to_date", json!("2025-10-10")),
             ("enable_image_understanding", json!(true)),
             ("enable_video_understanding", json!(true)),
         ]);
+        let filters = crate::utils::SearchFilters {
+            since: Some("2025-10-01".to_string()),
+            until: Some("2025-10-10".to_string()),
+            ..empty_filters()
+        };
 
-        let options = XaiSearchConnector::resolve_x_search_options(&args, &empty_filters())
+        let options = XaiSearchConnector::resolve_x_search_options(&args, &filters)
             .expect("options should resolve");
 
         assert_eq!(options.allowed_x_handles, vec!["one", "two"]);

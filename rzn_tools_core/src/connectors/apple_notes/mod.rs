@@ -30,28 +30,8 @@ impl AppleNotesConnector {
 // ============================================================================
 
 #[derive(Debug, Serialize, Deserialize)]
-struct NotesAccount {
-    /// Account name (e.g., "iCloud", "On My Mac")
-    name: String,
-    /// Account ID
-    id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct NotesFolder {
-    /// Folder name
-    name: String,
-    /// Folder ID
-    id: String,
-    /// Parent account name
-    account: String,
-    /// Number of notes in folder
-    note_count: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 struct NoteSummary {
-    /// Note ID (use for get/update/delete operations)
+    /// Note ID (use for get/update operations)
     id: String,
     /// Note title (first line or name)
     name: String,
@@ -95,62 +75,6 @@ struct CreateNoteResult {
 // ============================================================================
 // AppleScript Generators
 // ============================================================================
-
-#[cfg(target_os = "macos")]
-fn script_list_accounts() -> String {
-    r#"
-tell application "Notes"
-    set output to ""
-    repeat with acc in accounts
-        set accName to name of acc
-        set accId to id of acc
-        if output is not "" then set output to output & "|||"
-        set output to output & accName & ":::" & accId
-    end repeat
-    return output
-end tell
-"#
-    .to_string()
-}
-
-#[cfg(target_os = "macos")]
-fn script_list_folders(account: Option<&str>) -> String {
-    match account {
-        Some(acc) => format!(
-            r#"
-tell application "Notes"
-    set output to ""
-    set acc to account "{}"
-    repeat with f in folders of acc
-        set fName to name of f
-        set fId to id of f
-        set noteCount to count of notes of f
-        if output is not "" then set output to output & "|||"
-        set output to output & fName & ":::" & fId & ":::" & (name of acc) & ":::" & noteCount
-    end repeat
-    return output
-end tell
-"#,
-            escape_applescript_string(acc)
-        ),
-        None => r#"
-tell application "Notes"
-    set output to ""
-    repeat with acc in accounts
-        repeat with f in folders of acc
-            set fName to name of f
-            set fId to id of f
-            set noteCount to count of notes of f
-            if output is not "" then set output to output & "|||"
-            set output to output & fName & ":::" & fId & ":::" & (name of acc) & ":::" & noteCount
-        end repeat
-    end repeat
-    return output
-end tell
-"#
-        .to_string(),
-    }
-}
 
 #[cfg(target_os = "macos")]
 fn script_list_notes(folder: Option<&str>, account: Option<&str>, limit: usize) -> String {
@@ -362,81 +286,9 @@ end tell
     )
 }
 
-#[cfg(target_os = "macos")]
-fn script_delete_note(note_id: &str) -> String {
-    format!(
-        r#"
-tell application "Notes"
-    delete note id "{}"
-    return "Note deleted successfully"
-end tell
-"#,
-        escape_applescript_string(note_id)
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn script_create_folder(name: &str, account: Option<&str>) -> String {
-    let location = match account {
-        Some(a) => format!(r#"in account "{}""#, escape_applescript_string(a)),
-        None => String::new(),
-    };
-
-    format!(
-        r#"
-tell application "Notes"
-    set newFolder to make new folder {} with properties {{name:"{}"}}
-    return id of newFolder
-end tell
-"#,
-        location,
-        escape_applescript_string(name)
-    )
-}
-
 // ============================================================================
 // Parsing Functions
 // ============================================================================
-
-#[cfg(target_os = "macos")]
-fn parse_accounts(output: &str) -> Vec<NotesAccount> {
-    output
-        .split("|||")
-        .filter(|s| !s.is_empty())
-        .filter_map(|entry| {
-            let parts: Vec<&str> = entry.split(":::").collect();
-            if parts.len() >= 2 {
-                Some(NotesAccount {
-                    name: parts[0].to_string(),
-                    id: parts[1].to_string(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
-#[cfg(target_os = "macos")]
-fn parse_folders(output: &str) -> Vec<NotesFolder> {
-    output
-        .split("|||")
-        .filter(|s| !s.is_empty())
-        .filter_map(|entry| {
-            let parts: Vec<&str> = entry.split(":::").collect();
-            if parts.len() >= 4 {
-                Some(NotesFolder {
-                    name: parts[0].to_string(),
-                    id: parts[1].to_string(),
-                    account: parts[2].to_string(),
-                    note_count: parts[3].parse().unwrap_or(0),
-                })
-            } else {
-                None
-            }
-        })
-        .collect()
-}
 
 #[cfg(target_os = "macos")]
 fn parse_note_summaries(output: &str) -> Vec<NoteSummary> {
@@ -504,7 +356,7 @@ impl crate::Connector for AppleNotesConnector {
     }
 
     fn description(&self) -> &'static str {
-        "Apple Notes.app connector for macOS. Access notes from iCloud, On My Mac, and other accounts. Create, read, search, and organize notes. Great for personal knowledge management."
+        "Apple Notes.app connector for macOS. Access notes from iCloud, On My Mac, and other accounts. Create, read, search, append to, and update notes."
     }
 
     fn display_name(&self) -> &'static str {
@@ -557,7 +409,6 @@ impl crate::Connector for AppleNotesConnector {
         _request: Option<PaginatedRequestParam>,
     ) -> Result<ListToolsResult, ConnectorError> {
         // Keep the surface small to reduce ambiguity and context bloat for agents.
-        // Back-compat: legacy tools are still accepted in call_tool().
         let tools = vec![
             Tool {
                 name: Cow::Borrowed("list_notes"),
@@ -731,33 +582,6 @@ get_note first if you need to preserve existing content.",
             let args = request.arguments.unwrap_or_default();
 
             match name {
-                "list_accounts" => {
-                    let output = run_applescript_output(&script_list_accounts()).await?;
-                    let accounts = parse_accounts(&output);
-                    structured_result_with_text(&accounts, None)
-                }
-
-                "list_folders" => {
-                    let account = args.get("account").and_then(|v| v.as_str());
-                    let output = run_applescript_output(&script_list_folders(account)).await?;
-                    let folders = parse_folders(&output);
-                    structured_result_with_text(&folders, None)
-                }
-
-                "create_folder" => {
-                    let name = args.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
-                        ConnectorError::InvalidParams("Missing 'name'".to_string())
-                    })?;
-                    let account = args.get("account").and_then(|v| v.as_str());
-
-                    let output =
-                        run_applescript_output(&script_create_folder(name, account)).await?;
-                    structured_result_with_text(
-                        &json!({"success": true, "folder_id": output}),
-                        None,
-                    )
-                }
-
                 "list_notes" => {
                     let folder = args.get("folder").and_then(|v| v.as_str());
                     let account = args.get("account").and_then(|v| v.as_str());
@@ -855,18 +679,6 @@ get_note first if you need to preserve existing content.",
 
                     let output =
                         run_applescript_output(&script_append_to_note(note_id, text)).await?;
-                    structured_result_with_text(&json!({"success": true, "message": output}), None)
-                }
-
-                "delete_note" => {
-                    let note_id =
-                        args.get("note_id")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                ConnectorError::InvalidParams("Missing 'note_id'".to_string())
-                            })?;
-
-                    let output = run_applescript_output(&script_delete_note(note_id)).await?;
                     structured_result_with_text(&json!({"success": true, "message": output}), None)
                 }
 

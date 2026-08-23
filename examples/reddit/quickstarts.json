@@ -13,7 +13,7 @@
     }
   },
   {
-    "id": "search_posts",
+    "id": "search",
     "title": "Search discussions",
     "system_id": "reddit",
     "runtime_tool": "reddit/search",

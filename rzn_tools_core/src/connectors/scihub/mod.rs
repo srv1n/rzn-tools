@@ -597,17 +597,6 @@ impl Connector for SciHubConnector {
                     icons: None,
                 },
                 Tool {
-                    name: Cow::Borrowed("get_paper"),
-                    title: None,
-                    description: Some(Cow::Borrowed(
-                        "Alias of scihub/get for compatibility (open-access lookup only).",
-                    )),
-                    input_schema,
-                    output_schema: None,
-                    annotations: None,
-                    icons: None,
-                },
-                Tool {
                     name: Cow::Borrowed("search"),
                     title: None,
                     description: Some(Cow::Borrowed(
@@ -641,7 +630,7 @@ impl Connector for SciHubConnector {
         let args = request.arguments.unwrap_or_default();
 
         match request.name.as_ref() {
-            "get" | "get_paper" => {
+            "get" => {
                 let doi = args.get("doi").and_then(|v| v.as_str()).ok_or(
                     ConnectorError::InvalidParams("Missing 'doi' parameter".to_string()),
                 )?;

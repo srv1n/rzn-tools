@@ -1278,7 +1278,7 @@ TWITTER_BEARER_TOKEN."
                     field_type: FieldType::Secret,
                     required: false,
                     description: Some(
-                        "OAuth 1.0a consumer key for legacy X user-context operations.".to_string(),
+                        "OAuth 1.0a consumer key for X user-context operations.".to_string(),
                     ),
                     options: None,
                 },
@@ -1288,8 +1288,7 @@ TWITTER_BEARER_TOKEN."
                     field_type: FieldType::Secret,
                     required: false,
                     description: Some(
-                        "OAuth 1.0a consumer secret for legacy X user-context operations."
-                            .to_string(),
+                        "OAuth 1.0a consumer secret for X user-context operations.".to_string(),
                     ),
                     options: None,
                 },
@@ -1365,30 +1364,6 @@ TWITTER_BEARER_TOKEN."
                         "type": "object",
                         "properties": {
                             "username": { "type": "string", "description": "Username without @" },
-                            "user_fields": { "type": "string", "description": "Comma-separated user.fields override (optional)." },
-                            "auth_mode": { "type": "string", "enum": ["auto", "bearer", "oauth2", "oauth1"] }
-                        },
-                        "required": ["username"]
-                    })
-                    .as_object()
-                    .expect("Schema object")
-                    .clone(),
-                ),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
-            Tool {
-                name: Cow::Borrowed("get_profile"),
-                title: None,
-                description: Some(Cow::Borrowed(
-                    "Alias for get_user_by_username (kept for URL resolver compatibility).",
-                )),
-                input_schema: Arc::new(
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "username": { "type": "string", "description": "Username without @." },
                             "user_fields": { "type": "string", "description": "Comma-separated user.fields override (optional)." },
                             "auth_mode": { "type": "string", "enum": ["auto", "bearer", "oauth2", "oauth1"] }
                         },
@@ -2028,32 +2003,6 @@ the same time filtering as get_user_tweets.",
             }
             "get_user_by_username" => {
                 let auth_mode = Self::auth_mode_from_args(&args)?;
-                let username = args
-                    .get("username")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| ConnectorError::InvalidParams("Missing 'username'".into()))?
-                    .trim()
-                    .trim_start_matches('@');
-
-                let user_fields = args
-                    .get("user_fields")
-                    .and_then(Value::as_str)
-                    .unwrap_or("created_at,description,public_metrics,verified,profile_image_url");
-
-                let v = self
-                    .get_json_as(
-                        &format!("users/by/username/{username}"),
-                        &[("user.fields", user_fields.to_string())],
-                        AuthRequirement::PublicRead,
-                        auth_mode,
-                    )
-                    .await?;
-                let text = serde_json::to_string(&v)?;
-                structured_result_with_text(&v, Some(text))
-            }
-            "get_profile" => {
-                let auth_mode = Self::auth_mode_from_args(&args)?;
-                // Alias kept intentionally small: same behavior as get_user_by_username.
                 let username = args
                     .get("username")
                     .and_then(Value::as_str)

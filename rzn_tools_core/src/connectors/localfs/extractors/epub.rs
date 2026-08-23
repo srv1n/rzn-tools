@@ -523,14 +523,8 @@ impl Extractor for EpubExtractor {
     fn get_section(&self, path: &Path, section_id: &str) -> Result<SectionContent, ConnectorError> {
         // Parse section ID - supports:
         // - N - chapter by index (0-indexed)
-        // - chapter:N - legacy format (still supported)
         let chapter_idx: usize = if let Ok(idx) = section_id.parse::<usize>() {
             idx
-        } else if let Some(chapter_str) = section_id.strip_prefix("chapter:") {
-            // Legacy format support
-            chapter_str.parse().map_err(|_| {
-                ConnectorError::InvalidParams(format!("Invalid chapter number: {}", section_id))
-            })?
         } else {
             return Err(ConnectorError::InvalidParams(format!(
                 "Invalid section ID for EPUB: {}. Expected: N (0-indexed chapter number)",

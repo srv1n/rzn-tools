@@ -94,48 +94,6 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct RuntimeToolAlias {
-    alias_connector: &'static str,
-    alias_tool: &'static str,
-    target_connector: &'static str,
-    target_tool: &'static str,
-}
-
-// Runtime aliases accepted by `call_tool` but intentionally NOT listed by
-// `list_tools`. Per Anthropic's "Writing tools for agents" guidance,
-// duplicate-surface tools (same behavior under multiple names) waste agent
-// context and muddy tool selection. Aliases here exist for backwards
-// compatibility of existing callers only.
-//
-// Note: simple connector renames like `youtube_transcripts` → `youtube`
-// are handled by `ProviderRegistry.aliases` (see `register_alias`) and do
-// not need an entry here. Only aliases that also rename the *tool* belong
-// in this list.
-fn runtime_tool_aliases(registry: &ProviderRegistry) -> Vec<RuntimeToolAlias> {
-    let mut aliases = Vec::new();
-
-    if registry.providers.contains_key("federated") {
-        aliases.push(RuntimeToolAlias {
-            alias_connector: "web_search",
-            alias_tool: "search",
-            target_connector: "federated",
-            target_tool: "federated_search",
-        });
-    }
-
-    if registry.providers.contains_key("web") {
-        aliases.push(RuntimeToolAlias {
-            alias_connector: "web_search",
-            alias_tool: "get",
-            target_connector: "web",
-            target_tool: "get",
-        });
-    }
-
-    aliases
-}
-
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ListIngestSourcesParams {
     /// Optional filter: only include these connectors.
@@ -384,11 +342,6 @@ impl McpServer {
                 }
             }
         }
-
-        // Intentionally do NOT expand runtime_tool_aliases into the tool
-        // listing: duplicate surface confuses agents and wastes context
-        // (see guidance in `.claude/skills/tool-design/SKILL.md`).
-        // Aliases remain callable via `call_tool` for backwards compat.
 
         // Add generic auth tools per connector following MCP tool semantics
         for (connector_name, connector) in registry.providers.iter() {
@@ -941,17 +894,17 @@ impl McpServer {
             .and_then(|v| v.as_str())
             .is_some_and(|v| v == "display_v1");
 
-        // Support auth tools: auth/<provider>/set|test|get_schema
-        if request.name.starts_with("auth/") {
-            let parts: Vec<&str> = request.name.split('/').collect();
-            if parts.len() != 3 {
-                return Err(ConnectorError::InvalidInput(
-                    "Auth tool must be 'auth/<provider>/<action>'".into(),
-                ));
-            }
-            let provider = parts[1];
-            let action = parts[2];
-
+        // Shared MCP uses slashes. The HTTP catalog uses dots.
+        let request_name = request.name.as_ref();
+        let auth_route = request_name
+            .strip_prefix("auth/")
+            .and_then(|route| route.split_once('/'))
+            .or_else(|| {
+                request_name
+                    .strip_prefix("auth.")
+                    .and_then(|route| route.split_once('.'))
+            });
+        if let Some((provider, action)) = auth_route {
             let registry = self.registry.lock().await;
             let connector = registry
                 .providers
@@ -1016,21 +969,10 @@ impl McpServer {
         let tool_name = parts[1];
 
         let registry = self.registry.lock().await;
-        let (resolved_connector, resolved_tool) = runtime_tool_aliases(&registry)
-            .into_iter()
-            .find(|alias| alias.alias_connector == connector_name && alias.alias_tool == tool_name)
-            .map(|alias| {
-                (
-                    alias.target_connector.to_string(),
-                    alias.target_tool.to_string(),
-                )
-            })
-            .unwrap_or_else(|| (connector_name.to_string(), tool_name.to_string()));
-
-        if let Some(connector) = registry.get_provider(&resolved_connector) {
+        if let Some(connector) = registry.get_provider(connector_name) {
             // Create a new request with the unprefixed tool name
             let mut unprefixed_request = CallToolRequestParam {
-                name: resolved_tool.into(),
+                name: tool_name.to_string().into(),
                 arguments: request.arguments,
             };
 
@@ -1070,12 +1012,7 @@ impl McpServer {
     /// tools/list with a concrete example).
     async fn tool_name_error(&self, requested: &str) -> ConnectorError {
         let registry = self.registry.lock().await;
-        let connector_names: Vec<String> = registry
-            .providers
-            .keys()
-            .cloned()
-            .chain(registry.aliases.keys().cloned())
-            .collect();
+        let connector_names: Vec<String> = registry.providers.keys().cloned().collect();
 
         let matched = connector_names
             .iter()
@@ -1810,24 +1747,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn runtime_system_aliases_are_routed_but_not_listed() {
-        // Per Anthropic's "Writing tools for agents" guidance, aliases must
-        // remain callable for backwards compat but must NOT appear in the
-        // tool listing — duplicate surface wastes agent context and makes
-        // tool selection non-deterministic.
+    async fn canonical_system_tools_are_listed() {
         let mut registry = ProviderRegistry::new();
         registry.register_provider(Box::new(StubConnector {
             name: "youtube",
             tools: vec!["search", "get", "list", "resolve_channel"],
         }));
-        registry.register_alias("youtube_transcripts", "youtube");
         registry.register_provider(Box::new(StubConnector {
             name: "federated",
             tools: vec!["federated_search"],
         }));
         registry.register_provider(Box::new(StubConnector {
             name: "web",
-            tools: vec!["get"],
+            tools: vec!["scrape_url"],
         }));
         let server = McpServer::new(Arc::new(Mutex::new(registry)));
 
@@ -1838,84 +1770,11 @@ mod tests {
             .map(|tool| tool.name.to_string())
             .collect();
 
-        // Canonical names ARE listed.
+        // Canonical names are listed.
         assert!(tool_names.contains(&"youtube/search".to_string()));
         assert!(tool_names.contains(&"youtube/get".to_string()));
         assert!(tool_names.contains(&"federated/federated_search".to_string()));
-        assert!(tool_names.contains(&"web/get".to_string()));
-
-        // Alias names are NOT listed.
-        assert!(!tool_names.contains(&"youtube_transcripts/search".to_string()));
-        assert!(!tool_names.contains(&"youtube_transcripts/get".to_string()));
-        assert!(!tool_names.contains(&"youtube_transcripts/list".to_string()));
-        assert!(!tool_names.contains(&"youtube_transcripts/resolve_channel".to_string()));
-        assert!(!tool_names.contains(&"web_search/search".to_string()));
-        assert!(!tool_names.contains(&"web_search/get".to_string()));
-
-        let youtube_result = server
-            .handle_call_tool(CallToolRequestParam {
-                name: "youtube_transcripts/get".to_string().into(),
-                arguments: None,
-            })
-            .await
-            .expect("youtube alias call");
-        let youtube_payload = youtube_result
-            .structured_content
-            .expect("youtube alias payload");
-        assert_eq!(
-            youtube_payload
-                .get("connector")
-                .and_then(|value| value.as_str()),
-            Some("youtube")
-        );
-        assert_eq!(
-            youtube_payload.get("tool").and_then(|value| value.as_str()),
-            Some("get")
-        );
-
-        let web_search_result = server
-            .handle_call_tool(CallToolRequestParam {
-                name: "web_search/search".to_string().into(),
-                arguments: None,
-            })
-            .await
-            .expect("web search alias call");
-        let web_search_payload = web_search_result
-            .structured_content
-            .expect("web search alias payload");
-        assert_eq!(
-            web_search_payload
-                .get("connector")
-                .and_then(|value| value.as_str()),
-            Some("federated")
-        );
-        assert_eq!(
-            web_search_payload
-                .get("tool")
-                .and_then(|value| value.as_str()),
-            Some("federated_search")
-        );
-
-        let web_get_result = server
-            .handle_call_tool(CallToolRequestParam {
-                name: "web_search/get".to_string().into(),
-                arguments: None,
-            })
-            .await
-            .expect("web get alias call");
-        let web_get_payload = web_get_result
-            .structured_content
-            .expect("web get alias payload");
-        assert_eq!(
-            web_get_payload
-                .get("connector")
-                .and_then(|value| value.as_str()),
-            Some("web")
-        );
-        assert_eq!(
-            web_get_payload.get("tool").and_then(|value| value.as_str()),
-            Some("get")
-        );
+        assert!(tool_names.contains(&"web/scrape_url".to_string()));
     }
 
     #[cfg(feature = "hackernews")]
@@ -1929,43 +1788,34 @@ mod tests {
 
         let listed_tools = server.handle_list_tools(None).await.expect("tool list");
 
-        for tool_name in ["hackernews/get_thread", "hackernews/get"] {
-            let tool = listed_tools
-                .tools
-                .iter()
-                .find(|tool| tool.name.as_ref() == tool_name)
-                .unwrap_or_else(|| panic!("missing tool {tool_name}"));
+        let tool_name = "hackernews/get_thread";
+        let tool = listed_tools
+            .tools
+            .iter()
+            .find(|tool| tool.name.as_ref() == tool_name)
+            .unwrap_or_else(|| panic!("missing tool {tool_name}"));
 
-            let props = tool
-                .input_schema
-                .get("properties")
-                .and_then(|value| value.as_object())
-                .expect("schema properties");
+        let props = tool
+            .input_schema
+            .get("properties")
+            .and_then(|value| value.as_object())
+            .expect("schema properties");
 
-            let id_types = props
-                .get("id")
-                .and_then(|value| value.get("type"))
-                .expect("id type");
-            let item_id_types = props
-                .get("item_id")
-                .and_then(|value| value.get("type"))
-                .expect("item_id type");
+        let id_types = props
+            .get("id")
+            .and_then(|value| value.get("type"))
+            .expect("id type");
 
-            let has_string_type = |value: &Value| {
-                value
-                    .as_array()
-                    .is_some_and(|types| types.iter().any(|entry| entry.as_str() == Some("string")))
-            };
+        let has_string_type = |value: &Value| {
+            value
+                .as_array()
+                .is_some_and(|types| types.iter().any(|entry| entry.as_str() == Some("string")))
+        };
 
-            assert!(
-                has_string_type(id_types),
-                "{tool_name} id schema should accept strings"
-            );
-            assert!(
-                has_string_type(item_id_types),
-                "{tool_name} item_id schema should accept strings"
-            );
-        }
+        assert!(
+            has_string_type(id_types),
+            "{tool_name} id schema should accept strings"
+        );
     }
 }
 

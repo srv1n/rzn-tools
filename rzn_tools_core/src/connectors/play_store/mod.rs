@@ -384,7 +384,7 @@ impl Connector for PlayStoreConnector {
         let args = request.arguments.unwrap_or_default();
 
         match name {
-            "app" | "details" => {
+            "app" => {
                 let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| {
                     ConnectorError::InvalidParams("Missing 'id' parameter".into())
                 })?;

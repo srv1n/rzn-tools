@@ -63,7 +63,6 @@ impl Connector for SerperSearchConnector {
             "properties": {
                 "query": {"type": "string"},
                 "limit": {"type": "integer", "default": 10},
-                "max_results": {"type": "integer", "description": "Alias for limit (deprecated)."},
                 "date_preset": {"type": "string", "description": "last_24_hours|last_7_days|last_30_days|this_month|past_year"},
                 "locale": {"type": "string", "description": "Locale like en-US or fr-FR"},
                 "language": {"type": "string", "description": "BCP-47 language (hl)"},
@@ -93,7 +92,6 @@ impl Connector for SerperSearchConnector {
             .ok_or_else(|| ConnectorError::InvalidParams("Missing 'query'".into()))?;
         let num = args
             .get("limit")
-            .or_else(|| args.get("max_results"))
             .or_else(|| args.get("num"))
             .and_then(|v| v.as_u64())
             .unwrap_or(10) as usize;

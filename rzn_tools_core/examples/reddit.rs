@@ -104,7 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             title
         );
 
-        // Call the get_post_details tool
+        // Call the get tool.
         match reddit_connector
             .call_tool(CallToolRequestParam {
                 name: "get".into(),

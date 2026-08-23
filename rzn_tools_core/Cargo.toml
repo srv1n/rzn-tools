@@ -80,9 +80,8 @@ dirs = { version = "5.0.1" }
 [features]
 default = []
 examples = []
-# `full` is deliberately portable: server consumers must not accidentally pull
-# local browser profile access into their dependency graph.
-full = ["server-full"]
+# `server-full` is deliberately portable: server consumers must not accidentally
+# pull local browser profile access into their dependency graph.
 server-full = ["server-connectors"]
 # Telegram remains available to local distributions, but its upstream MTProto
 # dependency chain cannot resolve from a fresh Cargo consumer because it pins a
@@ -121,7 +120,6 @@ wikipedia = ["dep:wikipedia"]
 arxiv = ["dep:quick-xml"]
 pubmed = ["dep:quick-xml", "dep:scraper"]
 semantic-scholar = []
-semantic_scholar = ["semantic-scholar"]
 web = ["dep:scraper", "dep:htmd"]
 x-twitter = ["dep:agent-twitter-client", "dep:reqwest011"]
 x-browser = ["x-twitter"]
@@ -129,10 +127,6 @@ x = ["x-api"]
 x-api = ["dep:hmac", "dep:sha1"]
 scihub = []
 
-# iOS-friendly variants (no desktop-only dependencies like browser cookie extraction)
-# Use these on platforms without desktop browsers (iOS, etc.)
-# Compatibility name for the now-portable canonical web connector.
-web-lite = ["web"]
 imap = ["dep:imap", "dep:imap-proto", "dep:mailparse"]
 smtp = ["dep:lettre"]
 caldav = ["dep:quick-xml"]
@@ -174,8 +168,6 @@ localfs = ["dep:lopdf", "dep:zip", "dep:quick-xml", "dep:scraper", "dep:htmd"]
 # Local-only browser profile import. This is never enabled by connector
 # features so server and default builds remain portable.
 browser-cookie-import = ["dep:rookie", "dep:publicsuffix"]
-# Backwards-compatible spelling for callers that opted into the old feature.
-browser-cookies = ["browser-cookie-import"]
 
 # Apple Ecosystem connectors (macOS only)
 # These use AppleScript to interact with native macOS apps

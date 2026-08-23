@@ -28,13 +28,10 @@ tracing-subscriber = { version = "0.3.20", default-features = false, features = 
 
 [features]
 default = []
-# `full` remains the portable/server-safe distribution profile.
-full = ["server-full"]
 server-full = ["rzn_tools_core/server-full"]
 desktop-full = ["rzn_tools_core/desktop-full"]
 all-connectors = ["rzn_tools_core/all-connectors"]
 browser-cookie-import = ["rzn_tools_core/browser-cookie-import"]
-browser-cookies = ["browser-cookie-import"]
 
 # Fine-grained pass-through
 reddit = ["rzn_tools_core/reddit"]
@@ -50,9 +47,7 @@ pubmed = ["rzn_tools_core/pubmed"]
 polymarket = ["rzn_tools_core/polymarket"]
 kalshi = ["rzn_tools_core/kalshi"]
 semantic-scholar = ["rzn_tools_core/semantic-scholar"]
-semantic_scholar = ["semantic-scholar"]
 web = ["rzn_tools_core/web"]
-web-lite = ["rzn_tools_core/web-lite"]
 x-twitter = ["rzn_tools_core/x-twitter"]
 x-browser = ["x-twitter"]
 x = ["rzn_tools_core/x"]

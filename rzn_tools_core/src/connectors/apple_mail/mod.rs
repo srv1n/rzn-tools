@@ -30,16 +30,6 @@ impl AppleMailConnector {
 // ============================================================================
 
 #[derive(Debug, Serialize, Deserialize)]
-struct MailAccount {
-    /// Account name as shown in Mail.app
-    name: String,
-    /// Account ID for reference
-    id: String,
-    /// Email addresses associated with this account
-    email_addresses: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 struct Mailbox {
     /// Mailbox name (e.g., "INBOX", "Sent", "Drafts")
     name: String,
@@ -103,29 +93,6 @@ struct SendResult {
 // ============================================================================
 // AppleScript Generators
 // ============================================================================
-
-#[cfg(target_os = "macos")]
-fn script_list_accounts() -> String {
-    r#"
-tell application "Mail"
-    set output to ""
-    repeat with acc in accounts
-        set accName to name of acc
-        set accId to id of acc
-        set emails to email addresses of acc
-        set emailList to ""
-        repeat with em in emails
-            if emailList is not "" then set emailList to emailList & ";"
-            set emailList to emailList & em
-        end repeat
-        if output is not "" then set output to output & "|||"
-        set output to output & accName & ":::" & accId & ":::" & emailList
-    end repeat
-    return output
-end tell
-"#
-    .to_string()
-}
 
 #[cfg(target_os = "macos")]
 fn script_list_mailboxes(account: Option<&str>) -> String {
@@ -418,131 +385,9 @@ end tell
     )
 }
 
-#[cfg(target_os = "macos")]
-fn script_mark_read(message_id: &str, read: bool) -> String {
-    format!(
-        r#"
-tell application "Mail"
-    set msg to message id {}
-    set read status of msg to {}
-    return "Message marked as {}"
-end tell
-"#,
-        message_id,
-        if read { "true" } else { "false" },
-        if read { "read" } else { "unread" }
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn script_mark_flagged(message_id: &str, flagged: bool) -> String {
-    format!(
-        r#"
-tell application "Mail"
-    set msg to message id {}
-    set flagged status of msg to {}
-    return "Message {} flagged"
-end tell
-"#,
-        message_id,
-        if flagged { "true" } else { "false" },
-        if flagged { "" } else { "un" }
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn script_delete_message(message_id: &str) -> String {
-    format!(
-        r#"
-tell application "Mail"
-    set msg to message id {}
-    delete msg
-    return "Message deleted"
-end tell
-"#,
-        message_id
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn script_move_message(
-    message_id: &str,
-    target_mailbox: &str,
-    target_account: Option<&str>,
-) -> String {
-    let target = match target_account {
-        Some(acc) => format!(
-            r#"mailbox "{}" of account "{}""#,
-            escape_applescript_string(target_mailbox),
-            escape_applescript_string(acc)
-        ),
-        None => format!(r#"mailbox "{}""#, escape_applescript_string(target_mailbox)),
-    };
-
-    format!(
-        r#"
-tell application "Mail"
-    set msg to message id {}
-    move msg to {}
-    return "Message moved to {}"
-end tell
-"#,
-        message_id, target, target_mailbox
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn script_reply_to_message(message_id: &str, body: &str, reply_all: bool) -> String {
-    let reply_type = if reply_all {
-        "reply with opening window with properties {reply to all:true}"
-    } else {
-        "reply with opening window"
-    };
-
-    format!(
-        r#"
-tell application "Mail"
-    set msg to message id {}
-    set replyMsg to {}
-    tell replyMsg
-        set content to "{}" & return & return & content
-    end tell
-    return "Reply draft created"
-end tell
-"#,
-        message_id,
-        reply_type,
-        escape_applescript_string(body)
-    )
-}
-
 // ============================================================================
 // Parsing Functions
 // ============================================================================
-
-#[cfg(target_os = "macos")]
-fn parse_accounts(output: &str) -> Vec<MailAccount> {
-    output
-        .split("|||")
-        .filter(|s| !s.is_empty())
-        .filter_map(|entry| {
-            let parts: Vec<&str> = entry.split(":::").collect();
-            if parts.len() >= 3 {
-                Some(MailAccount {
-                    name: parts[0].to_string(),
-                    id: parts[1].to_string(),
-                    email_addresses: parts[2]
-                        .split(';')
-                        .filter(|s| !s.is_empty())
-                        .map(|s| s.to_string())
-                        .collect(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect()
-}
 
 #[cfg(target_os = "macos")]
 fn parse_mailboxes(output: &str) -> Vec<Mailbox> {
@@ -681,7 +526,7 @@ impl crate::Connector for AppleMailConnector {
     }
 
     fn description(&self) -> &'static str {
-        "Apple Mail.app connector for macOS. Access all email accounts configured in Mail.app without separate credentials. Read, search, compose, and manage emails natively."
+        "Apple Mail.app connector for macOS. Access all email accounts configured in Mail.app without separate credentials. List, read, search, draft, and send email."
     }
 
     fn display_name(&self) -> &'static str {
@@ -735,7 +580,6 @@ impl crate::Connector for AppleMailConnector {
         _request: Option<PaginatedRequestParam>,
     ) -> Result<ListToolsResult, ConnectorError> {
         // Keep the surface small to reduce ambiguity and context bloat for agents.
-        // Back-compat: additional legacy tools are still accepted in call_tool().
         let tools = vec![
             Tool {
                 name: Cow::Borrowed("list_mailboxes"),
@@ -916,12 +760,6 @@ confirmation). If the user hasn't confirmed, use create_draft instead.",
             let args = request.arguments.unwrap_or_default();
 
             match name {
-                "list_accounts" => {
-                    let output = run_applescript_output(&script_list_accounts()).await?;
-                    let accounts = parse_accounts(&output);
-                    structured_result_with_text(&accounts, None)
-                }
-
                 "list_mailboxes" => {
                     let account = args.get("account").and_then(|v| v.as_str());
                     let output = run_applescript_output(&script_list_mailboxes(account)).await?;
@@ -1035,99 +873,6 @@ confirmation). If the user hasn't confirmed, use create_draft instead.",
                         message: output,
                     };
                     structured_result_with_text(&result, None)
-                }
-
-                "reply" => {
-                    let message_id =
-                        args.get("message_id")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                ConnectorError::InvalidParams("Missing 'message_id'".to_string())
-                            })?;
-                    let body = args.get("body").and_then(|v| v.as_str()).ok_or_else(|| {
-                        ConnectorError::InvalidParams("Missing 'body'".to_string())
-                    })?;
-                    let reply_all = args
-                        .get("reply_all")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
-
-                    let output = run_applescript_output(&script_reply_to_message(
-                        message_id, body, reply_all,
-                    ))
-                    .await?;
-                    let result = DraftResult {
-                        success: true,
-                        message: output,
-                    };
-                    structured_result_with_text(&result, None)
-                }
-
-                "mark_read" => {
-                    let message_id =
-                        args.get("message_id")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                ConnectorError::InvalidParams("Missing 'message_id'".to_string())
-                            })?;
-                    let read = args.get("read").and_then(|v| v.as_bool()).unwrap_or(true);
-
-                    let output =
-                        run_applescript_output(&script_mark_read(message_id, read)).await?;
-                    structured_result_with_text(&json!({"success": true, "message": output}), None)
-                }
-
-                "mark_flagged" => {
-                    let message_id =
-                        args.get("message_id")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                ConnectorError::InvalidParams("Missing 'message_id'".to_string())
-                            })?;
-                    let flagged = args
-                        .get("flagged")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(true);
-
-                    let output =
-                        run_applescript_output(&script_mark_flagged(message_id, flagged)).await?;
-                    structured_result_with_text(&json!({"success": true, "message": output}), None)
-                }
-
-                "move_message" => {
-                    let message_id =
-                        args.get("message_id")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                ConnectorError::InvalidParams("Missing 'message_id'".to_string())
-                            })?;
-                    let target_mailbox = args
-                        .get("target_mailbox")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| {
-                            ConnectorError::InvalidParams("Missing 'target_mailbox'".to_string())
-                        })?;
-                    let target_account = args.get("target_account").and_then(|v| v.as_str());
-
-                    let output = run_applescript_output(&script_move_message(
-                        message_id,
-                        target_mailbox,
-                        target_account,
-                    ))
-                    .await?;
-                    structured_result_with_text(&json!({"success": true, "message": output}), None)
-                }
-
-                "delete_message" => {
-                    let message_id =
-                        args.get("message_id")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                ConnectorError::InvalidParams("Missing 'message_id'".to_string())
-                            })?;
-
-                    let output = run_applescript_output(&script_delete_message(message_id)).await?;
-                    structured_result_with_text(&json!({"success": true, "message": output}), None)
                 }
 
                 _ => Err(ConnectorError::ToolNotFound),

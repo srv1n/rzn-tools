@@ -146,6 +146,11 @@ async fn main() {
                 Some(Commands::Config { action }) => config::run(&cli, action.clone()).await,
                 Some(Commands::Connectors) => connectors::run(&cli).await,
                 Some(Commands::Tools { connector }) => tools::run(&cli, connector.as_deref()).await,
+                Some(Commands::Call {
+                    connector,
+                    tool,
+                    args,
+                }) => connectors::call(&cli, connector, tool, args).await,
                 Some(Commands::Ingest { action }) => ingest::run(&cli, action.clone()).await,
                 Some(Commands::Pricing {
                     connector,
@@ -178,11 +183,6 @@ async fn main() {
                 Some(Commands::Report { action }) => report::run(action.clone()).await,
                 Some(Commands::Workflows { action }) => workflows::run(&cli, action.clone()).await,
                 Some(Commands::Skills { action }) => skills::run(&cli, action.clone()).await,
-                Some(Commands::Call {
-                    connector,
-                    tool,
-                    args,
-                }) => connectors::call(&cli, connector, tool, args).await,
                 Some(Commands::Youtube { args }) => {
                     connectors::handle_youtube(&cli, args.clone()).await
                 }

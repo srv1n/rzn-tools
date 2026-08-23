@@ -52,7 +52,7 @@ Canonical get tools should accept at least one of:
 - `item_ref`
 - `url`
 
-Legacy identifiers may remain optional, such as `video_id`, `paper_id`, or `pmid`.
+Provider IDs can remain when the live tool schema lists them.
 
 ## Output Shapes
 
@@ -94,7 +94,7 @@ Get/read-one tools return a normalized item:
   },
   "source": {
     "connector": "hackernews",
-    "tool": "get",
+    "tool": "get_thread",
     "fetched_at": "2026-04-28T00:00:00Z"
   }
 }

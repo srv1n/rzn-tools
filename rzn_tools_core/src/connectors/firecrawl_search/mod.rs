@@ -70,7 +70,6 @@ impl Connector for FirecrawlSearchConnector {
                     "query": {"type": "string"},
                     "sources": {"type": "array", "items": {"type": "string", "enum": ["web", "images", "news"]}, "default": ["web"]},
                     "limit": {"type": "integer", "default": 10},
-                    "max_results": {"type": "integer", "description": "Alias for limit (deprecated)."},
                     "scrape": {"type": "boolean", "default": true, "description": "Fetch and parse content"},
                     "date_preset": {"type": "string", "description": "last_24_hours|last_7_days|last_30_days|this_month|past_year"},
                     "locale": {"type": "string", "description": "Locale like en-US or fr-FR"},
@@ -110,11 +109,7 @@ impl Connector for FirecrawlSearchConnector {
                     .collect()
             })
             .unwrap_or_else(|| vec!["web".to_string()]);
-        let limit = args
-            .get("limit")
-            .or_else(|| args.get("max_results"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(10) as usize;
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
         let scrape = args.get("scrape").and_then(|v| v.as_bool()).unwrap_or(true);
         let detailed = args
             .get("response_format")

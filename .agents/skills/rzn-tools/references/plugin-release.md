@@ -53,7 +53,7 @@ target/release/rzn-tools-mcp
 The plugin build target expects full connector features:
 
 ```bash
-cargo build --release -p rzn_tools_mcp --features full
+make build-release CARGO_ARGS="-p rzn_tools_mcp --features server-full"
 ```
 
 The Makefile target for local ZIP building is:
@@ -82,18 +82,13 @@ make plugins-verify ZIP=dist/plugins/.../rzn-tools-...zip PUB=.secrets/plugin-si
 
 ## Backend Contract
 
-Preferred scoped publisher flow:
+Scoped publisher flow:
 
 1. `POST /publisher/products/:product_id/releases`
 2. `POST /publisher/releases/:release_id/upload-session`
 3. Upload ZIP to the returned presigned URL.
 4. `POST /publisher/releases/:release_id/finalize`
 5. `POST /publisher/releases/:release_id/publish`
-
-Legacy admin flow remains compatible:
-
-1. `POST /admin/plugins/releases`
-2. `POST /admin/plugins/catalog/publish`
 
 Use the repo's existing release/publish script if the user asks for the established automation, but do not introduce new Python scripts.
 

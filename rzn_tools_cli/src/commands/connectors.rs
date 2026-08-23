@@ -185,8 +185,8 @@ fn format_pretty_connectors(connectors: &[Value]) -> Result<()> {
         "rzn-tools config test <connector>".cyan()
     );
     println!(
-        "  {} - Search using a connector",
-        "rzn-tools search <connector> <query>".cyan()
+        "  {} - Call a connector tool",
+        "rzn-tools call <connector> <tool> --args <JSON_OBJECT>".cyan()
     );
 
     Ok(())
@@ -215,7 +215,7 @@ fn print_connector_categories(connectors: &[Value]) -> Result<()> {
                 "gemini-search",
                 "perplexity-search",
                 "xai-search",
-                "exa-search",
+                "exa",
                 "firecrawl-search",
                 "serper-search",
                 "tavily-search",
@@ -224,13 +224,13 @@ fn print_connector_categories(connectors: &[Value]) -> Result<()> {
         ),
         (
             "📚 Academic & Research",
-            vec!["arxiv", "pubmed", "semantic_scholar", "scihub"],
+            vec!["arxiv", "pubmed", "semantic-scholar", "scihub"],
         ),
         (
             "🌐 Web & Social",
             vec!["linkedin", "x", "hackernews", "wikipedia"],
         ),
-        ("🛠️ Web Scraping", vec!["web", "web_chrome"]),
+        ("🛠️ Web Scraping", vec!["web"]),
         (
             "🗂️ Productivity & Cloud",
             vec![
@@ -538,51 +538,6 @@ pub async fn handle_youtube(cli: &Cli, args: YoutubeArgs) -> Result<()> {
             tool_args.insert("video_id".to_string(), json!(id));
             tool_args.insert("response_format".to_string(), json!("detailed"));
             call_tool(cli, "youtube", "get", tool_args).await
-        }
-        YoutubeTools::Transcript { id_or_url, id } => {
-            let id = id_or_url.or(id).ok_or_else(|| {
-                crate::commands::CommandError::InvalidInput(
-                    "Missing video ID/URL. Use `rzn-tools youtube get`.".to_string(),
-                )
-            })?;
-
-            let mut tool_args = Map::new();
-            tool_args.insert("video_id".to_string(), json!(id));
-            tool_args.insert("response_format".to_string(), json!("concise"));
-
-            let (payload, meta_value) = call_tool_raw(cli, "youtube", "get", tool_args).await?;
-            let transcript_only = payload.get("transcript").cloned().unwrap_or(Value::Null);
-            output_tool_result(
-                cli,
-                "youtube",
-                "transcript",
-                &transcript_only,
-                meta_value.as_ref(),
-            )
-        }
-        YoutubeTools::Chapters { id_or_url, id } => {
-            let id = id_or_url.or(id).ok_or_else(|| {
-                crate::commands::CommandError::InvalidInput(
-                    "Missing video ID/URL. Use `rzn-tools youtube get`.".to_string(),
-                )
-            })?;
-
-            let mut tool_args = Map::new();
-            tool_args.insert("video_id".to_string(), json!(id));
-            tool_args.insert("response_format".to_string(), json!("concise"));
-
-            let (payload, meta_value) = call_tool_raw(cli, "youtube", "get", tool_args).await?;
-            let chapters_only = payload
-                .get("chapters")
-                .cloned()
-                .unwrap_or(Value::Array(Vec::new()));
-            output_tool_result(
-                cli,
-                "youtube",
-                "chapters",
-                &chapters_only,
-                meta_value.as_ref(),
-            )
         }
     }
 }

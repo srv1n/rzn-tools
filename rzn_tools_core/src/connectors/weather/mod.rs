@@ -555,7 +555,7 @@ Example: location=\"San Francisco\" days=2 units=\"metric\".",
             .map_err(|e| ConnectorError::InvalidParams(format!("Invalid arguments: {}", e)))?;
 
         match tool_name {
-            "get_weather" | "current" => {
+            "get_weather" => {
                 let requested_location = parsed
                     .location
                     .as_deref()

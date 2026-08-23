@@ -676,53 +676,6 @@ the main page content (not structured scraping). Example: url=\"https://example.
                     icons: None,
                 },
                 Tool {
-                    name: Cow::Borrowed("get"),
-                    title: None,
-                    description: Some(Cow::Borrowed(
-                        "Fetch a URL and return readable content (alias of scrape_url).",
-                    )),
-                    annotations: None,
-                    input_schema: Arc::new(json!({
-                        "type": "object",
-                        "properties": {
-                            "url": {
-                                "type": "string",
-                                "description": "The URL to scrape"
-                            },
-                            "use_cookies": {
-                                "type": "boolean",
-                                "description": "Whether to use an explicitly configured Cookie header. Automatic browser import requires browser-cookie-import.",
-                                "default": false
-                            },
-                            "browser": {
-                                "type": "string",
-                            "description": "Override the browser identity used for user-agent selection; automatic cookie import requires browser-cookie-import.",
-                                "enum": ["firefox", "chrome", "edge", "safari", "brave"],
-                                "default": "firefox"
-                            },
-                            "output_format": {
-                                "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
-                                "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
-                            }
-                        },
-                        "required": ["url"],
-                        "examples": [
-                            { "description": "Fetch a page", "input": { "url": "https://example.com" } }
-                        ],
-                        "_meta": {
-                            "category": "read",
-                            "tags": ["web", "scrape"],
-                            "auth_required": false,
-                            "supports_output_format": true,
-                            "supports_cursor": false
-                        }
-                    }).as_object().expect("Schema object").clone()),
-                    output_schema: None,
-                    icons: None,
-                },
-                Tool {
                     name: Cow::Borrowed("scrape_with_config"),
                     title: None,
                     description: Some(Cow::Borrowed(
@@ -809,7 +762,7 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
         let args = request.arguments.unwrap_or_default();
 
         match request.name.as_ref() {
-            "scrape_url" | "get" => {
+            "scrape_url" => {
                 let url = args
                     .get("url")
                     .and_then(|value| value.as_str())

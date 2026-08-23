@@ -31,13 +31,7 @@ fn bundled_core_systems_are_present() {
         .map(|spec| spec.metadata.system.id.clone())
         .collect();
 
-    let expected = [
-        "wikipedia",
-        "youtube_transcripts",
-        "pubmed",
-        "reddit",
-        "web_search",
-    ];
+    let expected = ["wikipedia", "youtube", "pubmed", "reddit"];
 
     for system_id in expected {
         assert!(

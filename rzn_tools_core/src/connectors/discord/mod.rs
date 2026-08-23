@@ -39,8 +39,6 @@ struct IngestRollingLastNArgs {
     channel_id: u64,
     #[serde(default)]
     last_n: Option<u64>,
-    #[serde(default)]
-    limit: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,8 +49,6 @@ struct IngestBackfillWindowsArgs {
     window_size: Option<u64>,
     #[serde(default)]
     page_limit: Option<u64>,
-    #[serde(default)]
-    limit: Option<u64>,
     #[serde(default)]
     cursor: Option<String>,
 }
@@ -318,7 +314,6 @@ impl Connector for DiscordConnector {
                         "guild_id": { "type": "integer", "description": "ID of the server/guild" },
                         "channel_id": { "type": "integer", "description": "ID of the channel" },
                         "last_n": { "type": "integer", "minimum": 1, "maximum": 5000, "default": 500, "description": "Number of most recent messages to represent." },
-                        "limit": { "type": "integer", "minimum": 1, "maximum": 5000, "description": "Alias for last_n." },
                         "output_format": { "type": "string", "enum": ["raw", "normalized_v1", "display_v1"], "default": "raw" }
                     },
                     "required": ["guild_id", "channel_id"],
@@ -353,7 +348,6 @@ impl Connector for DiscordConnector {
                         "channel_id": { "type": "integer", "description": "ID of the channel" },
                         "window_size": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100, "description": "Messages per window (Discord API max 100)." },
                         "page_limit": { "type": "integer", "minimum": 1, "maximum": 25, "default": 3, "description": "How many windows to return per call." },
-                        "limit": { "type": "integer", "minimum": 1, "maximum": 25, "description": "Alias for page_limit (required by the ingestion cursor schema)." },
                         "cursor": { "type": ["string", "null"], "description": "Opaque cursor from a previous response (fetch older windows)." },
                         "output_format": { "type": "string", "enum": ["raw", "normalized_v1", "display_v1"], "default": "raw" }
                     },
@@ -659,7 +653,7 @@ impl Connector for DiscordConnector {
                 let args: IngestRollingLastNArgs = serde_json::from_value(args_value)
                     .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
 
-                let last_n = args.last_n.or(args.limit).unwrap_or(500).clamp(1, 5_000);
+                let last_n = args.last_n.unwrap_or(500).clamp(1, 5_000);
 
                 let mut last_message_id: Option<u64> = None;
                 let mut last_message_at: Option<String> = None;
@@ -744,7 +738,7 @@ impl Connector for DiscordConnector {
                     .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
 
                 let window_size = args.window_size.unwrap_or(100).clamp(1, 100) as u8;
-                let page_limit = args.page_limit.or(args.limit).unwrap_or(3).clamp(1, 25);
+                let page_limit = args.page_limit.unwrap_or(3).clamp(1, 25);
 
                 let mut pagination: Option<MessagePagination> = None;
                 if let Some(cursor) = args.cursor.as_deref() {

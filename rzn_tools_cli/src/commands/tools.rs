@@ -292,7 +292,15 @@ fn format_pretty_connector_tools(
         println!("  {}", "Example:".bold());
         println!(
             "    {}",
-            format!("rzn-tools {} --help", connector_name).cyan()
+            format!("rzn-tools tools {}", connector_name).cyan()
+        );
+        println!(
+            "    {}",
+            format!(
+                "rzn-tools call {} {} --args <JSON_OBJECT>",
+                connector_name, tool.name
+            )
+            .cyan()
         );
     }
 
@@ -300,13 +308,14 @@ fn format_pretty_connector_tools(
     println!("{}", "─".repeat(separator_width).dimmed());
     println!();
     println!("{}", "Quick Commands:".bold().green());
+    println!("  {}", format!("rzn-tools tools {}", connector_name).cyan());
     println!(
         "  {}",
-        format!("rzn-tools search {} \"<query>\"", connector_name).cyan()
-    );
-    println!(
-        "  {}",
-        format!("rzn-tools {} --help", connector_name).cyan()
+        format!(
+            "rzn-tools call {} <tool> --args <JSON_OBJECT>",
+            connector_name
+        )
+        .cyan()
     );
 
     Ok(())

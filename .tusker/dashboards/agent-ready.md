@@ -6,6 +6,6 @@
 
 | Task | Priority | Next action |
 |---|---|---|
-| [[ADS-T-0001]] | p0 | Execute the task contract and satisfy proof mode. |
+
 
 <!-- tusker:generated:end -->

@@ -368,7 +368,7 @@ static BUILTIN_PROFILES: Lazy<Vec<SearchProfile>> = Lazy::new(|| {
             extends: None,
             connectors: vec![
                 "perplexity-search".to_string(),
-                "exa-search".to_string(),
+                "exa".to_string(),
                 "tavily-search".to_string(),
                 "parallel-search".to_string(),
             ],

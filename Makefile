@@ -1,8 +1,8 @@
-.PHONY: help ensure-sccache build build-release test check clippy fmt fmt-check doc run install release release-dry-run release-prepare release-retitle-legacy release-retitle-legacy-dry-run plugins-keygen plugins-build-rzn-tools-macos-arm64 plugins-verify plugins-validate-system-metadata
+.PHONY: help ensure-sccache build build-release test check clippy fmt fmt-check doc run install release release-dry-run release-prepare plugins-keygen plugins-build-rzn-tools-macos-arm64 plugins-verify plugins-validate-system-metadata
 
 # Rust entrypoint policy
 #
-# Use these targets from every checkout, including Tusker worktrees. sccache's
+# Use these targets from every checkout. sccache's
 # user-level cache is outside the repository, so worktrees share it.
 SCCACHE ?= sccache
 export RUSTC_WRAPPER := $(SCCACHE)
@@ -11,8 +11,8 @@ CARGO_ARGS ?=
 help:
 	@printf '%s\n' \
 		'Rust commands (all require sccache):' \
-		'  make build CARGO_ARGS="-p rzn_tools_cli --features full"' \
-		'  make build-release CARGO_ARGS="-p rzn_tools_cli --features full"' \
+		'  make build CARGO_ARGS="-p rzn_tools_cli --features server-full"' \
+		'  make build-release CARGO_ARGS="-p rzn_tools_cli --features server-full"' \
 		'  make test CARGO_ARGS="-p rzn_tools_core"' \
 		'  make check | make clippy | make fmt | make fmt-check | make doc' \
 		'  make run CARGO_ARGS="-p rzn_tools_cli -- list"'
@@ -111,14 +111,8 @@ release-prepare:
 		--output target/release-preflight/release-notes.md
 	@echo "Preflight notes: target/release-preflight/release-notes.md"
 
-release-retitle-legacy:
-	@python3 scripts/retitle_github_releases.py --apply
-
-release-retitle-legacy-dry-run:
-	@python3 scripts/retitle_github_releases.py
-
 # Build and install the local CLI binary.
-# Usage: make install [INSTALL_DIR=/usr/local/bin] [FEATURES=full]
+# Usage: make install [INSTALL_DIR=/usr/local/bin] [FEATURES=server-full]
 install:
 	./packaging/scripts/local-install.sh
 
@@ -145,7 +139,7 @@ plugins-build-rzn-tools-macos-arm64:
 	fi
 	@$(MAKE) plugins-validate-system-metadata
 	@# rzn-tools MCP server binary must include connector features (default is empty).
-	@cargo build --release -p rzn_tools_mcp --features full
+	@cargo build --release -p rzn_tools_mcp --features server-full
 	@RZN_TOOLS_MCP_BIN_MACOS_ARM64="$(PWD)/target/release/rzn-tools-mcp" \
 	cargo run --manifest-path "$(RZN_PLUGIN_DEVKIT_MANIFEST)" -p rzn_plugin_devkit -- \
 		build \

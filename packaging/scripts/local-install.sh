@@ -13,7 +13,7 @@ USER_PREFIX="$HOME/.local"
 DEFAULT_INSTALL_DIR="$USER_PREFIX/bin"
 DEFAULT_ASSET_DIR="$USER_PREFIX/share/rzn-tools"
 INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
-FEATURES="${FEATURES:-full}"
+FEATURES="${FEATURES:-server-full}"
 BUILD_EXAMPLES="${BUILD_EXAMPLES:-1}"
 
 say() { printf "%s\n" "$*"; }
@@ -53,15 +53,11 @@ fi
 say "Building ${BINARY_NAME} (features: ${FEATURES})..."
 cd "$ROOT_DIR"
 
-if [[ "$FEATURES" == "full" ]]; then
-  make build-release CARGO_ARGS="-p rzn_tools_cli --features full"
-else
-  make build-release CARGO_ARGS="-p rzn_tools_cli --features $FEATURES"
-fi
+make build-release CARGO_ARGS="-p rzn_tools_cli --features $FEATURES"
 
 if [[ "$BUILD_EXAMPLES" == "1" ]]; then
   say "Compiling example binaries and validating bundled workflows..."
-  make build-release CARGO_ARGS="-p rzn_tools_core --features examples,full --examples"
+  make build-release CARGO_ARGS="-p rzn_tools_core --features examples,server-full --examples"
   make test CARGO_ARGS="-p rzn_tools_core --test system_metadata_conformance"
 fi
 

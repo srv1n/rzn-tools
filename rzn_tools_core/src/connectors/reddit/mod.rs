@@ -98,8 +98,6 @@ impl RedditConnector {
     fn resolve_oauth_token_base_url(details: &AuthDetails) -> Result<String, ConnectorError> {
         let configured = details
             .get("oauth_token_base_url")
-            // Keep the original override as a compatibility spelling. It
-            // controls token acquisition, not the OAuth API request base.
             .or_else(|| details.get("oauth_base_url"))
             .cloned()
             .or_else(|| env::var("RZN_REDDIT_OAUTH_TOKEN_BASE_URL").ok())
@@ -378,7 +376,6 @@ impl Connector for RedditConnector {
         _request: Option<PaginatedRequestParam>,
     ) -> Result<ListToolsResult, ConnectorError> {
         // Keep the surface small to reduce ambiguity and context bloat for agents.
-        // Back-compat: legacy tools are still accepted in call_tool(), but not listed here.
         let tools = vec![
             Tool {
                 name: Cow::Borrowed("list"),
@@ -667,7 +664,7 @@ impl Connector for RedditConnector {
 
         match name {
             // === Canonical, low-ambiguity tools ===
-            "list" | "list_posts" => {
+            "list" => {
                 let subreddit_name = args.get("subreddit").and_then(|v| v.as_str()).ok_or(
                     ConnectorError::InvalidParams("Missing 'subreddit' parameter".to_string()),
                 )?;
@@ -752,7 +749,7 @@ impl Connector for RedditConnector {
                 let text = serde_json::to_string(&results)?;
                 Ok(structured_result_with_text(&results, Some(text))?)
             }
-            "media" | "resolve_media" => {
+            "media" => {
                 let target = self.resolve_post_target(&args)?;
                 let include_nsfw = Self::include_nsfw_from_args(&args);
                 let post = self
@@ -777,7 +774,7 @@ impl Connector for RedditConnector {
                 let text = serde_json::to_string(&result)?;
                 Ok(structured_result_with_text(&result, Some(text))?)
             }
-            "user" | "user_about" => {
+            "user" => {
                 let username = args.get("username").and_then(|v| v.as_str()).ok_or(
                     ConnectorError::InvalidParams("Missing 'username' parameter".to_string()),
                 )?;
@@ -885,111 +882,7 @@ impl Connector for RedditConnector {
 
                 Ok(structured_result_with_text(&profile, text)?)
             }
-            "search" | "search_posts" => {
-                let request = CallToolRequestParam {
-                    name: "search_reddit".into(),
-                    arguments: Some(args),
-                };
-                self.call_tool(request).await
-            }
-            "get" | "get_post" => {
-                let request = CallToolRequestParam {
-                    name: "get_post_details".into(),
-                    arguments: Some(args),
-                };
-                self.call_tool(request).await
-            }
-
-            // === Legacy tool names (kept for compatibility) ===
-            "get_user_info" => {
-                let username = args.get("username").and_then(|v| v.as_str()).ok_or(
-                    ConnectorError::InvalidParams("Missing 'username' parameter".to_string()),
-                )?;
-                // Strip "u/", "/u/", or leading "/" from username
-                let username = username
-                    .strip_prefix("/u/")
-                    .or_else(|| username.strip_prefix("u/"))
-                    .unwrap_or(username);
-
-                let about = self.fetch_user_about_json(username).await?;
-                let data = about
-                    .get("data")
-                    .and_then(Value::as_object)
-                    .ok_or_else(|| {
-                        ConnectorError::Other("Unexpected Reddit user response".to_string())
-                    })?;
-                let result = json!({
-                    "name": data.get("name").cloned().unwrap_or(Value::Null),
-                    "id": data.get("id").cloned().unwrap_or(Value::Null),
-                    "link_karma": data.get("link_karma").cloned().unwrap_or(Value::Null),
-                    "comment_karma": data.get("comment_karma").cloned().unwrap_or(Value::Null),
-                    "created_utc": data.get("created_utc").cloned().unwrap_or(Value::Null),
-                    "is_gold": data.get("is_gold").cloned().unwrap_or(Value::Null),
-                    "is_mod": data.get("is_mod").cloned().unwrap_or(Value::Null),
-                    "verified": data.get("verified").cloned().unwrap_or(Value::Null),
-                });
-
-                let text = serde_json::to_string(&result)?;
-                Ok(structured_result_with_text(&result, Some(text))?)
-            }
-            "get_subreddit_top_posts" => {
-                let mut forwarded_args = args.clone();
-                forwarded_args.insert("sort".to_string(), json!("top"));
-                let request = CallToolRequestParam {
-                    name: "list".into(),
-                    arguments: Some(forwarded_args),
-                };
-                self.call_tool(request).await
-            }
-            "get_subreddit_hot_posts" => {
-                let mut forwarded_args = args.clone();
-                forwarded_args.insert("sort".to_string(), json!("hot"));
-                let request = CallToolRequestParam {
-                    name: "list".into(),
-                    arguments: Some(forwarded_args),
-                };
-                self.call_tool(request).await
-            }
-            "get_subreddit_new_posts" => {
-                let mut forwarded_args = args.clone();
-                forwarded_args.insert("sort".to_string(), json!("new"));
-                let request = CallToolRequestParam {
-                    name: "list".into(),
-                    arguments: Some(forwarded_args),
-                };
-                self.call_tool(request).await
-            }
-            "get_subreddit_info" => {
-                let subreddit_name = args.get("subreddit").and_then(|v| v.as_str()).ok_or(
-                    ConnectorError::InvalidParams("Missing 'subreddit' parameter".to_string()),
-                )?;
-                // Strip "r/" prefix if present
-                let subreddit_name = subreddit_name.strip_prefix("r/").unwrap_or(subreddit_name);
-
-                let about = self
-                    .fetch_reddit_json(&format!("/r/{subreddit_name}/about.json"), &[], false)
-                    .await?;
-                let data = about
-                    .get("data")
-                    .and_then(Value::as_object)
-                    .ok_or_else(|| {
-                        ConnectorError::Other("Unexpected Reddit subreddit response".to_string())
-                    })?;
-                let result = json!({
-                    "display_name": data.get("display_name").cloned().unwrap_or(Value::Null),
-                    "title": data.get("title").cloned().unwrap_or(Value::Null),
-                    "description": data.get("public_description").cloned().unwrap_or(Value::Null),
-                    "subscribers": data.get("subscribers").cloned().unwrap_or(Value::Null),
-                    "active_users": data.get("active_user_count").cloned().unwrap_or(Value::Null),
-                    "url": data.get("url").cloned().unwrap_or(Value::Null),
-                    "created_utc": data.get("created_utc").cloned().unwrap_or(Value::Null),
-                    "over18": data.get("over18").cloned().unwrap_or(Value::Null),
-                });
-
-                let text = serde_json::to_string(&result)?;
-                Ok(structured_result_with_text(&result, Some(text))?)
-            }
-            "search_reddit" => {
+            "search" => {
                 let output_format = Self::parse_output_format(&args)?;
                 let query = args.get("query").and_then(|v| v.as_str()).ok_or(
                     ConnectorError::InvalidParams("Missing 'query' parameter".to_string()),
@@ -1253,7 +1146,7 @@ impl Connector for RedditConnector {
                 let text = serde_json::to_string(&combined_results)?;
                 Ok(structured_result_with_text(&combined_results, Some(text))?)
             }
-            "get_post_details" => {
+            "get" => {
                 let target = self.resolve_post_target(&args)?;
                 let comment_limit =
                     args.get("comment_limit")

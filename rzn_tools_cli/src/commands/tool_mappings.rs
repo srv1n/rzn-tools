@@ -27,14 +27,14 @@ pub fn generic_get_tool_and_args(
                     .clone(),
             ))
         }
-        "play-store" | "playstore" | "play_store" => Ok((
+        "play-store" => Ok((
             "app",
             json!({ "id": id, "hl": "en", "gl": "US" })
                 .as_object()
                 .expect("json object")
                 .clone(),
         )),
-        "app-store" | "appstore" | "itunes" => {
+        "app-store" => {
             let track_id = id.parse::<u64>().map_err(|_| {
                 CommandError::InvalidInput("App Store track IDs must be numeric.".to_string())
             })?;
@@ -46,7 +46,7 @@ pub fn generic_get_tool_and_args(
                     .clone(),
             ))
         }
-        "app-store-connect" | "asc" | "appstoreconnect" | "app_store_connect" => Ok((
+        "app-store-connect" => Ok((
             "get_app",
             json!({ "app_id": id }).as_object().expect("json object").clone(),
         )),
@@ -69,7 +69,7 @@ pub fn generic_get_tool_and_args(
                 .expect("json object")
                 .clone(),
         )),
-        "weather" | "wttr" => Ok((
+        "weather" => Ok((
             "get_weather",
             json!({ "location": id, "response_format": "detailed" })
                 .as_object()
@@ -136,7 +136,7 @@ pub fn generic_get_tool_and_args(
             };
             Ok((tool, args.as_object().expect("json object").clone()))
         }
-        "semantic-scholar" | "semantic_scholar" => Ok((
+        "semantic-scholar" => Ok((
             "get_paper_details",
             json!({ "paper_id": id, "response_format": "detailed" })
                 .as_object()
@@ -156,7 +156,7 @@ pub fn generic_get_tool_and_args(
             ))
         }
         _ => Err(CommandError::InvalidInput(format!(
-            "Connector '{}' is not supported by the generic `get` command. Use `rzn-tools {0} --help` or `rzn-tools tools {0}`.",
+            "Connector '{}' is not supported by the generic `get` command. Use `rzn-tools tools {0}` and `rzn-tools call {0} <tool> --args <JSON_OBJECT>.",
             connector
         ))),
     }
@@ -224,7 +224,7 @@ pub fn generic_search_tool_and_args(
                 .expect("json object")
                 .clone(),
         )),
-        "semantic-scholar" | "semantic_scholar" => Ok((
+        "semantic-scholar" => Ok((
             "search_papers",
             json!({ "query": query, "limit": limit, "response_format": "concise" })
                 .as_object()
@@ -238,14 +238,14 @@ pub fn generic_search_tool_and_args(
                 .expect("json object")
                 .clone(),
         )),
-        "app-store" | "appstore" | "itunes" => Ok((
+        "app-store" => Ok((
             "search",
             json!({ "query": query, "limit": limit, "country": "US" })
                 .as_object()
                 .expect("json object")
                 .clone(),
         )),
-        "x" | "twitter" => Ok((
+        "x" => Ok((
             "search_recent_tweets",
             json!({ "query": query, "limit": limit })
                 .as_object()
@@ -260,7 +260,7 @@ pub fn generic_search_tool_and_args(
                 .clone(),
         )),
         _ => Err(CommandError::InvalidInput(format!(
-            "Connector '{}' is not supported by the generic `search` command. Use `rzn-tools {0} --help` or `rzn-tools tools {0}`.",
+            "Connector '{}' is not supported by the generic `search` command. Use `rzn-tools tools {0}` and `rzn-tools call {0} <tool> --args <JSON_OBJECT>.",
             connector
         ))),
     }

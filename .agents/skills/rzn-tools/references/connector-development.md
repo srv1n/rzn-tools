@@ -6,7 +6,7 @@ Use this when adding or changing an integration connector.
 
 | Concern | Location |
 |---|---|
-| Connector trait, registry, aliases | `rzn_tools_core/src/lib.rs` |
+| Connector trait and registry | `rzn_tools_core/src/lib.rs` |
 | Module declarations | `rzn_tools_core/src/connectors/mod.rs` |
 | Connector implementation | `rzn_tools_core/src/connectors/<name>/mod.rs` |
 | Smart URL/ID routing | `rzn_tools_core/src/resolver.rs` and `Connector::url_patterns()` |
@@ -14,7 +14,7 @@ Use this when adding or changing an integration connector.
 | CLI feature forwarding | `rzn_tools_cli/Cargo.toml` |
 | MCP feature forwarding | `rzn_tools_mcp/Cargo.toml` |
 | Direct CLI command definitions | `rzn_tools_cli/src/cli.rs` |
-| Connector docs | `docs/connectors/<name>.md` |
+| Connector catalog | `docs/system/connectors.md` |
 
 ## Connector Trait Expectations
 
@@ -45,7 +45,7 @@ For a connector named `my-service` with module `my_service`:
 Release builds use:
 
 ```bash
-cargo build --release -p rzn_tools_cli --features full
+make build-release CARGO_ARGS="-p rzn_tools_cli --features server-full"
 ```
 
 ## Tool Design

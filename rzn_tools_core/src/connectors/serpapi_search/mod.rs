@@ -62,7 +62,6 @@ impl Connector for SerpapiSearchConnector {
             "properties": {
                 "query": {"type": "string"},
                 "limit": {"type": "integer", "default": 10},
-                "max_results": {"type": "integer", "description": "Alias for limit (deprecated)."},
                 "engine": {"type": "string", "default": "google"},
                 "hl": {"type": "string"},
                 "gl": {"type": "string"},
@@ -94,7 +93,6 @@ impl Connector for SerpapiSearchConnector {
             .ok_or_else(|| ConnectorError::InvalidParams("Missing 'query'".into()))?;
         let num = args
             .get("limit")
-            .or_else(|| args.get("max_results"))
             .or_else(|| args.get("num"))
             .and_then(|v| v.as_u64())
             .unwrap_or(10) as usize;

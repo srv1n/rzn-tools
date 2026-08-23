@@ -85,7 +85,6 @@ impl Connector for GeminiSearchConnector {
                 "properties": {
                     "query": {"type": "string"},
                     "limit": {"type": "integer", "default": 5},
-                    "max_results": {"type": "integer", "description": "Alias for limit (deprecated)."},
                     "model": {"type": "string", "description": "Gemini model (e.g., gemini-1.5-pro-latest)"},
                     "language": {"type": "string", "description": "BCP-47 language hint (e.g., en)"},
                     "region": {"type": "string", "description": "Region/country code (e.g., US)"},
@@ -124,11 +123,7 @@ impl Connector for GeminiSearchConnector {
                     .into(),
             )
         })?;
-        let limit = args
-            .get("limit")
-            .or_else(|| args.get("max_results"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(5) as usize;
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
         let model = args
             .get("model")
             .and_then(|v| v.as_str())

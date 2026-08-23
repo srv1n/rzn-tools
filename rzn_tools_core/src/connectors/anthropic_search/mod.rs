@@ -99,7 +99,6 @@ sources. Example: query=\"latest US inflation print\" limit=5.",
                 "properties": {
                     "query": {"type": "string"},
                     "limit": {"type": "integer", "description": "Approximate number of sources (default 5).", "default": 5},
-                    "max_results": {"type": "integer", "description": "Alias for limit (deprecated)."},
                     "model": {"type": "string", "description": "Claude model (e.g., claude-3-7-sonnet-latest)"},
                     "max_output_tokens": {"type": "integer"},
                     "language": {"type": "string", "description": "BCP-47 language hint (e.g., en)"},
@@ -139,11 +138,7 @@ sources. Example: query=\"latest US inflation print\" limit=5.",
                     .into(),
             )
         })?;
-        let limit = args
-            .get("limit")
-            .or_else(|| args.get("max_results"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(5) as usize;
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
         let model = args
             .get("model")
             .and_then(|v| v.as_str())

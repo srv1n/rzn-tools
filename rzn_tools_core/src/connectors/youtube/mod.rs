@@ -180,8 +180,6 @@ pub struct ListedVideo {
 pub struct ListVideosOutput {
     /// Ordered videos. This is the canonical enumeration field for downstream scripts.
     pub entries: Vec<ListedVideo>,
-    /// Back-compat alias for callers that already consume youtube/list.
-    pub videos: Vec<ListedVideo>,
     pub source: ListSource,
     pub channel_id: Option<String>,
     pub channel_title: Option<String>,
@@ -1113,7 +1111,7 @@ impl Connector for YouTubeConnector {
         let args_map = serde_json::Map::from_iter(args);
 
         match name {
-            "get" | "get_video_details" => {
+            "get" => {
                 let input: GetVideoDetailsInput =
                     serde_json::from_value(Value::Object(args_map))
                         .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
@@ -1375,7 +1373,7 @@ impl Connector for YouTubeConnector {
                     Ok(structured_result_with_text(&youtube_content, Some(text))?)
                 }
             }
-            "search" | "search_videos" => {
+            "search" => {
                 let input: SearchVideosInput = serde_json::from_value(Value::Object(args_map))
                     .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
 
@@ -1540,7 +1538,7 @@ impl Connector for YouTubeConnector {
                     Ok(structured_result_with_text(&output, Some(text))?)
                 }
             }
-            "list" | "list_videos" => {
+            "list" => {
                 let input: ListVideosInput = serde_json::from_value(Value::Object(args_map))
                     .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
                 list_videos_call_result(input).await
@@ -1716,8 +1714,7 @@ AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
     );
 
     Ok(ListVideosOutput {
-        entries: videos.clone(),
-        videos,
+        entries: videos,
         source,
         channel_id,
         channel_title,
@@ -3984,7 +3981,7 @@ mod tests {
     }
 
     #[test]
-    fn concise_detailed_and_normalized_transcript_shapes_stay_compatible() {
+    fn concise_detailed_and_normalized_transcript_shapes_are_valid() {
         let concise = serde_json::to_value(YouTubeContentConcise {
             title: "Fixture title".to_string(),
             transcript: Some("Hello".to_string()),

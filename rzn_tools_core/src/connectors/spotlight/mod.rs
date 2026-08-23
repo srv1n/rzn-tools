@@ -273,7 +273,6 @@ impl crate::Connector for SpotlightConnector {
         _request: Option<PaginatedRequestParam>,
     ) -> Result<ListToolsResult, ConnectorError> {
         // Keep the surface small to reduce ambiguity and context bloat for agents.
-        // Back-compat: legacy tools are still accepted in call_tool(), but not listed here.
         let tools = vec![
             Tool {
                 name: Cow::Borrowed("search"),
@@ -387,248 +386,126 @@ and want its indexed attributes.",
                     .get("mode")
                     .and_then(|v| v.as_str())
                     .unwrap_or("content");
-                let directory = args.get("directory").cloned();
-                let limit = args.get("limit").cloned();
+                let directory = args.get("directory").and_then(|v| v.as_str());
+                let limit = args
+                    .get("limit")
+                    .and_then(|v| v.as_u64())
+                    .map(|n| n as usize)
+                    .unwrap_or(50);
 
-                let mut mapped = serde_json::Map::new();
-                if let Some(d) = directory {
-                    mapped.insert("directory".to_string(), d);
-                }
-                if let Some(l) = limit {
-                    mapped.insert("limit".to_string(), l);
-                }
-
-                let legacy_tool = match mode {
+                match mode {
                     "content" => {
-                        let query = args.get("query").cloned().ok_or_else(|| {
-                            ConnectorError::InvalidInput("Missing 'query' for mode=content".into())
-                        })?;
-                        mapped.insert("query".to_string(), query);
-                        if let Some(k) = args.get("kind").cloned() {
-                            mapped.insert("kind".to_string(), k);
-                        }
-                        "search_content"
+                        let query_text =
+                            args.get("query").and_then(|v| v.as_str()).ok_or_else(|| {
+                                ConnectorError::InvalidInput(
+                                    "Missing 'query' for mode=content".into(),
+                                )
+                            })?;
+                        let kind = args.get("kind").and_then(|v| v.as_str());
+                        let query = self.build_query(Some(query_text), kind, None, None, None);
+                        let results = self
+                            .run_mdfind(&query, directory, Some(limit), false)
+                            .await?;
+                        let payload = json!({
+                            "query": query_text,
+                            "spotlight_query": query,
+                            "directory": directory,
+                            "count": results.len(),
+                            "files": results
+                        });
+                        structured_result_with_text(&payload, None)
                     }
                     "name" => {
-                        let query = args
-                            .get("query")
-                            .or_else(|| args.get("name"))
-                            .cloned()
-                            .ok_or_else(|| {
+                        let name_query =
+                            args.get("query").and_then(|v| v.as_str()).ok_or_else(|| {
                                 ConnectorError::InvalidInput("Missing 'query' for mode=name".into())
                             })?;
-                        mapped.insert("name".to_string(), query);
-                        "search_by_name"
+                        let results = self
+                            .run_mdfind(name_query, directory, Some(limit), true)
+                            .await?;
+                        let payload = json!({
+                            "name_query": name_query,
+                            "directory": directory,
+                            "count": results.len(),
+                            "files": results
+                        });
+                        structured_result_with_text(&payload, None)
                     }
                     "kind" => {
-                        let kind = args.get("kind").cloned().ok_or_else(|| {
+                        let kind = args.get("kind").and_then(|v| v.as_str()).ok_or_else(|| {
                             ConnectorError::InvalidInput("Missing 'kind' for mode=kind".into())
                         })?;
-                        mapped.insert("kind".to_string(), kind);
-                        "search_by_kind"
+                        let query = self.build_query(None, Some(kind), None, None, None);
+                        let results = self
+                            .run_mdfind(&query, directory, Some(limit), false)
+                            .await?;
+                        let payload = json!({
+                            "kind": kind,
+                            "spotlight_query": query,
+                            "directory": directory,
+                            "count": results.len(),
+                            "files": results
+                        });
+                        structured_result_with_text(&payload, None)
                     }
                     "recent" => {
-                        if let Some(days) = args.get("days").cloned() {
-                            mapped.insert("days".to_string(), days);
+                        let days = args.get("days").and_then(|v| v.as_u64()).unwrap_or(7) as i64;
+                        let kind = args.get("kind").and_then(|v| v.as_str());
+                        let mut query_parts = vec![format!(
+                            "kMDItemContentModificationDate >= $time.today(-{})",
+                            days
+                        )];
+                        if let Some(kind) = kind {
+                            query_parts.push(self.build_query(None, Some(kind), None, None, None));
                         }
-                        if let Some(k) = args.get("kind").cloned() {
-                            mapped.insert("kind".to_string(), k);
-                        }
-                        "search_recent"
+                        let query = query_parts.join(" && ");
+                        let results = self
+                            .run_mdfind(&query, directory, Some(limit), false)
+                            .await?;
+                        let payload = json!({
+                            "days": days,
+                            "kind": kind,
+                            "spotlight_query": query,
+                            "directory": directory,
+                            "count": results.len(),
+                            "files": results
+                        });
+                        structured_result_with_text(&payload, None)
                     }
                     "raw" => {
-                        let query = args.get("query").cloned().ok_or_else(|| {
-                            ConnectorError::InvalidInput("Missing 'query' for mode=raw".into())
-                        })?;
-                        mapped.insert("query".to_string(), query);
-                        "raw_query"
+                        let query =
+                            args.get("query").and_then(|v| v.as_str()).ok_or_else(|| {
+                                ConnectorError::InvalidInput("Missing 'query' for mode=raw".into())
+                            })?;
+                        let results = self
+                            .run_mdfind(query, directory, Some(limit), false)
+                            .await?;
+                        let payload = json!({
+                            "query": query,
+                            "directory": directory,
+                            "count": results.len(),
+                            "files": results
+                        });
+                        structured_result_with_text(&payload, None)
                     }
-                    _ => {
-                        return Err(ConnectorError::InvalidInput(format!(
-                            "Invalid 'mode': {}",
-                            mode
-                        )));
-                    }
-                };
-
-                let request = CallToolRequestParam {
-                    name: legacy_tool.into(),
-                    arguments: Some(mapped),
-                };
-                self.call_tool(request).await
-            }
-            "search_content" => {
-                let query_text = args
-                    .get("query")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| ConnectorError::InvalidInput("Missing 'query'".to_string()))?;
-
-                let directory = args.get("directory").and_then(|v| v.as_str());
-                let kind = args.get("kind").and_then(|v| v.as_str());
-                let limit = args
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .map(|n| n as usize)
-                    .unwrap_or(50);
-
-                // Build the query
-                let query = self.build_query(Some(query_text), kind, None, None, None);
-
-                let results = self
-                    .run_mdfind(&query, directory, Some(limit), false)
-                    .await?;
-
-                let payload = json!({
-                    "query": query_text,
-                    "spotlight_query": query,
-                    "directory": directory,
-                    "count": results.len(),
-                    "files": results
-                });
-
-                structured_result_with_text(&payload, None)
-            }
-
-            "search_by_name" => {
-                let name_query = args
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| ConnectorError::InvalidInput("Missing 'name'".to_string()))?;
-
-                let directory = args.get("directory").and_then(|v| v.as_str());
-                let limit = args
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .map(|n| n as usize)
-                    .unwrap_or(50);
-
-                let results = self
-                    .run_mdfind(name_query, directory, Some(limit), true)
-                    .await?;
-
-                let payload = json!({
-                    "name_query": name_query,
-                    "directory": directory,
-                    "count": results.len(),
-                    "files": results
-                });
-
-                structured_result_with_text(&payload, None)
-            }
-
-            "search_by_kind" => {
-                let kind = args
-                    .get("kind")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| ConnectorError::InvalidInput("Missing 'kind'".to_string()))?;
-
-                let directory = args.get("directory").and_then(|v| v.as_str());
-                let limit = args
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .map(|n| n as usize)
-                    .unwrap_or(50);
-
-                let query = self.build_query(None, Some(kind), None, None, None);
-
-                let results = self
-                    .run_mdfind(&query, directory, Some(limit), false)
-                    .await?;
-
-                let payload = json!({
-                    "kind": kind,
-                    "spotlight_query": query,
-                    "directory": directory,
-                    "count": results.len(),
-                    "files": results
-                });
-
-                structured_result_with_text(&payload, None)
-            }
-
-            "search_recent" => {
-                let days = args.get("days").and_then(|v| v.as_u64()).unwrap_or(7) as i64;
-
-                let kind = args.get("kind").and_then(|v| v.as_str());
-                let directory = args.get("directory").and_then(|v| v.as_str());
-                let limit = args
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .map(|n| n as usize)
-                    .unwrap_or(50);
-
-                // Build date query using relative time
-                let mut query_parts = vec![format!(
-                    "kMDItemContentModificationDate >= $time.today(-{})",
-                    days
-                )];
-
-                if let Some(kind) = kind {
-                    let kind_query = self.build_query(None, Some(kind), None, None, None);
-                    query_parts.push(kind_query);
+                    _ => Err(ConnectorError::InvalidInput(format!(
+                        "Invalid 'mode': {}",
+                        mode
+                    ))),
                 }
-
-                let query = query_parts.join(" && ");
-
-                let results = self
-                    .run_mdfind(&query, directory, Some(limit), false)
-                    .await?;
-
-                let payload = json!({
-                    "days": days,
-                    "kind": kind,
-                    "spotlight_query": query,
-                    "directory": directory,
-                    "count": results.len(),
-                    "files": results
-                });
-
-                structured_result_with_text(&payload, None)
             }
-
             "get_metadata" => {
                 let path = args
                     .get("path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| ConnectorError::InvalidInput("Missing 'path'".to_string()))?;
-
                 let metadata = self.get_file_metadata(path).await?;
-
                 let payload = json!({
                     "path": path,
                     "metadata": metadata
                 });
-
                 structured_result_with_text(&payload, None)
             }
-
-            "raw_query" => {
-                let query = args
-                    .get("query")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| ConnectorError::InvalidInput("Missing 'query'".to_string()))?;
-
-                let directory = args.get("directory").and_then(|v| v.as_str());
-                let limit = args
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .map(|n| n as usize)
-                    .unwrap_or(50);
-
-                let results = self
-                    .run_mdfind(query, directory, Some(limit), false)
-                    .await?;
-
-                let payload = json!({
-                    "query": query,
-                    "directory": directory,
-                    "count": results.len(),
-                    "files": results
-                });
-
-                structured_result_with_text(&payload, None)
-            }
-
             _ => Err(ConnectorError::ToolNotFound),
         }
     }

@@ -87,10 +87,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "jsonrpc": "2.0",
         "method": "tools/call",
         "params": {
-            "name": "hackernews/search_stories",
+            "name": "hackernews/search",
             "arguments": {
                 "query": "rust",
-                "hitsPerPage": 3
+                "limit": 3
             }
         },
         "id": 3
@@ -131,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "jsonrpc": "2.0",
         "method": "tools/call",
         "params": {
-            "name": "wikipedia/get_article",
+            "name": "wikipedia/get",
             "arguments": {
                 "title": "Rust (programming language)"
             }

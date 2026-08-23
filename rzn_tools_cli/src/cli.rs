@@ -9,13 +9,13 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
   rzn-tools tools                             Show all tools with auth requirements
   rzn-tools tools youtube                     Show tools for a specific connector
   rzn-tools search youtube \"rust tutorial\"    Search YouTube videos
-  rzn-tools hackernews search --query \"rust\"  Search Hacker News directly
+  rzn-tools call hackernews search --args '{\"query\":\"rust\"}'
 
 \x1b[1;36mAuthentication:\x1b[0m
   rzn-tools setup                             Interactive setup wizard
-  rzn-tools setup slack                       Configure a specific connector
+  rzn-tools setup youtube                     Configure a specific connector
   rzn-tools config show                       View current auth configuration
-  rzn-tools config test github                Test authentication
+  rzn-tools config test youtube               Test authentication
 
 \x1b[1;36mMore Info:\x1b[0m
   rzn-tools <command> --help                  Get help for any command
@@ -44,14 +44,6 @@ pub struct Cli {
     #[arg(long, global = true, value_enum, default_value_t = OutputFormat::Pretty)]
     pub output: OutputFormat,
 
-    /// Disable colored output
-    #[arg(long, global = true)]
-    pub no_color: bool,
-
-    /// Verbose output
-    #[arg(short, long, global = true, action = clap::ArgAction::Count)]
-    pub verbose: u8,
-
     /// Copy output to clipboard
     #[arg(short, long, global = true)]
     pub copy: bool,
@@ -70,9 +62,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    #[command(alias = "ls")]
     List,
-    #[command(alias = "init")]
     Setup {
         connector: Option<String>,
     },
@@ -121,13 +111,11 @@ pub enum Commands {
         #[arg(long)]
         field: Option<String>,
     },
-    #[command(alias = "f")]
     Fetch {
         input: String,
         #[arg(long, default_value = "raw", value_parser = ["raw", "normalized_v1", "display_v1"])]
         output_format: String,
     },
-    #[command(alias = "patterns")]
     Formats,
     Config {
         #[command(subcommand)]
@@ -169,7 +157,6 @@ pub enum Commands {
         #[command(subcommand)]
         action: ReportAction,
     },
-    #[command(alias = "systems")]
     Workflows {
         #[command(subcommand)]
         action: WorkflowAction,
@@ -178,8 +165,8 @@ pub enum Commands {
         #[command(subcommand)]
         action: SkillAction,
     },
-    /// First-class YouTube video, playlist, channel, and transcript workflows.
-    #[command(name = "youtube", alias = "yt")]
+    /// First-class YouTube video, playlist, and channel workflows.
+    #[command(name = "youtube")]
     Youtube {
         #[command(flatten)]
         args: YoutubeArgs,
@@ -315,7 +302,6 @@ pub enum SkillAction {
     /// Show where the bundled skill would be installed and current link status
     Status(SkillArgs),
     /// Install symlinks for the bundled rzn-tools skill
-    #[command(alias = "setup")]
     Install(SkillInstallArgs),
     /// Refresh managed skill source and relink selected clients
     Update(SkillInstallArgs),
@@ -484,7 +470,7 @@ pub enum YoutubeTools {
     },
 
     /// List recent uploads from a channel or playlist
-    #[command(name = "list", alias = "recent")]
+    #[command(name = "list")]
     List {
         /// Channel ID/URL/handle (e.g., UC..., <https://youtube.com/@hubermanlab>, @hubermanlab)
         #[arg(
@@ -508,7 +494,7 @@ pub enum YoutubeTools {
     },
 
     /// Resolve a channel name/handle to a stable UC... channel ID (and ranked candidates for "official" selection)
-    #[command(name = "resolve-channel", alias = "resolve", alias = "channel")]
+    #[command(name = "resolve-channel")]
     ResolveChannel {
         /// Channel name query (e.g., "Andrew Huberman")
         #[arg(long)]
@@ -525,14 +511,7 @@ pub enum YoutubeTools {
     },
 
     /// Get video details or enumerate a playlist/channel URL
-    #[command(
-        name = "get",
-        alias = "video",
-        alias = "details",
-        alias = "get_details",
-        alias = "get-details",
-        alias = "getdetails"
-    )]
+    #[command(name = "get")]
     Get {
         /// Video ID/URL, playlist ID/URL, or channel handle/URL (positional)
         #[arg(
@@ -545,42 +524,12 @@ pub enum YoutubeTools {
         #[arg(long, short, required_unless_present = "id_or_url")]
         id: Option<String>,
     },
-
-    /// Get video transcript (compat alias; use `rzn-tools youtube get`)
-    #[command(name = "transcript", alias = "captions", hide = true)]
-    Transcript {
-        /// Video ID or URL (positional)
-        #[arg(
-            value_name = "ID_OR_URL",
-            required_unless_present = "id",
-            conflicts_with = "id"
-        )]
-        id_or_url: Option<String>,
-        /// Video ID or URL (flag)
-        #[arg(long, short, required_unless_present = "id_or_url")]
-        id: Option<String>,
-    },
-
-    /// Get video chapters (compat alias; use `rzn-tools youtube get`)
-    #[command(name = "chapters", hide = true)]
-    Chapters {
-        /// Video ID or URL (positional)
-        #[arg(
-            value_name = "ID_OR_URL",
-            required_unless_present = "id",
-            conflicts_with = "id"
-        )]
-        id_or_url: Option<String>,
-        /// Video ID or URL (flag)
-        #[arg(long, short, required_unless_present = "id_or_url")]
-        id: Option<String>,
-    },
 }
 
 /// YouTube command args
 ///
 /// Supports both:
-/// - `rzn-tools youtube <ID_OR_URL>` (implicit get/list)
+/// - `rzn-tools youtube <ID_OR_URL>` (implicit get)
 /// - `rzn-tools youtube <subcommand> ...`
 #[derive(Args, Clone)]
 #[command(args_conflicts_with_subcommands = true, arg_required_else_help = true)]

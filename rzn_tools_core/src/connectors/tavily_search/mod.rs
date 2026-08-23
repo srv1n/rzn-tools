@@ -65,7 +65,6 @@ impl Connector for TavilySearchConnector {
                 "topic": {"type": "string", "enum": ["general","news"], "default":"general"},
                 "depth": {"type": "string", "enum": ["basic","advanced"], "default":"basic", "description": "Search depth"},
                 "limit": {"type": "integer", "default": 10},
-                "max_results": {"type": "integer", "description": "Alias for limit (deprecated)."},
                 "include_answer": {"type": "boolean", "default": true},
                 "include_images": {"type": "boolean", "default": false},
                 "include_domains": {"type": "array", "items": {"type": "string"}},
@@ -103,11 +102,7 @@ impl Connector for TavilySearchConnector {
             .get("depth")
             .and_then(|v| v.as_str())
             .unwrap_or("basic");
-        let max_results = args
-            .get("limit")
-            .or_else(|| args.get("max_results"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(10) as usize;
+        let max_results = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
         let include_answer = args
             .get("include_answer")
             .and_then(|v| v.as_bool())

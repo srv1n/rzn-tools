@@ -30,16 +30,6 @@ impl AppleContactsConnector {
 // ============================================================================
 
 #[derive(Debug, Serialize, Deserialize)]
-struct ContactGroup {
-    /// Group name
-    name: String,
-    /// Group ID
-    id: String,
-    /// Number of contacts in group
-    member_count: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 struct ContactSummary {
     /// Contact ID (use for get_contact)
     id: String,
@@ -98,24 +88,6 @@ struct Address {
 // ============================================================================
 // AppleScript Generators
 // ============================================================================
-
-#[cfg(target_os = "macos")]
-fn script_list_groups() -> String {
-    r#"
-tell application "Contacts"
-    set output to ""
-    repeat with g in groups
-        set gName to name of g
-        set gId to id of g
-        set memberCount to count of people of g
-        if output is not "" then set output to output & "|||"
-        set output to output & gName & ":::" & gId & ":::" & memberCount
-    end repeat
-    return output
-end tell
-"#
-    .to_string()
-}
 
 #[cfg(target_os = "macos")]
 fn script_list_contacts(group: Option<&str>, limit: usize) -> String {
@@ -255,109 +227,9 @@ end tell
     )
 }
 
-#[cfg(target_os = "macos")]
-fn script_search_by_email(email: &str) -> String {
-    format!(
-        r#"
-tell application "Contacts"
-    set output to ""
-    repeat with p in people
-        repeat with e in emails of p
-            if value of e contains "{}" then
-                set pId to id of p
-                set pName to name of p
-                set pFirst to first name of p
-                if pFirst is missing value then set pFirst to ""
-                set pLast to last name of p
-                if pLast is missing value then set pLast to ""
-                set pOrg to organization of p
-                if pOrg is missing value then set pOrg to ""
-
-                if output is not "" then set output to output & "|||"
-                set output to output & pId & ":::" & pName & ":::" & pFirst & ":::" & pLast & ":::" & pOrg
-                exit repeat
-            end if
-        end repeat
-    end repeat
-    return output
-end tell
-"#,
-        escape_applescript_string(email)
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn script_search_by_phone(phone: &str) -> String {
-    // Normalize phone for search (remove common formatting)
-    let normalized = phone
-        .chars()
-        .filter(|c| c.is_ascii_digit() || *c == '+')
-        .collect::<String>();
-
-    format!(
-        r#"
-tell application "Contacts"
-    set output to ""
-    repeat with p in people
-        repeat with ph in phones of p
-            set phoneVal to value of ph
-            -- Simple contains check
-            if phoneVal contains "{}" then
-                set pId to id of p
-                set pName to name of p
-                set pFirst to first name of p
-                if pFirst is missing value then set pFirst to ""
-                set pLast to last name of p
-                if pLast is missing value then set pLast to ""
-                set pOrg to organization of p
-                if pOrg is missing value then set pOrg to ""
-
-                if output is not "" then set output to output & "|||"
-                set output to output & pId & ":::" & pName & ":::" & pFirst & ":::" & pLast & ":::" & pOrg
-                exit repeat
-            end if
-        end repeat
-    end repeat
-    return output
-end tell
-"#,
-        escape_applescript_string(&normalized)
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn script_get_contact_count() -> String {
-    r#"
-tell application "Contacts"
-    return count of people
-end tell
-"#
-    .to_string()
-}
-
 // ============================================================================
 // Parsing Functions
 // ============================================================================
-
-#[cfg(target_os = "macos")]
-fn parse_groups(output: &str) -> Vec<ContactGroup> {
-    output
-        .split("|||")
-        .filter(|s| !s.is_empty())
-        .filter_map(|entry| {
-            let parts: Vec<&str> = entry.split(":::").collect();
-            if parts.len() >= 3 {
-                Some(ContactGroup {
-                    name: parts[0].to_string(),
-                    id: parts[1].to_string(),
-                    member_count: parts[2].parse().unwrap_or(0),
-                })
-            } else {
-                None
-            }
-        })
-        .collect()
-}
 
 #[cfg(target_os = "macos")]
 fn parse_contact_summaries(output: &str) -> Vec<ContactSummary> {
@@ -614,29 +486,6 @@ impl crate::Connector for AppleContactsConnector {
         _request: Option<PaginatedRequestParam>,
     ) -> Result<ListToolsResult, ConnectorError> {
         let tools = vec![
-            // Group Management
-            Tool {
-                name: Cow::Borrowed("list_groups"),
-                title: Some("List Contact Groups".to_string()),
-                description: Some(Cow::Borrowed(
-                    "List all contact groups with names, IDs, and member counts. Use group names to filter contact listings.",
-                )),
-                input_schema: Arc::new(json!({"type": "object", "properties": {}}).as_object().unwrap().clone()),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
-            Tool {
-                name: Cow::Borrowed("get_contact_count"),
-                title: Some("Get Contact Count".to_string()),
-                description: Some(Cow::Borrowed(
-                    "Get the total number of contacts in your address book.",
-                )),
-                input_schema: Arc::new(json!({"type": "object", "properties": {}}).as_object().unwrap().clone()),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
             // Contact Listing
             Tool {
                 name: Cow::Borrowed("list_contacts"),
@@ -723,64 +572,9 @@ impl crate::Connector for AppleContactsConnector {
                 annotations: None,
                 icons: None,
             },
-            Tool {
-                name: Cow::Borrowed("search_by_email"),
-                title: Some("Search by Email".to_string()),
-                description: Some(Cow::Borrowed(
-                    "Find contacts by email address. Useful for identifying senders. Returns matching contacts.",
-                )),
-                input_schema: Arc::new(
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "email": {
-                                "type": "string",
-                                "description": "Email address or partial email to search for. Required."
-                            }
-                        },
-                        "required": ["email"]
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
-            Tool {
-                name: Cow::Borrowed("search_by_phone"),
-                title: Some("Search by Phone".to_string()),
-                description: Some(Cow::Borrowed(
-                    "Find contacts by phone number. Numbers are normalized for matching (ignores formatting). Returns matching contacts.",
-                )),
-                input_schema: Arc::new(
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "phone": {
-                                "type": "string",
-                                "description": "Phone number to search for. Can include formatting. Required."
-                            }
-                        },
-                        "required": ["phone"]
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-            },
         ];
 
         // Keep the surface small to reduce ambiguity and context bloat for agents.
-        // Back-compat: non-listed tools are still accepted in call_tool().
-        let tools = tools
-            .into_iter()
-            .filter(|t| matches!(t.name.as_ref(), "list_contacts" | "get_contact" | "search"))
-            .collect();
 
         Ok(ListToolsResult {
             tools,
@@ -806,18 +600,6 @@ impl crate::Connector for AppleContactsConnector {
             let args = request.arguments.unwrap_or_default();
 
             match name {
-                "list_groups" => {
-                    let output = run_applescript_output(&script_list_groups()).await?;
-                    let groups = parse_groups(&output);
-                    structured_result_with_text(&groups, None)
-                }
-
-                "get_contact_count" => {
-                    let output = run_applescript_output(&script_get_contact_count()).await?;
-                    let count: i32 = output.trim().parse().unwrap_or(0);
-                    structured_result_with_text(&json!({"total_contacts": count}), None)
-                }
-
                 "list_contacts" => {
                     let group = args.get("group").and_then(|v| v.as_str());
                     let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
@@ -851,26 +633,6 @@ impl crate::Connector for AppleContactsConnector {
 
                     let output =
                         run_applescript_output(&script_search_contacts(query, limit)).await?;
-                    let contacts = parse_contact_summaries(&output);
-                    structured_result_with_text(&contacts, None)
-                }
-
-                "search_by_email" => {
-                    let email = args.get("email").and_then(|v| v.as_str()).ok_or_else(|| {
-                        ConnectorError::InvalidParams("Missing 'email'".to_string())
-                    })?;
-
-                    let output = run_applescript_output(&script_search_by_email(email)).await?;
-                    let contacts = parse_contact_summaries(&output);
-                    structured_result_with_text(&contacts, None)
-                }
-
-                "search_by_phone" => {
-                    let phone = args.get("phone").and_then(|v| v.as_str()).ok_or_else(|| {
-                        ConnectorError::InvalidParams("Missing 'phone'".to_string())
-                    })?;
-
-                    let output = run_applescript_output(&script_search_by_phone(phone)).await?;
                     let contacts = parse_contact_summaries(&output);
                     structured_result_with_text(&contacts, None)
                 }

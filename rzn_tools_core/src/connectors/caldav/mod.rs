@@ -132,8 +132,6 @@ struct GetEventArgs {
     #[serde(default)]
     url: Option<String>,
     #[serde(default)]
-    event_url: Option<String>,
-    #[serde(default)]
     output_format: OutputFormat,
     #[serde(default = "default_response_format")]
     response_format: String,
@@ -147,8 +145,6 @@ struct CreateEventArgs {
     event_path: Option<String>,
     #[serde(default)]
     url: Option<String>,
-    #[serde(default)]
-    event_url: Option<String>,
     #[serde(default)]
     uid: Option<String>,
     #[serde(default)]
@@ -179,8 +175,6 @@ struct UpdateEventArgs {
     item_ref: Option<String>,
     #[serde(default)]
     url: Option<String>,
-    #[serde(default)]
-    event_url: Option<String>,
     #[serde(default)]
     uid: Option<String>,
     #[serde(default)]
@@ -213,8 +207,6 @@ struct DeleteEventArgs {
     item_ref: Option<String>,
     #[serde(default)]
     url: Option<String>,
-    #[serde(default)]
-    event_url: Option<String>,
     #[serde(default)]
     if_match: Option<String>,
 }
@@ -560,9 +552,8 @@ impl CaldavConnector {
         &self,
         item_ref: Option<String>,
         url: Option<String>,
-        event_url: Option<String>,
     ) -> Result<String, ConnectorError> {
-        if let Some(value) = url.or(event_url) {
+        if let Some(value) = url {
             return Ok(value);
         }
 
@@ -589,7 +580,7 @@ impl CaldavConnector {
         }
 
         Err(ConnectorError::InvalidParams(
-            "Provide one of: item_ref, url, or event_url.".to_string(),
+            "Provide item_ref or url.".to_string(),
         ))
     }
 
@@ -925,8 +916,7 @@ impl CaldavConnector {
     async fn handle_get_event(&self, args: GetEventArgs) -> Result<CallToolResult, ConnectorError> {
         let config = self.ensure_config()?;
         let response_format = validate_response_format(&args.response_format)?;
-        let event_url =
-            self.resolve_event_url_from_inputs(args.item_ref, args.url, args.event_url)?;
+        let event_url = self.resolve_event_url_from_inputs(args.item_ref, args.url)?;
 
         let raw_ical = self.send_event_get(config, &event_url).await?;
         let event = build_event_from_raw(event_url, raw_ical, None);
@@ -961,7 +951,7 @@ impl CaldavConnector {
             .or_else(|| parsed_from_raw.as_ref().and_then(|value| value.uid.clone()))
             .unwrap_or_else(generate_uid);
 
-        let event_url = if let Some(url) = args.url.or(args.event_url) {
+        let event_url = if let Some(url) = args.url {
             url
         } else {
             let calendar_url = self
@@ -1043,8 +1033,7 @@ impl CaldavConnector {
     ) -> Result<CallToolResult, ConnectorError> {
         let config = self.ensure_config()?;
         let response_format = validate_response_format(&args.response_format)?;
-        let event_url =
-            self.resolve_event_url_from_inputs(args.item_ref, args.url, args.event_url)?;
+        let event_url = self.resolve_event_url_from_inputs(args.item_ref, args.url)?;
 
         let raw_ical = if let Some(raw) = args.raw_ical {
             if raw.trim().is_empty() {
@@ -1165,8 +1154,7 @@ impl CaldavConnector {
         args: DeleteEventArgs,
     ) -> Result<CallToolResult, ConnectorError> {
         let config = self.ensure_config()?;
-        let event_url =
-            self.resolve_event_url_from_inputs(args.item_ref, args.url, args.event_url)?;
+        let event_url = self.resolve_event_url_from_inputs(args.item_ref, args.url)?;
         self.send_event_delete(config, &event_url, args.if_match.as_deref())
             .await?;
         let item_ref = event_item_ref_from_url(&event_url);
@@ -1280,7 +1268,6 @@ impl Connector for CaldavConnector {
                         "properties": {
                             "item_ref": { "type": "string", "description": "Preferred identifier, e.g. caldav:event:<base64url>" },
                             "url": { "type": "string", "description": "Event URL (.ics or CalDAV resource URL)." },
-                            "event_url": { "type": "string", "description": "Alias for url." },
                             "output_format": {
                                 "type": "string",
                                 "enum": ["raw", "normalized_v1", "display_v1"],
@@ -1311,7 +1298,6 @@ impl Connector for CaldavConnector {
                             "calendar_url": { "type": "string", "description": "Optional calendar collection URL override." },
                             "event_path": { "type": "string", "description": "Optional resource path/name (e.g., standup-2026-02-20.ics)." },
                             "url": { "type": "string", "description": "Optional full event URL (overrides calendar_url/event_path)." },
-                            "event_url": { "type": "string", "description": "Alias for url." },
                             "uid": { "type": "string", "description": "Optional event UID. Generated when omitted." },
                             "summary": { "type": "string" },
                             "description": { "type": "string" },
@@ -1350,7 +1336,6 @@ impl Connector for CaldavConnector {
                         "properties": {
                             "item_ref": { "type": "string", "description": "Preferred reference, e.g. caldav:event:<base64url>" },
                             "url": { "type": "string", "description": "Event URL" },
-                            "event_url": { "type": "string", "description": "Alias for url" },
                             "if_match": { "type": "string", "description": "Optional ETag for optimistic concurrency control." },
                             "uid": { "type": "string" },
                             "summary": { "type": "string" },
@@ -1390,7 +1375,6 @@ impl Connector for CaldavConnector {
                         "properties": {
                             "item_ref": { "type": "string", "description": "Preferred reference, e.g. caldav:event:<base64url>" },
                             "url": { "type": "string", "description": "Event URL" },
-                            "event_url": { "type": "string", "description": "Alias for url" },
                             "if_match": { "type": "string", "description": "Optional ETag for optimistic concurrency control." }
                         }
                     })

@@ -19,8 +19,7 @@ pub trait AuthStore: Send + Sync {
 /// We treat the key before the delimiter as the connector/provider name, and the key after
 /// the delimiter as the profile name.
 ///
-/// Backward compatibility:
-/// - Keys without this delimiter are treated as `profile = "default"`.
+/// A key without this delimiter is the default profile.
 pub const AUTH_PROFILE_DELIM: &str = "::";
 pub const CONFIG_DIR_NAME: &str = "rzn-tools";
 
@@ -81,8 +80,7 @@ impl FileAuthStore {
 
     /// Build a storage key for a `(provider, profile)` pair.
     ///
-    /// `profile = "default"` uses the legacy key format (just the provider name), so existing
-    /// config files keep working.
+    /// The default profile uses the provider name. Named profiles use the delimiter.
     pub fn key_for_profile(provider: &str, profile: &str) -> String {
         if profile == "default" {
             provider.to_string()
@@ -140,7 +138,7 @@ impl FileAuthStore {
     /// Resolve an "effective" profile name for a provider when the caller did not specify one.
     ///
     /// Selection rules:
-    /// 1) If legacy/default credentials exist under the plain provider key, return `"default"`.
+    /// 1) If default credentials exist under the plain provider key, return `"default"`.
     /// 2) Otherwise, if any `provider::profile` entries exist, return the first profile
     ///    in sorted order (deterministic).
     pub fn resolve_profile_for_provider(&self, provider: &str) -> Option<String> {
@@ -227,7 +225,7 @@ mod tests {
     }
 
     #[test]
-    fn resolves_default_when_legacy_key_exists() {
+    fn resolves_default_profile() {
         let store = FileAuthStore {
             path: std::env::temp_dir().join(format!(
                 "rzn_tools_auth_store_test_{}.json",

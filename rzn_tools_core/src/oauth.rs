@@ -238,33 +238,6 @@ fn apply_expiry(mut map: HashMap<String, String>, tokens: &OAuthTokens) -> HashM
     map
 }
 
-pub fn ensure_google_access(auth: &mut HashMap<String, String>) -> Result<String, ConnectorError> {
-    if let (Some(at), Some(exp_at)) = (auth.get("access_token"), auth.get("expires_at")) {
-        if exp_at.parse::<i64>().unwrap_or(0) > now_epoch() {
-            return Ok(at.clone());
-        }
-    }
-    let rt = auth
-        .get("refresh_token")
-        .cloned()
-        .ok_or_else(|| ConnectorError::Authentication("Missing refresh_token".to_string()))?;
-    let client_id = auth.get("client_id").cloned().ok_or_else(|| {
-        ConnectorError::Authentication("Missing client_id for refresh".to_string())
-    })?;
-    let client_secret = auth.get("client_secret").cloned();
-    let fut = async move { google_refresh_token(&client_id, client_secret.as_deref(), &rt).await };
-    let rt_handle = tokio::runtime::Handle::try_current()
-        .map_err(|e| ConnectorError::Other(format!("no runtime: {}", e)))?;
-    let tokens = rt_handle.block_on(fut)?;
-    auth.insert("access_token".to_string(), tokens.access_token.clone());
-    if let Some(r) = tokens.refresh_token.clone() {
-        auth.insert("refresh_token".to_string(), r);
-    }
-    let mut copied = auth.clone();
-    *auth = apply_expiry(std::mem::take(&mut copied), &tokens);
-    Ok(tokens.access_token)
-}
-
 pub fn ensure_ms_access(auth: &mut HashMap<String, String>) -> Result<String, ConnectorError> {
     if let (Some(at), Some(exp_at)) = (auth.get("access_token"), auth.get("expires_at")) {
         if exp_at.parse::<i64>().unwrap_or(0) > now_epoch() {

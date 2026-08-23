@@ -165,18 +165,14 @@ pub trait Connector: Send + Sync {
         ConnectorConfigSchema::default()
     }
 }
-// ProviderRegistry and ServerInfo remain the same
-
 pub struct ProviderRegistry {
     pub providers: HashMap<String, Arc<tokio::sync::Mutex<Box<dyn Connector>>>>,
-    pub aliases: HashMap<String, String>, // alias -> canonical name
 }
 
 impl ProviderRegistry {
     pub fn new() -> Self {
         ProviderRegistry {
             providers: HashMap::new(),
-            aliases: HashMap::new(),
         }
     }
     pub fn register_provider(&mut self, provider: Box<dyn Connector>) {
@@ -186,21 +182,13 @@ impl ProviderRegistry {
         );
     }
 
-    pub fn register_alias(&mut self, alias: &str, canonical_name: &str) {
-        self.aliases
-            .insert(alias.to_string(), canonical_name.to_string());
-    }
-
     pub fn retain_connectors(&mut self, allowed: &HashSet<String>) {
         self.providers
             .retain(|name, _| allowed.contains(name.as_str()));
-        self.aliases
-            .retain(|_, canonical_name| self.providers.contains_key(canonical_name));
     }
 
     pub fn with_usage(self, usage: Arc<UsageManager>) -> ProviderRegistry {
         let mut registry = ProviderRegistry::new();
-        registry.aliases = self.aliases;
         for (name, provider) in self.providers {
             match Arc::try_unwrap(provider) {
                 Ok(mutex) => {
@@ -220,15 +208,7 @@ impl ProviderRegistry {
     }
 
     pub fn get_provider(&self, name: &str) -> Option<&Arc<tokio::sync::Mutex<Box<dyn Connector>>>> {
-        // First try direct lookup
-        if let Some(provider) = self.providers.get(name) {
-            return Some(provider);
-        }
-        // Then try alias lookup
-        if let Some(canonical_name) = self.aliases.get(name) {
-            return self.providers.get(canonical_name);
-        }
-        None
+        self.providers.get(name)
     }
     pub fn list_providers(&self) -> Vec<ServerInfo> {
         self.providers
@@ -280,25 +260,12 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
                 registry.register_provider(Box::new(connector));
             }
         };
-        ($connector:expr, $($alias:literal),+ $(,)?) => {
-            if let Ok(connector) = $connector {
-                let canonical = connector.name();
-                registry.register_provider(Box::new(connector));
-                $(registry.register_alias($alias, canonical);)+
-            }
-        };
     }
 
     #[allow(unused_macros)]
     macro_rules! register_sync {
         ($connector:expr) => {{
             registry.register_provider(Box::new($connector));
-        }};
-        ($connector:expr, $($alias:literal),+ $(,)?) => {{
-            let connector = $connector;
-            let canonical = connector.name();
-            registry.register_provider(Box::new(connector));
-            $(registry.register_alias($alias, canonical);)+
         }};
     }
 
@@ -309,10 +276,7 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
     register_async!(connectors::wikipedia::WikipediaConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "youtube")]
-    register_async!(
-        connectors::youtube::YouTubeConnector::new(None).await,
-        "youtube_transcripts"
-    );
+    register_async!(connectors::youtube::YouTubeConnector::new(None).await);
 
     #[cfg(feature = "arxiv")]
     register_async!(connectors::arxiv::ArxivConnector::new(auth::AuthDetails::new()).await);
@@ -324,10 +288,7 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
     register_async!(connectors::rss::RssConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "weather")]
-    register_async!(
-        connectors::weather::WeatherConnector::new(auth::AuthDetails::new()).await,
-        "wttr"
-    );
+    register_async!(connectors::weather::WeatherConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "polymarket")]
     register_async!(connectors::polymarket::PolymarketConnector::new().await);
@@ -348,38 +309,29 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
 
     #[cfg(feature = "semantic-scholar")]
     register_async!(
-        connectors::semantic_scholar::SemanticScholarConnector::new(auth::AuthDetails::new()).await,
-        "semantic_scholar"
+        connectors::semantic_scholar::SemanticScholarConnector::new(auth::AuthDetails::new()).await
     );
 
-    #[cfg(any(feature = "web", feature = "web-lite"))]
+    #[cfg(feature = "web")]
     register_async!(connectors::web::WebConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "play-store")]
     register_async!(
-        connectors::play_store::PlayStoreConnector::new(auth::AuthDetails::new()).await,
-        "play_store"
+        connectors::play_store::PlayStoreConnector::new(auth::AuthDetails::new()).await
     );
 
     #[cfg(feature = "app-store")]
-    register_async!(
-        connectors::app_store::AppStoreConnector::new(auth::AuthDetails::new()).await,
-        "appstore"
-    );
+    register_async!(connectors::app_store::AppStoreConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "app-store-connect")]
     register_async!(
         connectors::app_store_connect::AppStoreConnectConnector::new(auth::AuthDetails::new())
-            .await,
-        "asc",
-        "appstoreconnect"
+            .await
     );
 
     #[cfg(feature = "apple-search-ads")]
     register_async!(
-        connectors::apple_search_ads::AppleSearchAdsConnector::new(auth::AuthDetails::new()).await,
-        "asa",
-        "apple-searchads"
+        connectors::apple_search_ads::AppleSearchAdsConnector::new(auth::AuthDetails::new()).await
     );
 
     #[cfg(feature = "reddit")]
@@ -389,18 +341,10 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
     register_async!(connectors::linkedin::LinkedInConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "x-api")]
-    register_async!(
-        connectors::x::XApiConnector::new(auth::AuthDetails::new()).await,
-        "x-api",
-        "twitter-api"
-    );
+    register_async!(connectors::x::XApiConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "x-twitter")]
-    register_async!(
-        connectors::x_browser::XConnector::new(auth::AuthDetails::new()).await,
-        "x-cookies",
-        "twitter-cookies"
-    );
+    register_async!(connectors::x_browser::XConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "scihub")]
     register_async!(connectors::scihub::SciHubConnector::new(auth::AuthDetails::new()).await);
@@ -438,18 +382,13 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
         connectors::google_search_console::GoogleSearchConsoleConnector::new(
             auth::AuthDetails::new(),
         )
-        .await,
-        "gsc"
+        .await
     );
 
     #[cfg(feature = "bing-webmaster-tools")]
     register_async!(
-        connectors::bing_webmaster_tools::BingWebmasterToolsConnector::new(
-            auth::AuthDetails::new(),
-        )
-        .await,
-        "bing-webmaster",
-        "bing-search-console"
+        connectors::bing_webmaster_tools::BingWebmasterToolsConnector::new(auth::AuthDetails::new())
+            .await
     );
 
     #[cfg(feature = "macos-automation")]
@@ -517,8 +456,7 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
 
     #[cfg(feature = "exa-search")]
     register_async!(
-        connectors::exa_search::ExaSearchConnector::new(auth::AuthDetails::new()).await,
-        "exa-search"
+        connectors::exa_search::ExaSearchConnector::new(auth::AuthDetails::new()).await
     );
 
     #[cfg(feature = "firecrawl-search")]
@@ -533,8 +471,7 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
 
     #[cfg(feature = "tavily-search")]
     register_async!(
-        connectors::tavily_search::TavilySearchConnector::new(auth::AuthDetails::new()).await,
-        "tavily"
+        connectors::tavily_search::TavilySearchConnector::new(auth::AuthDetails::new()).await
     );
 
     #[cfg(feature = "serpapi-search")]

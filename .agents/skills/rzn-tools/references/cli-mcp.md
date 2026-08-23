@@ -39,16 +39,14 @@ The CLI and MCP server should expose the same connector capabilities through dif
 | `rzn-tools workflows ...` | Starter workflow/example sync |
 | `rzn-tools skills ...` | Install/update/remove the bundled repo Agent Skill |
 
-Direct connector subcommands live in `rzn_tools_cli/src/cli.rs`. Examples include `youtube`, `hackernews`, `google-drive`, `google-search-console`, `microsoft-graph`, and `exa`.
+Only YouTube has a typed connector command. Use `tools` and `call` for other connectors.
 
 ## Command Design
 
-Use direct flags for connector subcommands:
+Use direct flags for the YouTube command:
 
 ```bash
 rzn-tools youtube search --query "rust programming" --limit 10
-rzn-tools hackernews story --id 8863
-rzn-tools google-drive list-files --page-size 20
 ```
 
 Keep generic escape hatches working:
@@ -58,6 +56,7 @@ rzn-tools tools youtube --output json
 rzn-tools search youtube "rust"
 rzn-tools get youtube dQw4w9WgXcQ
 rzn-tools fetch "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+rzn-tools call google-drive list_files --args '{"page_size":20}'
 ```
 
 For URLs containing `?`, quote the URL in shell examples.
@@ -97,18 +96,18 @@ Macro tools are feature-gated with `llm-macros`. They combine multi-step flows s
 Fast checks:
 
 ```bash
-cargo check -p rzn_tools_cli
-cargo check -p rzn_tools_mcp --features full
-cargo run -p rzn_tools_cli -- list --output json
-cargo run -p rzn_tools_cli -- tools --output json
-cargo run -p rzn_tools_cli -- skills status --scope project --output json
+make check CARGO_ARGS="-p rzn_tools_cli"
+make check CARGO_ARGS="-p rzn_tools_mcp --features server-full"
+make run CARGO_ARGS="-p rzn_tools_cli -- list --output json"
+make run CARGO_ARGS="-p rzn_tools_cli -- tools --output json"
+make run CARGO_ARGS="-p rzn_tools_cli -- skills status --scope project --output json"
 ```
 
 Before release or broad CLI/MCP changes:
 
 ```bash
-cargo fmt --all
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --workspace
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+make fmt
+make clippy CARGO_ARGS="--all-targets --all-features -- -D warnings"
+make test CARGO_ARGS="--workspace"
+RUSTDOCFLAGS="-D warnings" make doc CARGO_ARGS="--workspace"
 ```

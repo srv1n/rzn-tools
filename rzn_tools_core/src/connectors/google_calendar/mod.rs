@@ -27,7 +27,7 @@ impl Connector for GoogleCalendarConnector {
         "google-calendar"
     }
     fn description(&self) -> &'static str {
-        "Google Calendar connector (list events)."
+        "Google Calendar events: list, create, update, delete, and sync."
     }
 
     fn display_name(&self) -> &'static str {

@@ -337,7 +337,7 @@ fn extract_id(source: &str, item: &Value) -> Option<String> {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
         }
-        "semantic-scholar" | "semantic_scholar" => {
+        "semantic-scholar" => {
             // Semantic Scholar uses paperId
             item.get("paperId")
                 .or_else(|| item.get("paper_id"))
@@ -446,7 +446,7 @@ fn extract_metadata(source: &str, item: &Value) -> Value {
             "authors_venue_year": item.get("authors_venue_year"),
             "year": item.get("year"),
         }),
-        "semantic-scholar" | "semantic_scholar" => json!({
+        "semantic-scholar" => json!({
             "authors": item.get("authors"),
             "year": item.get("year"),
             "citationCount": item.get("citationCount"),

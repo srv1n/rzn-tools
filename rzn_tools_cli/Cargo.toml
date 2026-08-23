@@ -67,14 +67,11 @@ default-connectors = [
     "wikipedia",
     "youtube",
 ]
-# `full` remains the portable/server-safe distribution profile.
-full = ["server-full"]
 serve = ["dep:rzn_tools_mcp"]
 server-full = ["serve", "rzn_tools_core/server-full", "rzn_tools_mcp/server-full"]
 desktop-full = ["serve", "rzn_tools_core/desktop-full", "rzn_tools_mcp/desktop-full"]
 all-connectors = ["rzn_tools_core/all-connectors", "rzn_tools_mcp?/all-connectors"]
 browser-cookie-import = ["rzn_tools_core/browser-cookie-import", "rzn_tools_mcp?/browser-cookie-import"]
-browser-cookies = ["browser-cookie-import"]
 
 # Fine-grained pass-through features
 reddit = ["rzn_tools_core/reddit", "rzn_tools_mcp?/reddit"]
@@ -88,9 +85,7 @@ pubmed = ["rzn_tools_core/pubmed", "rzn_tools_mcp?/pubmed"]
 polymarket = ["rzn_tools_core/polymarket", "rzn_tools_mcp?/polymarket"]
 kalshi = ["rzn_tools_core/kalshi", "rzn_tools_mcp?/kalshi"]
 semantic-scholar = ["rzn_tools_core/semantic-scholar", "rzn_tools_mcp?/semantic-scholar"]
-semantic_scholar = ["semantic-scholar"]
 web = ["rzn_tools_core/web", "rzn_tools_mcp?/web"]
-web-lite = ["rzn_tools_core/web-lite", "rzn_tools_mcp?/web-lite"]
 x-twitter = ["rzn_tools_core/x-twitter", "rzn_tools_mcp?/x-twitter"]
 x-browser = ["x-twitter"]
 x = ["rzn_tools_core/x-api", "rzn_tools_mcp?/x"]

@@ -58,7 +58,7 @@ quick_starts:
       time: "week"
       limit: 10
       output_format: "normalized_v1"
-  - id: "search_posts"
+  - id: "search"
     title: "Search discussions"
     description: "Search Reddit by keywords, optionally scoped to a subreddit."
     tool_id: "search"
@@ -199,4 +199,4 @@ x_runtime:
   notes:
     - "Current published tools cover public-read surfaces only."
     - "Authenticated write actions are modeled separately in metadata so the desktop can keep read-only and signed-in flows distinct."
-    - "Authenticated write tools are not exported yet in the v1 MCP surface."
+    - "Authenticated write tools are not exported."

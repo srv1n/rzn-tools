@@ -1,18 +1,15 @@
-## Contribution workflow snippet
+## Contribution workflow
 
 Keep `AGENTS.md` short.
 
-Point contributors and agents to:
-- the public issue templates for intake (a change issue maps to the contract sections of a Tusker task)
-- the PR template for evidence
-- the project repo docs for architecture or policy
+Point contributors and agents to the issue templates, the PR template, and the
+system docs in `docs/system/`.
 
-For Tusker lookup, start with `tusker search`, `tusker list`, and exact task
-paths. Do not search or read generated indexes, raw runner logs, scratch artifacts, or build logs unless the task is explicitly about evidence
-forensics.
+Read the smallest source file and the smallest test set that can explain the
+change. Do not read generated indexes, runner logs, scratch files, or build
+logs unless the task is about those files.
 
-For token discipline, keep repo-specific command wrappers, build locks, and
-forbidden expensive probes in `tusker/SKILL.md` or routed runbooks. Root
-`AGENTS.md` should stay a bootstrap pointer, not a command diary.
+Keep command wrappers and expensive probes in the relevant runbook. Keep root
+guidance short.
 
 Do not turn `AGENTS.md` into a giant encyclopedia.

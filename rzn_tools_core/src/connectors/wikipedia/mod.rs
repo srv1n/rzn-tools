@@ -995,7 +995,7 @@ tokens down. Example: title=\"Rust (programming language)\".",
                 let text = serde_json::to_string(&data)?;
                 Ok(structured_result_with_text(&data, Some(text))?)
             }
-            "get" | "get_article" => {
+            "get" => {
                 let args: GetArticleArgs = serde_json::from_value(json!(args)).map_err(|e| {
                     ConnectorError::InvalidParams(format!("Invalid arguments: {}", e))
                 })?;
