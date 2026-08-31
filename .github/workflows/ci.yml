@@ -76,7 +76,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: make build-release CARGO_ARGS="-p rzn_tools_cli --features full"
+      - run: make build-release CARGO_ARGS="-p rzn_tools_cli --features server-full"
       - run: ./target/release/rzn-tools --version
 
   build-cli-macos:
@@ -97,7 +97,7 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: make build-release CARGO_ARGS="--target ${{ matrix.target }} -p rzn_tools_cli --features full"
+      - run: make build-release CARGO_ARGS="--target ${{ matrix.target }} -p rzn_tools_cli --features server-full"
 
   workflow-assets:
     name: Validate Workflow Assets
@@ -107,7 +107,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: make build-release CARGO_ARGS="-p rzn_tools_core --features examples,full --examples"
+      - run: make build-release CARGO_ARGS="-p rzn_tools_core --features examples,server-full --examples"
       - run: make test CARGO_ARGS="-p rzn_tools_core --test system_metadata_conformance"
 
   docs:
