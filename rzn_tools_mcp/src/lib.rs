@@ -1,14 +1,18 @@
 pub mod http;
 
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, env, sync::Arc};
 
 use tokio::sync::Mutex;
 use tracing::error;
 
 use rzn_tools_core::{
+    auth_store::enable_invocation_scoped_auth,
     mcp_server::{JsonRpcHandler, McpServer},
-    transport::StdioTransport,
+    transport::{StdioTransport, DEFAULT_MAX_FRAME_BYTES},
 };
+
+pub const SIDECAR_CAPABILITY_VERSION: &str = "rzn-tools-mcp-capabilities-v1";
+pub const SIDECAR_PROTOCOL_VERSION: &str = "2025-03-26";
 
 pub use http::{HttpConfig, HttpServer};
 
@@ -46,6 +50,49 @@ pub async fn run_stdio_server(
     let transport = StdioTransport::new(handler);
     transport.run().await?;
     Ok(())
+}
+
+/// Run one tenant-bound MCP child with no inherited credential sources.
+pub async fn run_sidecar_server(
+    exposed_connectors: Option<HashSet<String>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    isolate_invocation_environment();
+    let handler = build_handler_with_connectors(exposed_connectors).await;
+    StdioTransport::with_max_frame_bytes(handler, DEFAULT_MAX_FRAME_BYTES)
+        .run()
+        .await?;
+    Ok(())
+}
+
+pub fn isolate_invocation_environment() {
+    for (name, _) in env::vars_os() {
+        let name = name.to_string_lossy();
+        if is_sensitive_env_name(&name) {
+            env::remove_var(name.as_ref());
+        }
+    }
+    env::remove_var("RZN_PERSIST_TOKENS");
+    env::remove_var("RZN_SHOW_ADMIN_TOOLS");
+    enable_invocation_scoped_auth();
+}
+
+pub fn is_sensitive_env_name(name: &str) -> bool {
+    let name = name.to_ascii_uppercase();
+    name.starts_with("WUZAPI_")
+        || name.contains("API_KEY")
+        || name.contains("TOKEN")
+        || name.contains("SECRET")
+        || name.contains("PASSWORD")
+        || name.contains("COOKIE")
+        || name.contains("OAUTH")
+        || name.contains("CREDENTIAL")
+        || name.contains("PRIVATE_KEY")
+        || name.contains("ACCESS_KEY")
+        || name.contains("SECRET_KEY")
+        || name.contains("KEY_ID")
+        || name.contains("DATABASE_URL")
+        || name.contains("CLIENT_ID")
+        || name.contains("AUTH")
 }
 
 pub async fn run_http_server(config: HttpConfig) -> Result<(), Box<dyn std::error::Error>> {
@@ -86,5 +133,15 @@ mod tests {
         assert!(tool_names
             .iter()
             .all(|name| !name.starts_with("hackernews/")));
+    }
+
+    #[test]
+    fn credential_env_names_are_not_ambient_sidecar_inputs() {
+        assert!(is_sensitive_env_name("OPENAI_API_KEY"));
+        assert!(is_sensitive_env_name("WUZAPI_TOKEN"));
+        assert!(is_sensitive_env_name("RZN_REDDIT_OAUTH_BASE_URL"));
+        assert!(is_sensitive_env_name("AWS_ACCESS_KEY_ID"));
+        assert!(!is_sensitive_env_name("RZN_TOOLS_MCP_CONNECTORS"));
+        assert!(!is_sensitive_env_name("HTTP_PROXY"));
     }
 }

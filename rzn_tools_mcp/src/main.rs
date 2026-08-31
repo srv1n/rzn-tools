@@ -1,7 +1,7 @@
 use std::{collections::HashSet, env, net::SocketAddr};
 use tracing::{error, info};
 
-use rzn_tools_mcp::{run_http_server, run_stdio_server, HttpConfig};
+use rzn_tools_mcp::{run_http_server, run_sidecar_server, run_stdio_server, HttpConfig};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TransportMode {
@@ -14,12 +14,15 @@ struct Config {
     transport: TransportMode,
     http: HttpConfig,
     exposed_connectors: Option<HashSet<String>>,
+    sidecar: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
-    tracing_subscriber::fmt().init();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
 
     let config = Config::parse()?;
     info!("Starting rzn-tools MCP Server");
@@ -27,7 +30,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match config.transport {
         TransportMode::Stdio => {
             info!("MCP Server ready, listening on stdio");
-            if let Err(e) = run_stdio_server(config.exposed_connectors).await {
+            let result = if config.sidecar {
+                run_sidecar_server(config.exposed_connectors).await
+            } else {
+                run_stdio_server(config.exposed_connectors).await
+            };
+            if let Err(e) = result {
                 error!("Transport error: {}", e);
                 return Err(e);
             }
@@ -46,6 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 impl Config {
     fn parse() -> Result<Self, Box<dyn std::error::Error>> {
         let mut transport = TransportMode::Stdio;
+        let mut sidecar = false;
         let mut bind = env::var("RZN_TOOLS_MCP_BIND")
             .ok()
             .or_else(|| env::var("BIND").ok())
@@ -71,6 +80,10 @@ impl Config {
                 }
                 "http" | "--http" => transport = TransportMode::Http,
                 "stdio" => transport = TransportMode::Stdio,
+                "sidecar" => {
+                    transport = TransportMode::Stdio;
+                    sidecar = true;
+                }
                 "--transport" => {
                     let Some(value) = args.next() else {
                         return Err("missing value for --transport".into());
@@ -104,6 +117,10 @@ impl Config {
             }
         }
 
+        if sidecar && transport != TransportMode::Stdio {
+            return Err("sidecar mode only supports stdio transport".into());
+        }
+
         let bind: SocketAddr = bind.parse()?;
         Ok(Self {
             transport,
@@ -113,6 +130,7 @@ impl Config {
                 exposed_connectors: exposed_connectors.clone(),
             },
             exposed_connectors,
+            sidecar,
         })
     }
 }
@@ -140,6 +158,7 @@ fn print_usage() {
         "\
 Usage:
   rzn-tools-mcp
+  rzn-tools-mcp sidecar [--connectors youtube,reddit]
   rzn-tools-mcp http [--bind 127.0.0.1:8000] [--allowed-hosts host1,host2] [--connectors youtube,reddit]
   rzn-tools-mcp --transport http [--bind 127.0.0.1:8000]
 
