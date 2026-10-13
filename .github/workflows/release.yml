@@ -29,18 +29,23 @@ jobs:
             target: x86_64-unknown-linux-gnu
             binary: rzn-tools
             archive_kind: tar.gz
+            features: --all-features
           - runner: windows-2022
             target: x86_64-pc-windows-msvc
             binary: rzn-tools.exe
             archive_kind: zip
+            # macOS-only connectors (apple-*, macos, spotlight) do not build on Windows
+            features: --features server-full,telegram,discord
           - runner: macos-26-intel
             target: x86_64-apple-darwin
             binary: rzn-tools
             archive_kind: tar.gz
+            features: --all-features
           - runner: macos-26
             target: aarch64-apple-darwin
             binary: rzn-tools
             archive_kind: tar.gz
+            features: --all-features
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,7 +55,7 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
-      - run: make build-release CARGO_ARGS="--target ${{ matrix.target }} -p rzn_tools_cli --features server-full"
+      - run: make build-release CARGO_ARGS="--target ${{ matrix.target }} -p rzn_tools_cli ${{ matrix.features }}"
       - if: matrix.archive_kind == 'tar.gz'
         run: |
           mkdir -p dist

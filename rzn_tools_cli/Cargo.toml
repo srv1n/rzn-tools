@@ -1,6 +1,6 @@
 [package]
 name = "rzn_tools_cli"
-version = "0.2.18"
+version = "0.2.19"
 edition = "2021"
 description = "CLI interface for rzn-tools - unified data access tool"
 license = "AGPL-3.0-only"
@@ -15,8 +15,8 @@ path = "src/main.rs"
 
 [dependencies]
 # Core library (feature-forwarding from this crate)
-rzn_tools_core = { package = "rzn_tools_core", version = "0.2.18", path = "../rzn_tools_core", default-features = false }
-rzn_tools_mcp = { package = "rzn_tools_mcp", version = "0.2.18", path = "../rzn_tools_mcp", default-features = false, optional = true }
+rzn_tools_core = { package = "rzn_tools_core", version = "0.2.19", path = "../rzn_tools_core", default-features = false }
+rzn_tools_mcp = { package = "rzn_tools_mcp", version = "0.2.19", path = "../rzn_tools_mcp", default-features = false, optional = true }
 
 # CLI dependencies - optimized for binary size
 clap = { version = "4.5.4", default-features = false, features = ["std", "derive", "env", "help", "usage", "error-context"] }

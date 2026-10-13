@@ -1,6 +1,6 @@
 [package]
 name = "rzn_tools_mcp"
-version = "0.2.18"
+version = "0.2.19"
 edition = "2021"
 description = "MCP server for rzn-tools - Model Context Protocol compliant server"
 license = "AGPL-3.0-only"
@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Core library with feature forwarding
-rzn_tools_core = { package = "rzn_tools_core", version = "0.2.18", path = "../rzn_tools_core", default-features = false }
+rzn_tools_core = { package = "rzn_tools_core", version = "0.2.19", path = "../rzn_tools_core", default-features = false }
 
 # MCP and async
 axum = "0.8.6"

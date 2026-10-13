@@ -1,6 +1,6 @@
 [package]
 name = "rzn_tools_core"
-version = "0.2.18"
+version = "0.2.19"
 edition = "2021"
 description = "Core library for rzn-tools - unified data source connectors"
 license = "AGPL-3.0-only"

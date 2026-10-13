@@ -5128,7 +5128,7 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
 name = "rzn_tools_cli"
-version = "0.2.18"
+version = "0.2.19"
 dependencies = [
  "arboard",
  "clap",
@@ -5155,7 +5155,7 @@ dependencies = [
 
 [[package]]
 name = "rzn_tools_core"
-version = "0.2.18"
+version = "0.2.19"
 dependencies = [
  "agent-twitter-client",
  "async-trait",
@@ -5215,7 +5215,7 @@ dependencies = [
 
 [[package]]
 name = "rzn_tools_mcp"
-version = "0.2.18"
+version = "0.2.19"
 dependencies = [
  "axum",
  "futures",
