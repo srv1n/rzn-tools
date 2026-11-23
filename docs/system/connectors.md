@@ -50,6 +50,23 @@ The registry in [`rzn_tools_core/src/lib.rs`](../../rzn_tools_core/src/lib.rs) i
 | `telegram` | Login, dialog, message, search, and send | Login state stays in the process. |
 | `whatsapp` | Local WuzAPI sidecar and message operations | The sidecar is unofficial. |
 
+YouTube transcript reads first use the watch page's caption tracks. If tracks are
+missing or the caption request fails, the connector tries `yt-dlp` from `PATH`.
+Both paths prefer manual English captions, then generated English, then another
+available language. The fallback prefers yt-dlp's `en-orig` track over an
+auto-translated `en` track, which YouTube may rate-limit. The `-orig` alias is
+removed from the reported language code. The fallback reads JSON3 captions and
+ignores user yt-dlp configuration. HTTP requests have a 20-second timeout; yt-dlp has a 30-second
+process timeout and bounded retries. Metadata can still be returned with
+`transcript_unavailable_reason` when captions cannot be fetched.
+
+Keep the optional fallback current with its package manager, for example
+`brew upgrade yt-dlp`. YouTube extraction also needs yt-dlp's EJS scripts and a
+[supported JavaScript runtime](https://github.com/yt-dlp/yt-dlp/wiki/EJS).
+Deno and Node are enabled in the fallback; Python installations can install the
+scripts with
+`python3 -m pip install -U 'yt-dlp[default]'`.
+
 ## Research and search
 
 | Name | Scope | Main risk or limit |
