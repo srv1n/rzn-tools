@@ -1,13 +1,11 @@
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
 use crate::ingest::{self, OutputFormat};
-use crate::item::{rfc3339, Block, Item, Party};
 #[cfg(feature = "browser-cookie-import")]
 use crate::utils::get_cookies;
 use crate::utils::{get_domain, get_user_agent, match_browser, strip_multiple_newlines, Browser};
 use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use htmd::HtmlToMarkdown;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, ACCEPT_LANGUAGE, COOKIE, USER_AGENT};
 use rmcp::model::*;
@@ -67,6 +65,9 @@ pub struct WebContent {
     pub title: Option<String>,
     pub content: String,
     pub metadata: WebMetadata,
+    /// SHA-256 of the fetched HTML, the page's change marker.
+    #[serde(skip)]
+    pub raw_sha256: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -77,42 +78,7 @@ pub struct WebMetadata {
     pub published_date: Option<String>,
 }
 
-fn web_item_ref(url: &str) -> String {
-    let encoded = URL_SAFE_NO_PAD.encode(url.as_bytes());
-    format!("web:page:{}", encoded)
-}
-
-fn web_item_from_content(content: &WebContent) -> Item {
-    let site = url::Url::parse(&content.url)
-        .ok()
-        .and_then(|url| {
-            url.host_str()
-                .map(|host| host.trim_start_matches("www.").to_string())
-        })
-        .unwrap_or_else(|| content.url.clone());
-    let site_party = Party::named(site.clone()).with_id(site.clone());
-    let author = content
-        .metadata
-        .author
-        .as_deref()
-        .filter(|name| !name.trim().is_empty())
-        .map(Party::named)
-        .unwrap_or_else(|| site_party.clone());
-    let mut item = Item::new(web_item_ref(&content.url), "page", content.url.clone())
-        .with_title(content.title.clone().unwrap_or_default())
-        .with_author(author)
-        .with_published_at(content.metadata.published_date.as_deref().and_then(rfc3339))
-        .with_published_in(site_party)
-        .with_fields(json!({
-            "description": content.metadata.description,
-            "keywords": content.metadata.keywords,
-        }));
-    if !content.content.trim().is_empty() {
-        item.blocks
-            .push(Block::new("content", "paragraph", content.content.clone()));
-    }
-    item
-}
+mod item_v2;
 
 #[derive(Clone)]
 pub struct WebConnector {
@@ -211,6 +177,10 @@ impl WebConnector {
             "scraped url"
         );
 
+        let raw_sha256 = {
+            use sha2::{Digest, Sha256};
+            format!("{:x}", Sha256::digest(response.as_bytes()))
+        };
         let t3 = std::time::Instant::now();
         let content = strip_multiple_newlines(&response);
         let t4 = std::time::Instant::now();
@@ -248,7 +218,59 @@ impl WebConnector {
             title,
             content,
             metadata,
+            raw_sha256,
         })
+    }
+
+    async fn fetch_text(&self, url: &str) -> Result<String, ConnectorError> {
+        let browser = self.browser.clone();
+        let user_agent = get_user_agent(browser);
+        self.client
+            .get(url)
+            .header(
+                USER_AGENT,
+                HeaderValue::from_str(&user_agent)
+                    .map_err(|e| ConnectorError::Other(e.to_string()))?,
+            )
+            .send()
+            .await
+            .and_then(|response| response.error_for_status())
+            .map_err(|e| ConnectorError::Other(e.to_string()))?
+            .text()
+            .await
+            .map_err(|e| ConnectorError::Other(e.to_string()))
+    }
+
+    /// Pages to index from one scope, as `rzn.items/v2`.
+    async fn list_pages(
+        &self,
+        args: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<CallToolResult, ConnectorError> {
+        let page = if let Some(urls) = args.get("urls").and_then(|v| v.as_array()) {
+            let urls: Vec<String> = urls
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect();
+            item_v2::url_list_page(&urls)?
+        } else if let Some(sitemap) = args.get("sitemap").and_then(|v| v.as_str()) {
+            let (mut entries, index) = item_v2::parse_sitemap(&self.fetch_text(sitemap).await?);
+            if index {
+                // A sitemap index lists sitemaps; read each once (no deeper nesting).
+                let mut pages = Vec::new();
+                for (child, _) in entries {
+                    pages.extend(item_v2::parse_sitemap(&self.fetch_text(&child).await?).0);
+                }
+                entries = pages;
+            }
+            item_v2::sitemap_page(&entries)?
+        } else if let Some(feed) = args.get("feed").and_then(|v| v.as_str()) {
+            item_v2::feed_page(self.fetch_text(feed).await?.as_bytes())?
+        } else {
+            return Err(ConnectorError::InvalidParams(
+                "list_pages needs one of urls, sitemap or feed".to_string(),
+            ));
+        };
+        crate::utils::structured_result(&page)
     }
 
     async fn resolve_browser_override(
@@ -729,7 +751,43 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
                     }).as_object().expect("Schema object").clone()),
                     output_schema: None,
                     icons: None,
-                }
+                },
+                Tool {
+                    name: Cow::Borrowed("list_pages"),
+                    title: Some("List Pages For Ingestion".into()),
+                    description: Some(Cow::Borrowed(
+                        "List pages to index from exactly one scope: `urls` (a list), `sitemap` (a sitemap or sitemap index URL), or `feed` (an RSS or Atom feed URL). Returns rzn.items/v2; fetch each with scrape_url output_format=item_v2. No link-following.",
+                    )),
+                    annotations: Some(ToolAnnotations::new().read_only(true).open_world(true)),
+                    input_schema: Arc::new(json!({
+                        "type": "object",
+                        "properties": {
+                            "urls": {"type": "array", "items": {"type": "string"}},
+                            "sitemap": {"type": "string"},
+                            "feed": {"type": "string"},
+                            "limit": {"type": "integer", "description": "Ignored; a scope is listed whole."},
+                            "cursor": {"type": "string", "description": "Ignored; one page."},
+                            "output_format": crate::ingest::output_format_property()
+                        },
+                        "examples": [
+                            {"description": "A sitemap", "input": {"sitemap": "https://example.com/sitemap.xml", "output_format": "item_v2"}}
+                        ],
+                        "_meta": {"category": "list", "tags": ["web"], "auth_required": false, "supports_output_format": true, "supports_cursor": false}
+                    }).as_object().expect("Schema object").clone()),
+                    output_schema: None,
+                    icons: None,
+                },
+                Tool {
+                    name: Cow::Borrowed("describe"),
+                    title: Some("Describe For Ingestion".into()),
+                    description: Some(Cow::Borrowed(
+                        "What this connector gives an index: identity rule, listing type, scopes and fields. Returns rzn.describe/v2.",
+                    )),
+                    annotations: Some(ToolAnnotations::new().read_only(true).open_world(false)),
+                    input_schema: Arc::new(json!({"type": "object", "properties": {}, "_meta": {"category": "describe", "supports_output_format": false}}).as_object().expect("Schema object").clone()),
+                    output_schema: Some(Arc::new(crate::item::description_schema().as_object().cloned().unwrap_or_default())),
+                    icons: None,
+                },
             ],
             next_cursor: None,
 
@@ -743,9 +801,13 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
         let args = request.arguments.unwrap_or_default();
 
         match request.name.as_ref() {
+            "describe" => crate::utils::structured_result(&item_v2::description()),
+            "list_pages" => self.list_pages(&args).await,
             "scrape_url" => {
+                // A web page's key is its normalized URL, so an index fetches by `item_ref`.
                 let url = args
                     .get("url")
+                    .or_else(|| args.get("item_ref"))
                     .and_then(|value| value.as_str())
                     .ok_or_else(|| {
                         ConnectorError::InvalidParams("Missing 'url' parameter".to_string())
@@ -778,7 +840,8 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
                 let content = self.scrape_url(url, &browser, cookies.as_deref()).await?;
 
                 if output_format == OutputFormat::ItemV2 {
-                    return crate::utils::structured_result(&web_item_from_content(&content));
+                    let item = item_v2::page_item(&content, &content.raw_sha256, None)?;
+                    return crate::utils::structured_result(&item);
                 }
 
                 let text = serde_json::to_string(&content)?;
