@@ -1169,7 +1169,8 @@ impl Connector for YouTubeConnector {
                 let chapters = video_info.chapters.clone();
 
                 let mut transcript_unavailable_reason: Option<&'static str> = None;
-                let transcript = fetch_transcript_with_fallback(&client, &player, &video_id, &watch_html).await;
+                let transcript =
+                    fetch_transcript_with_fallback(&client, &player, &video_id, &watch_html).await;
                 if want_item {
                     let fetched = match &transcript {
                         Ok(fetched) => Ok((
