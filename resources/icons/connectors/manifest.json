@@ -392,10 +392,6 @@
       "icon": "x",
       "path": "resources/icons/connectors/x.svg"
     },
-    "x-browser": {
-      "icon": "x",
-      "path": "resources/icons/connectors/x.svg"
-    },
     "xai-search": {
       "icon": "xai",
       "path": "resources/icons/connectors/xai.svg"

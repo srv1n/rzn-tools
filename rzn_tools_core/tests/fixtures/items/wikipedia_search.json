@@ -1,0 +1,18 @@
+{
+  "type": "rzn.items/v2",
+  "items": [
+    {
+      "type": "rzn.item/v2",
+      "key": "wikipedia:article:VGVzdCBUaXRsZQ",
+      "kind": "article",
+      "url": "https://en.wikipedia.org/wiki/Test_Title",
+      "title": "Test Title",
+      "published_in": {
+        "name": "Wikipedia",
+        "id": "wikipedia.org"
+      }
+    }
+  ],
+  "next_cursor": null,
+  "listing": "feed"
+}

@@ -142,7 +142,7 @@ These connectors query AI-powered or traditional search APIs.
 | Copy transcripts, docs, issues, or threads into an LLM by hand | Slow, lossy, and impossible to repeat cleanly | `fetch` and connector commands pull clean content directly from URLs, IDs, and APIs |
 | Write one script per provider | You rebuild auth, pagination, and response shaping every time | Connectors share one tool model across CLI, MCP, and library use |
 | Install one MCP server per source | Setup sprawl, uneven quality, and inconsistent tool naming | One MCP runtime exposes a broad, curated connector catalog |
-| Feed raw provider payloads into agents or ingestion jobs | Massive responses, weird schemas, cleanup hell | `response_format`, `output_format=normalized_v1`, and `display_v1` shape results for the job |
+| Feed raw provider payloads into agents or ingestion jobs | Massive responses, weird schemas, cleanup hell | `response_format`, `output_format=item_v2`, and `display_v1` shape results for the job |
 
 ## Best Fit
 
@@ -414,12 +414,12 @@ rzn-tools github issues --repo rust-lang/rust --state open
 
 # Reddit
 rzn-tools reddit search --query "rust" --subreddit programming
-rzn-tools reddit hot --subreddit rust --limit 200 --output-format normalized_v1
+rzn-tools reddit hot --subreddit rust --limit 200 --output-format item_v2
 rzn-tools reddit media --id https://www.reddit.com/comments/abc123
 rzn-tools reddit user --username spez --output-format display_v1
 
 # Play Store (best-effort)
-rzn-tools play-store app --id com.whatsapp --output-format normalized_v1
+rzn-tools play-store app --id com.whatsapp --output-format item_v2
 rzn-tools fetch --output-format display_v1 "https://play.google.com/store/apps/details?id=com.whatsapp&hl=en&gl=US"
 
 # AI-powered search
@@ -687,15 +687,10 @@ signed-in browser-session workflows (Web, X, Reddit, or YouTube), use `rzn-brows
 CLI/MCP surface. rzn-tools does not take a code dependency on it.
 
 When an advanced local integration specifically needs to import a browser profile, build with
-`browser-cookie-import` (or the `desktop-full` profile) and then use the relevant setup flow:
-
-```bash
-rzn-tools setup x-browser
-```
-
-The wizard prompts for a browser profile and imports cookies after confirmation. This feature uses
-Rookie and is intentionally not part of portable/server profiles. Prefer explicit credential
-material or an official API/OAuth route where available.
+`browser-cookie-import` (or the `desktop-full` profile). This feature uses Rookie and is
+intentionally not part of portable/server profiles. Prefer explicit credential material or an
+official API/OAuth route where available. X is read through the official API (`x`) or through
+`rzn-browser`; the cookie-based X connector was removed on 23 Nov 2026.
 
 ### X Official API Setup
 
@@ -852,7 +847,7 @@ rzn_tools_core = { version = "0.2.18", features = ["desktop-full"] }
 
 For a backend that launches `rzn-tools-mcp` as a separate process, pin the Git commit rather
 than using a sibling path dependency. `server-full` is the portable profile; it excludes
-Rookie, publicsuffix, browser-cookie import, `x-browser`, `telegram`, Discord, and macOS-only
+Rookie, publicsuffix, browser-cookie import, `telegram`, Discord, and macOS-only
 connectors. Telegram remains in `all-connectors` and `desktop-full`; its upstream MTProto
 dependency chain currently resolves through a yanked crate, so it cannot be included in a fresh
 downstream Cargo graph. Discord remains individually opt-in.
@@ -949,7 +944,6 @@ rzn-tools is built on the shoulders of excellent open-source crates:
 | [wikipedia](https://crates.io/crates/wikipedia) | Wikipedia API client |
 | [yt-transcript-rs](https://crates.io/crates/yt-transcript-rs) | YouTube transcript extraction |
 | [rusty_ytdl](https://crates.io/crates/rusty_ytdl) | YouTube video metadata |
-| [agent-twitter-client](https://crates.io/crates/agent-twitter-client) | X (Twitter) client |
 | [rookie](https://crates.io/crates/rookie) | Optional advanced local browser-profile cookie import |
 | [graph-rs-sdk](https://crates.io/crates/graph-rs-sdk) | Microsoft Graph API |
 | [google-drive3](https://crates.io/crates/google-drive3) | Google Drive API |

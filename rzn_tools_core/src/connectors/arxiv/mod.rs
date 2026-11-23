@@ -1,9 +1,7 @@
 use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
-use crate::ingest::{
-    self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
-    Partial, Source,
-};
+use crate::ingest::{self, OutputFormat};
+use crate::item::{rfc3339, Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{build_reqwest_client, structured_result, structured_result_with_text};
 use crate::{auth::AuthDetails, Connector, URLParamExtraction, URLPatternSpec};
 use async_trait::async_trait;
@@ -432,76 +430,39 @@ impl ArxivConnector {
         result
     }
 
-    fn build_content_item(&self, paper: &ArxivPaper, include_blocks: bool) -> ContentItem {
-        let mut blocks = Vec::new();
+    fn build_content_item(&self, paper: &ArxivPaper, include_blocks: bool) -> Item {
+        let mut item = Item::new(
+            format!("arxiv:paper:{}", paper.id),
+            "paper",
+            format!("https://arxiv.org/abs/{}", paper.id),
+        )
+        .with_title(paper.title.clone())
+        .with_published_at(rfc3339(&paper.published))
+        .with_published_in(
+            Party::named("arXiv")
+                .with_id("arxiv.org")
+                .with_url("https://arxiv.org"),
+        )
+        .with_marker(rfc3339(&paper.updated))
+        .with_fields(json!({
+            "pdf_url": Self::pdf_url(&paper.id),
+            "doi": paper.doi,
+            "journal_ref": paper.journal_ref,
+            "comment": paper.comment,
+            "categories": paper.categories,
+            "all_authors": paper.authors,
+        }));
+        if let Some(first) = paper.authors.first() {
+            item = item.with_author(Party::named(first.clone()));
+        }
         if include_blocks && !paper.summary.trim().is_empty() {
-            blocks.push(ContentBlock {
-                block_ref: format!("arxiv:abstract:{}", paper.id),
-                block_kind: "abstract".to_string(),
-                text: paper.summary.trim().to_string(),
-                author: None,
-                created_at: None,
-                reply_to: None,
-                position: None,
-                score: None,
-                attachments: Vec::new(),
-                metadata: None,
-            });
+            item.blocks.push(Block::new(
+                "abstract",
+                "abstract",
+                paper.summary.trim().to_string(),
+            ));
         }
-
-        let mut metadata = serde_json::Map::new();
-        metadata.insert("pdf_url".to_string(), json!(Self::pdf_url(&paper.id)));
-        metadata.insert(
-            "abstract_url".to_string(),
-            json!(format!("https://arxiv.org/abs/{}", paper.id)),
-        );
-        if let Some(doi) = &paper.doi {
-            metadata.insert("doi".to_string(), json!(doi));
-        }
-        if let Some(journal_ref) = &paper.journal_ref {
-            metadata.insert("journal_ref".to_string(), json!(journal_ref));
-        }
-        if let Some(comment) = &paper.comment {
-            metadata.insert("comment".to_string(), json!(comment));
-        }
-
-        ContentItem {
-            item_ref: format!("arxiv:paper:{}", paper.id),
-            kind: "paper".to_string(),
-            canonical_url: Some(format!("https://arxiv.org/abs/{}", paper.id)),
-            title: if paper.title.trim().is_empty() {
-                None
-            } else {
-                Some(paper.title.clone())
-            },
-            created_at: if paper.published.trim().is_empty() {
-                None
-            } else {
-                Some(paper.published.clone())
-            },
-            source_updated_at: if paper.updated.trim().is_empty() {
-                None
-            } else {
-                Some(paper.updated.clone())
-            },
-            authors: paper
-                .authors
-                .iter()
-                .map(|name| Author {
-                    name: name.clone(),
-                    id: None,
-                })
-                .collect(),
-            tags: paper.categories.clone(),
-            metadata: if metadata.is_empty() {
-                None
-            } else {
-                Some(Value::Object(metadata))
-            },
-            blocks,
-            relationships: Vec::new(),
-            truncation: None,
-        }
+        item
     }
 }
 
@@ -668,8 +629,8 @@ impl Connector for ArxivConnector {
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                            "enum": ["raw", "item_v2", "display_v1"],
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                             "default": "raw"
                         }
                     },
@@ -730,8 +691,8 @@ impl Connector for ArxivConnector {
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                            "enum": ["raw", "item_v2", "display_v1"],
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                             "default": "raw"
                         }
                     },
@@ -806,8 +767,8 @@ impl Connector for ArxivConnector {
                 }
 
                 let papers = self.search_papers(&args).await?;
-                if args.output_format == OutputFormat::NormalizedV1 {
-                    let items: Vec<ContentItem> = papers
+                if args.output_format == OutputFormat::ItemV2 {
+                    let items: Vec<Item> = papers
                         .iter()
                         .map(|paper| self.build_content_item(paper, false))
                         .collect();
@@ -825,13 +786,7 @@ impl Connector for ArxivConnector {
                         None
                     };
 
-                    let page = NormalizedPageV1::new(
-                        items,
-                        next_cursor,
-                        has_more,
-                        Partial::complete(Some(ingest::limits_max_items(args.limit as u64))),
-                        Source::new("arxiv", "search"),
-                    );
+                    let page = ItemsPage::new(items, next_cursor, Listing::Feed);
                     return structured_result(&page);
                 }
 
@@ -872,11 +827,8 @@ impl Connector for ArxivConnector {
 
                 match self.get_paper_details(&paper_id).await {
                     Ok(paper) => {
-                        if args.output_format == OutputFormat::NormalizedV1 {
-                            let item = self.build_content_item(&paper, true);
-                            let normalized =
-                                NormalizedItemV1::complete(item, Source::new("arxiv", "get"));
-                            return structured_result(&normalized);
+                        if args.output_format == OutputFormat::ItemV2 {
+                            return structured_result(&self.build_content_item(&paper, true));
                         }
 
                         let result = if args.response_format == ResponseFormat::Concise {

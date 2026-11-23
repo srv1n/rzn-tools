@@ -1,0 +1,19 @@
+{
+  "type": "rzn.items/v2",
+  "items": [
+    {
+      "type": "rzn.item/v2",
+      "key": "pubmed:article:34762503",
+      "kind": "paper",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/34762503/",
+      "title": "PubMed Example",
+      "published_at": "2024-06-01T00:00:00Z",
+      "published_in": {
+        "name": "PubMed",
+        "id": "pubmed.ncbi.nlm.nih.gov"
+      }
+    }
+  ],
+  "next_cursor": null,
+  "listing": "feed"
+}

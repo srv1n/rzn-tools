@@ -10,9 +10,8 @@ use std::sync::Arc;
 
 use crate::auth::AuthDetails;
 use crate::error::ConnectorError;
-use crate::ingest::{
-    Author, ContentBlock, ContentItem, NormalizedItemV1, OutputFormat, Partial, Source, Truncation,
-};
+use crate::ingest::OutputFormat;
+use crate::item::{Block, Item, Party};
 use crate::utils::{html_to_text, structured_result, structured_result_with_text};
 use crate::{Connector, URLParamExtraction, URLPatternSpec};
 use rmcp::model::*;
@@ -345,8 +344,8 @@ impl Connector for PlayStoreConnector {
                     },
                     "output_format": {
                         "type": "string",
-                        "enum": ["raw", "normalized_v1", "display_v1"],
-                        "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                        "enum": ["raw", "item_v2", "display_v1"],
+                        "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                         "default": "raw"
                     }
                 },
@@ -403,7 +402,7 @@ impl Connector for PlayStoreConnector {
                 let html = self.fetch_html(&url, hl).await?;
                 let app = Self::app_from_html(&id, &url, &html);
 
-                if output_format == OutputFormat::NormalizedV1 {
+                if output_format == OutputFormat::ItemV2 {
                     let item_ref = format!("play-store:app:{}", id);
                     let title = app.name.clone().or_else(|| Some(id.clone()));
 
@@ -430,53 +429,53 @@ impl Connector for PlayStoreConnector {
                         .developer_name
                         .as_ref()
                         .map(|name| {
-                            vec![Author {
+                            vec![Party {
                                 name: name.clone(),
                                 id: None,
+                                url: None,
                             }]
                         })
                         .unwrap_or_default();
 
-                    let blocks = vec![ContentBlock {
-                        block_ref: format!("play-store:app:{}:summary", id),
-                        block_kind: "summary".to_string(),
-                        text: summary,
-                        author: authors.first().cloned(),
-                        created_at: None,
-                        reply_to: None,
-                        position: None,
-                        score: None,
-                        attachments: Vec::new(),
-                        metadata: Some(serde_json::to_value(&app)?),
+                    let blocks = vec![{
+                        let mut b = Block::new(
+                            format!("play-store:app:{}:summary", id),
+                            "summary".to_string(),
+                            summary,
+                        );
+                        b.author = authors.first().cloned();
+                        if let Some(meta) = Some(serde_json::to_value(&app)?) {
+                            crate::item::merge_fields(&mut b.fields, meta);
+                        }
+                        b
                     }];
 
-                    let item = ContentItem {
-                        item_ref,
-                        kind: "app".to_string(),
-                        canonical_url: Some(url),
-                        title,
-                        created_at: None,
-                        source_updated_at: app.updated_on_iso.clone(),
-                        authors,
-                        tags: Vec::new(),
-                        metadata: Some(serde_json::to_value(&app)?),
-                        blocks,
-                        relationships: Vec::new(),
-                        truncation: Some(Truncation {
-                            is_truncated: true,
+                    let item = {
+                        let mut item = Item::new(item_ref, "app".to_string(), url);
+                        item.title = title;
+                        item.marker = app.updated_on_iso.clone();
+                        item.author = (authors).into_iter().next();
+                        item.published_in =
+                            Some(Party::named("Google Play").with_id("play.google.com"));
+                        if let Some(meta) = Some(serde_json::to_value(&app)?) {
+                            crate::item::merge_fields(&mut item.fields, meta);
+                        }
+                        item.blocks = blocks;
+                        item.truncated = (Some(crate::item::Truncated {
                             reason: "Best-effort Play Store HTML parsing; fields may be missing."
                                 .to_string(),
-                            total_blocks_hint: None,
                             returned_blocks: 1,
-                            policy: Some("best_effort_html".to_string()),
-                        }),
+                            total_blocks_hint: None,
+                        }))
+                        .map(|t| crate::item::Truncated {
+                            reason: t.reason,
+                            returned_blocks: t.returned_blocks,
+                            total_blocks_hint: t.total_blocks_hint,
+                        });
+                        item
                     };
 
-                    let normalized = NormalizedItemV1::new(
-                        item,
-                        Partial::complete(None),
-                        Source::new("play-store", "app"),
-                    );
+                    let normalized = item;
                     return structured_result(&normalized);
                 }
 

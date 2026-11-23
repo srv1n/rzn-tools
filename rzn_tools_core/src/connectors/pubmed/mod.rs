@@ -1,9 +1,7 @@
 use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
-use crate::ingest::{
-    self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
-    Partial, Source,
-};
+use crate::ingest::{self, OutputFormat};
+use crate::item::{rfc3339, Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{collect_paginated, structured_result_with_text, Page};
 use crate::{Connector, URLParamExtraction, URLPatternSpec};
 use async_trait::async_trait;
@@ -73,78 +71,72 @@ fn resolve_pubmed_pmid(args: &serde_json::Map<String, Value>) -> Result<String, 
     ))
 }
 
-fn parse_authors_list(authors: &str) -> Vec<Author> {
+fn parse_authors_list(authors: &str) -> Vec<String> {
     authors
         .split(',')
-        .map(|a| a.trim())
+        .map(str::trim)
         .filter(|a| !a.is_empty())
-        .map(|name| Author {
-            name: name.to_string(),
-            id: None,
-        })
+        .map(str::to_string)
         .collect()
 }
 
-fn pubmed_item_from_search(article: &PubMedArticle) -> ContentItem {
-    ContentItem {
-        item_ref: pubmed_item_ref(&article.pmid),
-        kind: "paper".to_string(),
-        canonical_url: Some(pubmed_canonical_url(&article.pmid)),
-        title: Some(article.title.clone()),
-        created_at: None,
-        source_updated_at: None,
-        authors: parse_authors_list(&article.authors),
-        tags: Vec::new(),
-        metadata: Some(json!({
-            "authors": article.authors,
-            "citation": article.citation,
-            "pmid": article.pmid,
-            "source": "pubmed"
-        })),
-        blocks: Vec::new(),
-        relationships: Vec::new(),
-        truncation: None,
-    }
+fn pubmed_party() -> Party {
+    Party::named("PubMed").with_id("pubmed.ncbi.nlm.nih.gov")
 }
 
-fn pubmed_item_from_abstract(abstract_data: &PubMedAbstract) -> ContentItem {
-    let mut blocks = Vec::new();
-    if !abstract_data.abstract_text.trim().is_empty() {
-        blocks.push(ContentBlock {
-            block_ref: format!("{}:abstract", pubmed_item_ref(&abstract_data.pmid)),
-            block_kind: "abstract".to_string(),
-            text: abstract_data.abstract_text.clone(),
-            author: None,
-            created_at: None,
-            reply_to: None,
-            position: None,
-            score: None,
-            attachments: Vec::new(),
-            metadata: None,
-        });
+fn pubmed_item_from_search(article: &PubMedArticle) -> Item {
+    let authors = parse_authors_list(&article.authors);
+    let mut item = Item::new(
+        pubmed_item_ref(&article.pmid),
+        "paper",
+        pubmed_canonical_url(&article.pmid),
+    )
+    .with_title(article.title.clone())
+    .with_published_in(pubmed_party())
+    .with_fields(
+        json!({ "pmid": article.pmid, "citation": article.citation, "all_authors": authors }),
+    );
+    if let Some(first) = authors.first() {
+        item = item.with_author(Party::named(first.clone()));
     }
+    item
+}
 
-    ContentItem {
-        item_ref: pubmed_item_ref(&abstract_data.pmid),
-        kind: "paper".to_string(),
-        canonical_url: Some(pubmed_canonical_url(&abstract_data.pmid)),
-        title: Some(abstract_data.title.clone()),
-        created_at: Some(abstract_data.publication_date.clone()),
-        source_updated_at: None,
-        authors: parse_authors_list(&abstract_data.authors),
-        tags: abstract_data.keywords.clone(),
-        metadata: Some(json!({
-            "journal": abstract_data.journal,
-            "doi": abstract_data.doi,
-            "affiliations": abstract_data.affiliations,
-            "publication_type": abstract_data.publication_type,
-            "citation_count": abstract_data.citation_count,
-            "pmid": abstract_data.pmid
-        })),
-        blocks,
-        relationships: Vec::new(),
-        truncation: None,
+fn pubmed_item_from_abstract(abstract_data: &PubMedAbstract) -> Item {
+    let authors = parse_authors_list(&abstract_data.authors);
+    let journal = if abstract_data.journal.trim().is_empty() {
+        pubmed_party()
+    } else {
+        Party::named(abstract_data.journal.clone())
+    };
+    let mut item = Item::new(
+        pubmed_item_ref(&abstract_data.pmid),
+        "paper",
+        pubmed_canonical_url(&abstract_data.pmid),
+    )
+    .with_title(abstract_data.title.clone())
+    .with_published_at(rfc3339(&abstract_data.publication_date))
+    .with_published_in(journal)
+    .with_fields(json!({
+        "pmid": abstract_data.pmid,
+        "doi": abstract_data.doi,
+        "affiliations": abstract_data.affiliations,
+        "keywords": abstract_data.keywords,
+        "publication_type": abstract_data.publication_type,
+        "all_authors": authors,
+    }))
+    .with_counts(json!({ "citations": abstract_data.citation_count }));
+    if let Some(first) = authors.first() {
+        item = item.with_author(Party::named(first.clone()));
     }
+    if !abstract_data.abstract_text.trim().is_empty() {
+        item.blocks.push(Block::new(
+            "abstract",
+            "abstract",
+            abstract_data.abstract_text.clone(),
+        ));
+    }
+    item
 }
 
 mod parse;
@@ -980,15 +972,15 @@ get. Tip: keep limit small for concise output. Example: query=\"CRISPR AND off-t
                             },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                             }
                         },
                         "required": ["query"],
                         "examples": [
                             { "description": "Search for a topic", "input": { "query": "CRISPR off-target", "limit": 10 } },
-                            { "description": "Page with cursor (normalized)", "input": { "query": "immunotherapy", "limit": 10, "output_format": "normalized_v1" } }
+                            { "description": "Page with cursor (normalized)", "input": { "query": "immunotherapy", "limit": 10, "output_format": "item_v2" } }
                         ],
                         "_meta": {
                             "category": "search",
@@ -1032,9 +1024,9 @@ only need title+abstract_text. Example: pmid=\"34762503\".",
                             },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                             }
                         },
                         "examples": [
@@ -1112,7 +1104,7 @@ only need title+abstract_text. Example: pmid=\"34762503\".",
                         None
                     };
 
-                if output_format == OutputFormat::NormalizedV1 {
+                if output_format == OutputFormat::ItemV2 {
                     let result = self
                         .search_pubmed(query, page, limit, date_range)
                         .await
@@ -1142,14 +1134,7 @@ only need title+abstract_text. Example: pmid=\"34762503\".",
                         _ => None,
                     };
                     let next_cursor = next_cursor.map(|c| ingest::encode_cursor(&c)).transpose()?;
-                    let has_more = next_cursor.is_some();
-                    let page_out = NormalizedPageV1::new(
-                        items,
-                        next_cursor,
-                        has_more,
-                        Partial::complete(Some(ingest::limits_max_items(limit as u64))),
-                        Source::new("pubmed", "search"),
-                    );
+                    let page_out = ItemsPage::new(items, next_cursor, Listing::Feed);
                     return crate::utils::structured_result(&page_out);
                 }
 
@@ -1199,14 +1184,10 @@ only need title+abstract_text. Example: pmid=\"34762503\".",
                         PubMedAbstract::new()
                     });
 
-                if output_format == OutputFormat::NormalizedV1 {
-                    let item = pubmed_item_from_abstract(&abstract_data);
-                    let normalized = NormalizedItemV1::new(
-                        item,
-                        Partial::complete(None),
-                        Source::new("pubmed", "get"),
-                    );
-                    return crate::utils::structured_result(&normalized);
+                if output_format == OutputFormat::ItemV2 {
+                    return crate::utils::structured_result(&pubmed_item_from_abstract(
+                        &abstract_data,
+                    ));
                 }
 
                 // Return concise or detailed based on response_format

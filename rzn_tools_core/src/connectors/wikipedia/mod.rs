@@ -1,9 +1,7 @@
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
-use crate::ingest::{
-    self, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat, Partial,
-    Source,
-};
+use crate::ingest::{self, OutputFormat};
+use crate::item::{Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{collect_paginated, structured_result_with_text, Page};
 use crate::{auth::AuthDetails, Connector, URLParamExtraction, URLPatternSpec};
 use async_trait::async_trait;
@@ -478,20 +476,16 @@ fn extract_title_from_url(url: &str) -> Option<String> {
     Some(slug.replace('_', " "))
 }
 
-fn wiki_item_from_title(title: &str, language: &str) -> ContentItem {
-    ContentItem {
-        item_ref: wiki_item_ref(title),
-        kind: "article".to_string(),
-        canonical_url: Some(wiki_canonical_url(title, language)),
-        title: Some(title.to_string()),
-        created_at: None,
-        source_updated_at: None,
-        authors: Vec::new(),
-        tags: Vec::new(),
-        metadata: None,
-        blocks: Vec::new(),
-        relationships: Vec::new(),
-        truncation: None,
+fn wiki_item_from_title(title: &str, language: &str) -> Item {
+    {
+        let mut item = Item::new(
+            wiki_item_ref(title),
+            "article".to_string(),
+            wiki_canonical_url(title, language),
+        );
+        item.title = Some(title.to_string());
+        item.published_in = Some(Party::named("Wikipedia").with_id("wikipedia.org"));
+        item
     }
 }
 
@@ -500,52 +494,35 @@ fn wiki_item_with_content(
     content: &str,
     summary: Option<&str>,
     language: &str,
-) -> (ContentItem, Partial) {
+) -> Item {
     let item_ref = wiki_item_ref(title);
     let mut blocks = Vec::new();
     if let Some(summary_text) = summary {
-        blocks.push(ContentBlock {
-            block_ref: format!("{}:summary", item_ref),
-            block_kind: "summary".to_string(),
-            text: summary_text.to_string(),
-            author: None,
-            created_at: None,
-            reply_to: None,
-            position: None,
-            score: None,
-            attachments: Vec::new(),
-            metadata: None,
-        });
+        blocks.push(Block::new(
+            format!("{}:summary", item_ref),
+            "summary",
+            summary_text.to_string(),
+        ));
     }
-    blocks.push(ContentBlock {
-        block_ref: format!("{}:content", item_ref),
-        block_kind: "content".to_string(),
-        text: content.to_string(),
-        author: None,
-        created_at: None,
-        reply_to: None,
-        position: None,
-        score: None,
-        attachments: Vec::new(),
-        metadata: None,
-    });
+    blocks.push(Block::new(
+        format!("{}:content", item_ref),
+        "content",
+        content.to_string(),
+    ));
 
-    let item = ContentItem {
-        item_ref,
-        kind: "article".to_string(),
-        canonical_url: Some(wiki_canonical_url(title, language)),
-        title: Some(title.to_string()),
-        created_at: None,
-        source_updated_at: None,
-        authors: Vec::new(),
-        tags: Vec::new(),
-        metadata: None,
-        blocks,
-        relationships: Vec::new(),
-        truncation: None,
+    let item = {
+        let mut item = Item::new(
+            item_ref,
+            "article".to_string(),
+            wiki_canonical_url(title, language),
+        );
+        item.title = Some(title.to_string());
+        item.published_in = Some(Party::named("Wikipedia").with_id("wikipedia.org"));
+        item.blocks = blocks;
+        item
     };
 
-    (item, Partial::complete(None))
+    item
 }
 
 #[cfg(test)]
@@ -751,9 +728,9 @@ pass into get. Example: query=\"rust language\" limit=5.",
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
+                            "enum": ["raw", "item_v2", "display_v1"],
                             "default": "raw",
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                         }
                     },
                     "required": ["query"],
@@ -803,9 +780,9 @@ Example: latitude=37.77 longitude=-122.42 radius=1000.",
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
+                            "enum": ["raw", "item_v2", "display_v1"],
                             "default": "raw",
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                         }
                     },
                     "required": ["latitude", "longitude"],
@@ -857,9 +834,9 @@ tokens down. Example: title=\"Rust (programming language)\".",
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
+                            "enum": ["raw", "item_v2", "display_v1"],
                             "default": "raw",
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                         }
                     },
                     "examples": [
@@ -905,7 +882,7 @@ tokens down. Example: title=\"Rust (programming language)\".",
                     ConnectorError::InvalidParams(format!("Invalid arguments: {}", e))
                 })?;
 
-                if args.output_format == OutputFormat::NormalizedV1 {
+                if args.output_format == OutputFormat::ItemV2 {
                     let cursor_str = args.cursor.as_deref();
                     let cursor = cursor_str.and_then(ingest::decode_cursor::<WikiSearchCursor>);
                     if cursor_str.is_some() && cursor.is_none() {
@@ -934,14 +911,7 @@ tokens down. Example: title=\"Rust (programming language)\".",
                             })
                         })
                         .transpose()?;
-                    let has_more = next_cursor.is_some();
-                    let page = NormalizedPageV1::new(
-                        items,
-                        next_cursor,
-                        has_more,
-                        Partial::complete(Some(ingest::limits_max_items(args.limit as u64))),
-                        Source::new("wikipedia", "search"),
-                    );
+                    let page = ItemsPage::new(items, next_cursor, Listing::Feed);
                     return crate::utils::structured_result(&page);
                 }
 
@@ -970,18 +940,12 @@ tokens down. Example: title=\"Rust (programming language)\".",
                     .geo_search(args.latitude, args.longitude, args.radius)
                     .await?;
 
-                if args.output_format == OutputFormat::NormalizedV1 {
+                if args.output_format == OutputFormat::ItemV2 {
                     let items = results
                         .into_iter()
                         .map(|title| wiki_item_from_title(&title, &self.language))
                         .collect::<Vec<_>>();
-                    let page = NormalizedPageV1::new(
-                        items,
-                        None,
-                        false,
-                        Partial::complete(None),
-                        Source::new("wikipedia", "geosearch"),
-                    );
+                    let page = ItemsPage::new(items, None, Listing::Feed);
                     return crate::utils::structured_result(&page);
                 }
 
@@ -1006,19 +970,14 @@ tokens down. Example: title=\"Rust (programming language)\".",
                     Ok(content) => {
                         let summary = self.get_article_summary(&title).await.ok();
 
-                        if args.output_format == OutputFormat::NormalizedV1 {
-                            let (item, partial) = wiki_item_with_content(
+                        if args.output_format == OutputFormat::ItemV2 {
+                            let item = wiki_item_with_content(
                                 &title,
                                 &content,
                                 summary.as_deref(),
                                 &self.language,
                             );
-                            let normalized = NormalizedItemV1::new(
-                                item,
-                                partial,
-                                Source::new("wikipedia", "get"),
-                            );
-                            return crate::utils::structured_result(&normalized);
+                            return crate::utils::structured_result(&item);
                         }
 
                         // Return concise or detailed based on response_format

@@ -85,7 +85,7 @@ impl Connector for DummyConnector {
                             "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1"],
+                                "enum": ["raw", "item_v2"],
                                 "default": "raw"
                             }
                         },
@@ -122,7 +122,7 @@ impl Connector for DummyConnector {
                             "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1"],
+                                "enum": ["raw", "item_v2"],
                                 "default": "raw"
                             }
                         },
@@ -158,7 +158,7 @@ impl Connector for DummyConnector {
                             "id": { "type": "string" },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1"],
+                                "enum": ["raw", "item_v2"],
                                 "default": "raw"
                             }
                         },

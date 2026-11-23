@@ -1,0 +1,19 @@
+{
+  "type": "rzn.items/v2",
+  "items": [
+    {
+      "type": "rzn.item/v2",
+      "key": "arxiv:paper:2301.07041",
+      "kind": "paper",
+      "url": "https://arxiv.org/abs/2301.07041",
+      "title": "Example Paper",
+      "published_at": "2025-01-01T00:00:00Z",
+      "published_in": {
+        "name": "arXiv",
+        "id": "arxiv.org"
+      }
+    }
+  ],
+  "next_cursor": null,
+  "listing": "feed"
+}

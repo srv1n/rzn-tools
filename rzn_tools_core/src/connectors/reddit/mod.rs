@@ -13,17 +13,16 @@ use std::sync::Arc;
 use crate::auth::AuthDetails;
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
-use crate::ingest::{
-    self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
-    Partial, Relationship, Source, Truncation,
-};
+use crate::ingest::{self, OutputFormat};
+use crate::item::{ItemsPage, Listing};
 use crate::utils::{
-    collect_paginated_with_cursor, html_to_text, structured_result, structured_result_with_text,
-    Page,
+    collect_paginated_with_cursor, structured_result, structured_result_with_text, Page,
 };
 use crate::Connector;
 use crate::{URLParamExtraction, URLPatternSpec};
 use rmcp::model::*;
+
+mod item_v2;
 
 pub struct RedditConnector {
     http_client: reqwest::Client,
@@ -420,8 +419,8 @@ impl Connector for RedditConnector {
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                            "enum": ["raw", "item_v2", "display_v1"],
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                             "default": "raw"
                         }
                     },
@@ -473,8 +472,8 @@ impl Connector for RedditConnector {
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                            "enum": ["raw", "item_v2", "display_v1"],
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                             "default": "raw"
                         }
                     },
@@ -520,8 +519,8 @@ impl Connector for RedditConnector {
                         "comment_sort": { "type": "string", "enum": ["best", "top", "new", "controversial", "old", "qa"], "default": "best" },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                            "enum": ["raw", "item_v2", "display_v1"],
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                             "default": "raw"
                         }
                     },
@@ -616,8 +615,8 @@ impl Connector for RedditConnector {
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                            "enum": ["raw", "item_v2", "display_v1"],
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                             "default": "raw"
                         }
                     },
@@ -629,7 +628,7 @@ impl Connector for RedditConnector {
                         },
                         {
                             "description": "Fetch user profile metadata (normalized output)",
-                            "input": { "username": "u/spez", "output_format": "normalized_v1" }
+                            "input": { "username": "u/spez", "output_format": "item_v2" }
                         }
                     ],
                     "_meta": {
@@ -723,24 +722,15 @@ impl Connector for RedditConnector {
                 .await?;
                 let posts = collected.items;
 
-                if output_format == OutputFormat::NormalizedV1 {
-                    let items: Vec<ContentItem> = posts
-                        .iter()
-                        .map(Self::content_item_from_post_data)
-                        .collect();
+                if output_format == OutputFormat::ItemV2 {
+                    let items: Vec<crate::item::Item> =
+                        posts.iter().map(item_v2::post_entry).collect();
 
                     let next_cursor = collected
                         .next_cursor
                         .map(|c| ingest::encode_cursor(&c))
                         .transpose()?;
-                    let has_more = next_cursor.is_some();
-                    let page = NormalizedPageV1::new(
-                        items,
-                        next_cursor,
-                        has_more,
-                        Partial::complete(Some(ingest::limits_max_items(desired_limit as u64))),
-                        Source::new("reddit", "list"),
-                    );
+                    let page = ItemsPage::new(items, next_cursor, Listing::Feed);
                     return structured_result(&page);
                 }
 
@@ -784,70 +774,8 @@ impl Connector for RedditConnector {
                 let about = self.fetch_user_about_json(&username).await?;
                 let profile = Self::user_profile_from_about_json(&username, &about)?;
 
-                if output_format == OutputFormat::NormalizedV1 {
-                    let created_at = profile
-                        .get("created_utc")
-                        .and_then(|v| v.as_f64())
-                        .and_then(Self::rfc3339_from_utc);
-
-                    let canonical_url = Some(format!("https://www.reddit.com/user/{}/", username));
-                    let item_ref = format!("reddit:user:{}", username);
-                    let authors = vec![Author {
-                        name: username.clone(),
-                        id: None,
-                    }];
-
-                    let total_karma = profile
-                        .get("total_karma")
-                        .and_then(|v| v.as_i64())
-                        .unwrap_or(0);
-                    let account_age_days = profile.get("account_age_days").and_then(|v| v.as_i64());
-
-                    let mut summary = format!("u/{} — {} karma", username, total_karma);
-                    if let Some(days) = account_age_days {
-                        summary.push_str(&format!(" — {} days old", days));
-                    }
-
-                    let blocks = vec![ContentBlock {
-                        block_ref: format!("reddit:user:{}:summary", username),
-                        block_kind: "summary".to_string(),
-                        text: summary,
-                        author: Some(Author {
-                            name: username.clone(),
-                            id: None,
-                        }),
-                        created_at,
-                        reply_to: None,
-                        position: None,
-                        score: None,
-                        attachments: Vec::new(),
-                        metadata: Some(profile.clone()),
-                    }];
-
-                    let item = ContentItem {
-                        item_ref,
-                        kind: "user_profile".to_string(),
-                        canonical_url,
-                        title: Some(format!("u/{}", username)),
-                        created_at: profile
-                            .get("created_iso")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string()),
-                        source_updated_at: None,
-                        authors,
-                        tags: Vec::new(),
-                        metadata: Some(profile),
-                        blocks,
-                        relationships: Vec::new(),
-                        truncation: None,
-                    };
-
-                    let normalized = NormalizedItemV1::new(
-                        item,
-                        Partial::complete(None),
-                        Source::new("reddit", "user"),
-                    );
-                    return structured_result(&normalized);
+                if output_format == OutputFormat::ItemV2 {
+                    return structured_result(&item_v2::user_item(&username, &profile));
                 }
 
                 let text = if output_format == OutputFormat::DisplayV1 {
@@ -1119,12 +1047,12 @@ impl Connector for RedditConnector {
                 combined_results.extend(img_results);
                 combined_results.extend(text_results);
 
-                if output_format == OutputFormat::NormalizedV1 {
-                    let items: Vec<ContentItem> = posts
+                if output_format == OutputFormat::ItemV2 {
+                    let items: Vec<crate::item::Item> = posts
                         .iter()
                         .map(|post| {
                             let data = &post["data"];
-                            Self::content_item_from_post_data(data)
+                            item_v2::post_entry(data)
                         })
                         .collect();
 
@@ -1132,14 +1060,7 @@ impl Connector for RedditConnector {
                         .next_cursor
                         .map(|c| ingest::encode_cursor(&c))
                         .transpose()?;
-                    let has_more = next_cursor.is_some();
-                    let page = NormalizedPageV1::new(
-                        items,
-                        next_cursor,
-                        has_more,
-                        Partial::complete(Some(ingest::limits_max_items(desired_limit as u64))),
-                        Source::new("reddit", "search"),
-                    );
+                    let page = ItemsPage::new(items, next_cursor, Listing::Feed);
                     return structured_result(&page);
                 }
 
@@ -1187,123 +1108,12 @@ impl Connector for RedditConnector {
                     )
                     .await?;
 
-                if output_format == OutputFormat::NormalizedV1 {
-                    let item_ref = format!("reddit:post:{}", post_id);
-                    let permalink = post["permalink"].as_str().unwrap_or("");
-                    let canonical_url = if permalink.is_empty() {
-                        None
-                    } else {
-                        Some(format!("https://www.reddit.com{}", permalink))
-                    };
-                    let author_name = post["author"].as_str().unwrap_or("");
-                    let authors = if author_name.is_empty() {
-                        Vec::new()
-                    } else {
-                        vec![Author {
-                            name: author_name.to_string(),
-                            id: None,
-                        }]
-                    };
-                    let subreddit = post["subreddit"].as_str().unwrap_or("");
-                    let tags = if subreddit.is_empty() {
-                        Vec::new()
-                    } else {
-                        vec![subreddit.to_string()]
-                    };
-
-                    let mut blocks: Vec<ContentBlock> = Vec::new();
-                    let mut relationships: Vec<Relationship> = Vec::new();
-
-                    let selftext = post["selftext"].as_str().unwrap_or("");
-                    let selftext_html = post["selftext_html"].as_str().unwrap_or("");
-                    let post_body_text = if !selftext.is_empty() {
-                        selftext.to_string()
-                    } else if !selftext_html.is_empty() {
-                        html_to_text(selftext_html)
-                    } else {
-                        String::new()
-                    };
-
-                    if !post_body_text.is_empty() || post["is_self"].as_bool().unwrap_or(false) {
-                        let post_body_ref = format!("reddit:post_body:{}", post_id);
-                        blocks.push(ContentBlock {
-                            block_ref: post_body_ref.clone(),
-                            block_kind: "post_body".to_string(),
-                            text: post_body_text,
-                            author: authors.first().cloned(),
-                            created_at: post["created_utc"]
-                                .as_f64()
-                                .and_then(Self::rfc3339_from_utc),
-                            reply_to: None,
-                            position: None,
-                            score: None,
-                            attachments: Vec::new(),
-                            metadata: None,
-                        });
-                        relationships.push(Relationship {
-                            rel: "has_block".to_string(),
-                            from: item_ref.clone(),
-                            to: post_body_ref,
-                        });
-                    }
-
-                    Self::append_comment_blocks(
+                if output_format == OutputFormat::ItemV2 {
+                    return structured_result(&item_v2::thread_item(
+                        &post,
                         &comments,
-                        None,
-                        0,
-                        &item_ref,
-                        &mut blocks,
-                        &mut relationships,
-                    );
-
-                    let num_comments = post["num_comments"].as_i64().unwrap_or(0).max(0) as u64;
-                    let returned_blocks = blocks.len() as u64;
-                    let is_truncated = num_comments > comment_limit as u64;
-                    let truncation = if is_truncated {
-                        Some(Truncation {
-                            is_truncated: true,
-                            reason: "comment_limit".to_string(),
-                            total_blocks_hint: Some(num_comments),
-                            returned_blocks,
-                            policy: Some("top_level_limit".to_string()),
-                        })
-                    } else {
-                        None
-                    };
-
-                    let item = ContentItem {
-                        item_ref: item_ref.clone(),
-                        kind: "thread".to_string(),
-                        canonical_url,
-                        title: Some(post["title"].as_str().unwrap_or("").to_string()),
-                        created_at: post["created_utc"]
-                            .as_f64()
-                            .and_then(Self::rfc3339_from_utc),
-                        source_updated_at: None,
-                        authors: authors.clone(),
-                        tags,
-                        metadata: Some(Self::listing_raw_post(post)),
-                        blocks,
-                        relationships,
-                        truncation,
-                    };
-
-                    let partial = if is_truncated {
-                        Partial::truncated(
-                            "comment_limit",
-                            Some(ingest::limits_max_blocks(
-                                comment_limit.saturating_add(1) as u64
-                            )),
-                        )
-                    } else {
-                        Partial::complete(Some(ingest::limits_max_blocks(
-                            comment_limit.saturating_add(1) as u64,
-                        )))
-                    };
-
-                    let normalized =
-                        NormalizedItemV1::new(item, partial, Source::new("reddit", "get"));
-                    return structured_result(&normalized);
+                        comment_limit as usize,
+                    ));
                 }
 
                 // Build the result
@@ -1676,50 +1486,6 @@ impl RedditConnector {
         }
 
         Ok(post)
-    }
-
-    fn content_item_from_post_data(data: &Value) -> ContentItem {
-        let post_id = data["id"].as_str().unwrap_or("");
-        let permalink = data["permalink"].as_str().unwrap_or("");
-        let canonical_url = if permalink.is_empty() {
-            None
-        } else if permalink.starts_with("http://") || permalink.starts_with("https://") {
-            Some(permalink.to_string())
-        } else {
-            Some(format!("{}{}", REDDIT_CANONICAL_BASE_URL, permalink))
-        };
-        let author = data["author"].as_str().unwrap_or("");
-        let authors = if author.is_empty() {
-            Vec::new()
-        } else {
-            vec![Author {
-                name: author.to_string(),
-                id: None,
-            }]
-        };
-        let subreddit = data["subreddit"].as_str().unwrap_or("");
-        let tags = if subreddit.is_empty() {
-            Vec::new()
-        } else {
-            vec![subreddit.to_string()]
-        };
-
-        ContentItem {
-            item_ref: format!("reddit:post:{}", post_id),
-            kind: "thread".to_string(),
-            canonical_url,
-            title: Some(data["title"].as_str().unwrap_or("").to_string()),
-            created_at: data["created_utc"]
-                .as_f64()
-                .and_then(Self::rfc3339_from_utc),
-            source_updated_at: None,
-            authors,
-            tags,
-            metadata: Some(Self::listing_raw_post(data)),
-            blocks: Vec::new(),
-            relationships: Vec::new(),
-            truncation: None,
-        }
     }
 
     fn listing_raw_post(data: &Value) -> Value {
@@ -2212,7 +1978,7 @@ impl RedditConnector {
 
         if let Some(item_ref) = item_ref {
             if let Some((kind, id)) = ingest::parse_item_ref_for_connector(item_ref, "reddit") {
-                if kind == "post" {
+                if kind == "thread" || kind == "post" {
                     return Ok(RedditPostTarget {
                         post_id: Self::normalize_post_id(&id)?,
                         subreddit: None,
@@ -2252,81 +2018,6 @@ impl RedditConnector {
         }
 
         Ok(id.to_string())
-    }
-
-    fn append_comment_blocks(
-        comments: &[Value],
-        parent_ref: Option<&str>,
-        depth: i64,
-        item_ref: &str,
-        blocks: &mut Vec<ContentBlock>,
-        relationships: &mut Vec<Relationship>,
-    ) {
-        for comment in comments {
-            let id = comment["id"].as_str().unwrap_or("");
-            if id.is_empty() {
-                continue;
-            }
-
-            let block_ref = format!("reddit:comment:{}", id);
-            let author_name = comment["author"].as_str().unwrap_or("");
-            let author = if author_name.is_empty() {
-                None
-            } else {
-                Some(Author {
-                    name: author_name.to_string(),
-                    id: None,
-                })
-            };
-            let created_at = comment["created_utc"]
-                .as_f64()
-                .and_then(Self::rfc3339_from_utc);
-            let position = Some(json!({ "kind": "thread_depth", "depth": depth }));
-            let score = comment["score"].as_i64().map(|v| v as f64);
-            let metadata = Some(json!({
-                "permalink": comment["permalink"].as_str().unwrap_or(""),
-                "is_submitter": comment["is_submitter"].as_bool().unwrap_or(false),
-                "distinguished": comment["distinguished"].as_str().unwrap_or(""),
-                "stickied": comment["stickied"].as_bool().unwrap_or(false),
-            }));
-
-            blocks.push(ContentBlock {
-                block_ref: block_ref.clone(),
-                block_kind: "comment".to_string(),
-                text: comment["body"].as_str().unwrap_or("").to_string(),
-                author,
-                created_at,
-                reply_to: parent_ref.map(str::to_string),
-                position,
-                score,
-                attachments: Vec::new(),
-                metadata,
-            });
-
-            relationships.push(Relationship {
-                rel: "has_block".to_string(),
-                from: item_ref.to_string(),
-                to: block_ref.clone(),
-            });
-            if let Some(parent_ref) = parent_ref {
-                relationships.push(Relationship {
-                    rel: "replies_to".to_string(),
-                    from: block_ref.clone(),
-                    to: parent_ref.to_string(),
-                });
-            }
-
-            if let Some(replies) = comment["replies"].as_array() {
-                Self::append_comment_blocks(
-                    replies,
-                    Some(block_ref.as_str()),
-                    depth.saturating_add(1),
-                    item_ref,
-                    blocks,
-                    relationships,
-                );
-            }
-        }
     }
 
     fn sort_for_morechildren(comment_sort: &str) -> &str {

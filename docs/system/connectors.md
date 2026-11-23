@@ -28,7 +28,7 @@ The registry in [`rzn_tools_core/src/lib.rs`](../../rzn_tools_core/src/lib.rs) i
 - The CLI default build uses `default-connectors`.
 - `server-full` enables the portable server set.
 - `all-connectors` adds Telegram and macOS connectors.
-- `desktop-full` adds browser-profile import and `x-browser`.
+- `desktop-full` adds browser-profile import.
 - Discord is an explicit feature.
 
 ## Public web and social data
@@ -43,7 +43,6 @@ The registry in [`rzn_tools_core/src/lib.rs`](../../rzn_tools_core/src/lib.rs) i
 | `web` | URL fetch and scrape | Caller headers and cookies can expose private data. |
 | `weather` | wttr.in weather reads | Forecast length is one to three days. |
 | `x` | Official X API reads and writes | Auth and provider access levels apply. |
-| `x-browser` | X browser-session reads | Browser cookies are sensitive. |
 | `linkedin` | Identity, post, token, and raw API operations | An imported token is required. |
 | `slack` | Channel, message, file, and user reads | The connector does not send messages. |
 | `discord` | Server reads, ingest windows, and message send | A bot token is required. |

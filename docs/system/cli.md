@@ -65,7 +65,7 @@ Global `--output` values are `pretty`, `json`, `yaml`, `text`, and `markdown`.
 
 `--copy` works on search, get, fetch, and connector output paths. It is not universal.
 
-`fetch --output-format` asks for `raw`, `normalized_v1`, or `display_v1`. The tool can reject an unsupported value.
+`fetch --output-format` asks for `raw`, `item_v2`, or `display_v1`. The tool can reject an unsupported value.
 
 `get --field <name>` selects one top-level field.
 

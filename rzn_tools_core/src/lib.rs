@@ -8,6 +8,7 @@ pub mod error;
 pub mod federated;
 pub mod flow_failure;
 pub mod ingest;
+pub mod item;
 pub mod mcp_server;
 pub mod metered;
 pub mod oauth;
@@ -342,9 +343,6 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
 
     #[cfg(feature = "x-api")]
     register_async!(connectors::x::XApiConnector::new(auth::AuthDetails::new()).await);
-
-    #[cfg(feature = "x-twitter")]
-    register_async!(connectors::x_browser::XConnector::new(auth::AuthDetails::new()).await);
 
     #[cfg(feature = "scihub")]
     register_async!(connectors::scihub::SciHubConnector::new(auth::AuthDetails::new()).await);

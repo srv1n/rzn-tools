@@ -1,0 +1,31 @@
+{
+  "type": "rzn.items/v2",
+  "items": [
+    {
+      "type": "rzn.item/v2",
+      "key": "biorxiv:paper:ZG9pLzEwLjExMDEvMjAyNC4wMS4wMS4wMDAwMDA",
+      "kind": "paper",
+      "url": "https://doi.org/10.1101/2024.01.01.000000",
+      "title": "bioRxiv Example",
+      "published_at": "2024-01-01T00:00:00Z",
+      "published_in": {
+        "name": "bioRxiv",
+        "id": "biorxiv.org"
+      },
+      "fields": {
+        "tags": [
+          "preprints"
+        ]
+      },
+      "blocks": [
+        {
+          "id": "biorxiv:paper:ZG9pLzEwLjExMDEvMjAyNC4wMS4wMS4wMDAwMDA:abstract",
+          "kind": "abstract",
+          "text": "Example abstract text."
+        }
+      ]
+    }
+  ],
+  "next_cursor": null,
+  "listing": "feed"
+}

@@ -31,7 +31,6 @@ module_name_repetitions = "allow"
 
 [patch.crates-io]
 grammers-session = { path = "vendor/grammers-session" }
-agent-twitter-client = { path = "vendor/agent-twitter-client" }
 
 [profile.release]
 opt-level = "z"    # Optimize for size over speed

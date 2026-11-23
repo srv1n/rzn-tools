@@ -1,8 +1,7 @@
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
-use crate::ingest::{
-    self, Author, ContentBlock, ContentItem, NormalizedItemV1, OutputFormat, Partial, Source,
-};
+use crate::ingest::{self, OutputFormat};
+use crate::item::{rfc3339, Block, Item, Party};
 #[cfg(feature = "browser-cookie-import")]
 use crate::utils::get_cookies;
 use crate::utils::{get_domain, get_user_agent, match_browser, strip_multiple_newlines, Browser};
@@ -83,54 +82,36 @@ fn web_item_ref(url: &str) -> String {
     format!("web:page:{}", encoded)
 }
 
-fn web_item_from_content(content: &WebContent) -> ContentItem {
-    let item_ref = web_item_ref(&content.url);
-    let author = content.metadata.author.as_ref().map(|name| Author {
-        name: name.to_string(),
-        id: None,
-    });
-    let block = ContentBlock {
-        block_ref: format!("{}:content", item_ref),
-        block_kind: "content".to_string(),
-        text: content.content.clone(),
-        author,
-        created_at: content.metadata.published_date.clone(),
-        reply_to: None,
-        position: None,
-        score: None,
-        attachments: Vec::new(),
-        metadata: None,
-    };
-
-    ContentItem {
-        item_ref,
-        kind: "page".to_string(),
-        canonical_url: Some(content.url.clone()),
-        title: content.title.clone(),
-        created_at: content.metadata.published_date.clone(),
-        source_updated_at: None,
-        authors: content
-            .metadata
-            .author
-            .as_ref()
-            .map(|name| {
-                vec![Author {
-                    name: name.to_string(),
-                    id: None,
-                }]
-            })
-            .unwrap_or_default(),
-        tags: content.metadata.keywords.clone(),
-        metadata: Some(json!({
+fn web_item_from_content(content: &WebContent) -> Item {
+    let site = url::Url::parse(&content.url)
+        .ok()
+        .and_then(|url| {
+            url.host_str()
+                .map(|host| host.trim_start_matches("www.").to_string())
+        })
+        .unwrap_or_else(|| content.url.clone());
+    let site_party = Party::named(site.clone()).with_id(site.clone());
+    let author = content
+        .metadata
+        .author
+        .as_deref()
+        .filter(|name| !name.trim().is_empty())
+        .map(Party::named)
+        .unwrap_or_else(|| site_party.clone());
+    let mut item = Item::new(web_item_ref(&content.url), "page", content.url.clone())
+        .with_title(content.title.clone().unwrap_or_default())
+        .with_author(author)
+        .with_published_at(content.metadata.published_date.as_deref().and_then(rfc3339))
+        .with_published_in(site_party)
+        .with_fields(json!({
             "description": content.metadata.description,
             "keywords": content.metadata.keywords,
-            "author": content.metadata.author,
-            "published_date": content.metadata.published_date
-        })),
-        blocks: vec![block],
-        relationships: Vec::new(),
-        truncation: None,
+        }));
+    if !content.content.trim().is_empty() {
+        item.blocks
+            .push(Block::new("content", "paragraph", content.content.clone()));
     }
+    item
 }
 
 #[derive(Clone)]
@@ -655,9 +636,9 @@ the main page content (not structured scraping). Example: url=\"https://example.
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
+                            "enum": ["raw", "item_v2", "display_v1"],
                             "default": "raw",
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                         }
                     },
                         "required": ["url"],
@@ -796,14 +777,8 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
 
                 let content = self.scrape_url(url, &browser, cookies.as_deref()).await?;
 
-                if output_format == OutputFormat::NormalizedV1 {
-                    let item = web_item_from_content(&content);
-                    let normalized = NormalizedItemV1::new(
-                        item,
-                        Partial::complete(None),
-                        Source::new("web", request.name.as_ref()),
-                    );
-                    return crate::utils::structured_result(&normalized);
+                if output_format == OutputFormat::ItemV2 {
+                    return crate::utils::structured_result(&web_item_from_content(&content));
                 }
 
                 let text = serde_json::to_string(&content)?;

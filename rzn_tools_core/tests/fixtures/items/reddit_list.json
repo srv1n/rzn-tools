@@ -1,0 +1,19 @@
+{
+  "type": "rzn.items/v2",
+  "items": [
+    {
+      "type": "rzn.item/v2",
+      "key": "reddit:post:abc123",
+      "kind": "thread",
+      "url": "https://www.reddit.com/r/rust/comments/abc123/example/",
+      "title": "Example Reddit Post",
+      "published_at": "2025-01-01T00:00:00Z",
+      "published_in": {
+        "name": "r/rust",
+        "id": "rust"
+      }
+    }
+  ],
+  "next_cursor": null,
+  "listing": "feed"
+}

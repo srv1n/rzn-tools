@@ -4,10 +4,8 @@ use crate::output::{format_output, OutputData};
 use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, ContentArrangement, Table};
 use owo_colors::OwoColorize;
 use rzn_tools_core::auth_store::FileAuthStore;
-use rzn_tools_core::ingest::{
-    now_rfc3339, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, Partial, Source,
-    NORMALIZED_ITEM_V1_TYPE, NORMALIZED_PAGE_V1_TYPE,
-};
+use rzn_tools_core::ingest::now_rfc3339;
+use rzn_tools_core::item::{Block, Item, ItemsPage, ITEMS_V2_TYPE, ITEM_V2_TYPE};
 use rzn_tools_core::mcp_server::{IngestSource, ListIngestSourcesParams, McpServer};
 use rzn_tools_core::{CallToolRequestParam, ProviderRegistry};
 use serde::{Deserialize, Serialize};
@@ -116,43 +114,28 @@ impl IndexWriter {
         })
     }
 
-    fn write_item(
-        &mut self,
-        item: &ContentItem,
-        source: &Source,
-        partial: &Partial,
-    ) -> Result<bool> {
-        if self.seen_items.contains(&item.item_ref) {
+    fn write_item(&mut self, item: &Item, tool: &str) -> Result<bool> {
+        if self.seen_items.contains(&item.key) {
             return Ok(false);
         }
-        let record = json!({
-            "item": item,
-            "source": source,
-            "partial": partial,
-        });
+        let mut head = item.clone();
+        head.blocks.clear();
+        let record = json!({ "item": head, "tool": tool });
         append_jsonl(&self.items_path, &record)?;
-        append_seen(&self.seen_items_path, &item.item_ref)?;
-        self.seen_items.insert(item.item_ref.clone());
+        append_seen(&self.seen_items_path, &item.key)?;
+        self.seen_items.insert(item.key.clone());
         Ok(true)
     }
 
-    fn write_block(
-        &mut self,
-        item_ref: &str,
-        block: &ContentBlock,
-        source: &Source,
-    ) -> Result<bool> {
-        if self.seen_blocks.contains(&block.block_ref) {
+    fn write_block(&mut self, key: &str, block: &Block, tool: &str) -> Result<bool> {
+        let seen_key = format!("{key}#{}", block.id);
+        if self.seen_blocks.contains(&seen_key) {
             return Ok(false);
         }
-        let record = json!({
-            "item_ref": item_ref,
-            "block": block,
-            "source": source,
-        });
+        let record = json!({ "key": key, "block": block, "tool": tool });
         append_jsonl(&self.blocks_path, &record)?;
-        append_seen(&self.seen_blocks_path, &block.block_ref)?;
-        self.seen_blocks.insert(block.block_ref.clone());
+        append_seen(&self.seen_blocks_path, &seen_key)?;
+        self.seen_blocks.insert(seen_key);
         Ok(true)
     }
 }
@@ -503,12 +486,11 @@ async fn run_ingest_source(
                 };
 
                 let type_field = payload.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                if type_field == NORMALIZED_PAGE_V1_TYPE {
-                    match serde_json::from_value::<NormalizedPageV1>(payload) {
+                if type_field == ITEMS_V2_TYPE {
+                    match serde_json::from_value::<ItemsPage>(payload) {
                         Ok(page) => {
-                            let mut page_has_more = page.has_more;
                             let mut next_cursor = page.next_cursor.clone();
-                            match index_page(index, &page.items, &page.source, &page.partial) {
+                            match index_page(index, &page.items, &source.tool) {
                                 Ok((item_count, block_count)) => {
                                     items += item_count;
                                     blocks += block_count;
@@ -523,12 +505,11 @@ async fn run_ingest_source(
 
                             if let Some(limit) = max_items {
                                 if items >= limit {
-                                    page_has_more = false;
                                     next_cursor = None;
                                 }
                             }
 
-                            if !page_has_more || next_cursor.is_none() {
+                            if next_cursor.is_none() {
                                 cursor = None;
                                 break;
                             }
@@ -536,14 +517,14 @@ async fn run_ingest_source(
                             cursor = next_cursor;
                         }
                         Err(err) => {
-                            last_error = Some(format!("Failed to parse normalized page: {}", err));
+                            last_error = Some(format!("Failed to parse items page: {}", err));
                             break;
                         }
                     }
-                } else if type_field == NORMALIZED_ITEM_V1_TYPE {
-                    match serde_json::from_value::<NormalizedItemV1>(payload) {
+                } else if type_field == ITEM_V2_TYPE {
+                    match serde_json::from_value::<Item>(payload) {
                         Ok(item) => {
-                            match index_item(index, &item.item, &item.source, &item.partial) {
+                            match index_item(index, &item, &source.tool) {
                                 Ok((item_added, block_added)) => {
                                     items += item_added;
                                     blocks += block_added;
@@ -559,15 +540,12 @@ async fn run_ingest_source(
                             break;
                         }
                         Err(err) => {
-                            last_error = Some(format!("Failed to parse normalized item: {}", err));
+                            last_error = Some(format!("Failed to parse item: {}", err));
                             break;
                         }
                     }
                 } else {
-                    last_error = Some(format!(
-                        "Unsupported normalized payload type: {}",
-                        type_field
-                    ));
+                    last_error = Some(format!("Unsupported item payload type: {}", type_field));
                     break;
                 }
             }
@@ -597,14 +575,13 @@ async fn run_ingest_source(
 
 fn index_page(
     index: &mut IndexWriter,
-    items: &[ContentItem],
-    source: &Source,
-    partial: &Partial,
+    items: &[Item],
+    tool: &str,
 ) -> std::result::Result<(u64, u64), CommandError> {
     let mut item_count = 0u64;
     let mut block_count = 0u64;
     for item in items {
-        let (item_added, block_added) = index_item(index, item, source, partial)?;
+        let (item_added, block_added) = index_item(index, item, tool)?;
         item_count += item_added;
         block_count += block_added;
     }
@@ -613,17 +590,16 @@ fn index_page(
 
 fn index_item(
     index: &mut IndexWriter,
-    item: &ContentItem,
-    source: &Source,
-    partial: &Partial,
+    item: &Item,
+    tool: &str,
 ) -> std::result::Result<(u64, u64), CommandError> {
     let mut item_added = 0u64;
     let mut block_added = 0u64;
-    if index.write_item(item, source, partial)? {
+    if index.write_item(item, tool)? {
         item_added = 1;
     }
     for block in &item.blocks {
-        if index.write_block(&item.item_ref, block, source)? {
+        if index.write_block(&item.key, block, tool)? {
             block_added += 1;
         }
     }
@@ -639,7 +615,7 @@ fn build_args(
     for (key, value) in overrides {
         args.insert(key.clone(), value.clone());
     }
-    args.insert("output_format".to_string(), json!("normalized_v1"));
+    args.insert("output_format".to_string(), json!("item_v2"));
     if let Some(cursor) = cursor {
         args.insert("cursor".to_string(), json!(cursor));
     } else {
@@ -987,7 +963,7 @@ mod tests {
         assert_eq!(args.get("cursor").and_then(|v| v.as_str()), Some("abc"));
         assert_eq!(
             args.get("output_format").and_then(|v| v.as_str()),
-            Some("normalized_v1")
+            Some("item_v2")
         );
     }
 

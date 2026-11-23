@@ -1,0 +1,25 @@
+{
+  "type": "rzn.items/v2",
+  "items": [
+    {
+      "type": "rzn.item/v2",
+      "key": "rss:entry:ZW50cnkx",
+      "kind": "entry",
+      "url": "https://example.com/post/1",
+      "title": "Example Feed Entry",
+      "published_at": "2025-01-01T00:00:00Z",
+      "published_in": {
+        "name": "example.com"
+      },
+      "blocks": [
+        {
+          "id": "rss:entry:ZW50cnkx:summary",
+          "kind": "summary",
+          "text": "Example summary."
+        }
+      ]
+    }
+  ],
+  "next_cursor": null,
+  "listing": "feed"
+}

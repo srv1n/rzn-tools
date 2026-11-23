@@ -1,7 +1,6 @@
 use crate::error::ConnectorError;
-use crate::ingest::{
-    self, Author, ContentBlock, ContentItem, NormalizedPageV1, OutputFormat, Partial, Source,
-};
+use crate::ingest::{self, OutputFormat};
+use crate::item::{Block, Item, ItemsPage, Listing, Party};
 use crate::utils::structured_result_with_text;
 use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
@@ -102,7 +101,7 @@ fn rss_item_ref(id: &str) -> String {
     format!("rss:entry:{}", encoded)
 }
 
-fn rss_item_from_entry(entry: &feed_rs::model::Entry, feed_url: &str) -> ContentItem {
+fn rss_item_from_entry(entry: &feed_rs::model::Entry, feed_url: &str) -> Item {
     let base_id = if !entry.id.is_empty() {
         entry.id.clone()
     } else {
@@ -112,17 +111,21 @@ fn rss_item_from_entry(entry: &feed_rs::model::Entry, feed_url: &str) -> Content
             .map(|l| l.href.clone())
             .unwrap_or_else(|| feed_url.to_string())
     };
-    let item_ref = rss_item_ref(&base_id);
-    let canonical_url = entry.links.first().map(|l| l.href.clone());
-    let title = entry.title.as_ref().map(|t| t.content.clone());
-    let authors = entry
+    let url = entry
+        .links
+        .first()
+        .map(|l| l.href.clone())
+        .unwrap_or_else(|| feed_url.to_string());
+    let feed_host = url::Url::parse(feed_url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
+        .unwrap_or_else(|| feed_url.to_string());
+    let feed = Party::named(feed_host).with_url(feed_url);
+    let author = entry
         .authors
-        .iter()
-        .map(|a| Author {
-            name: a.name.clone(),
-            id: None,
-        })
-        .collect::<Vec<_>>();
+        .first()
+        .map(|a| Party::named(a.name.clone()))
+        .unwrap_or_else(|| feed.clone());
     let summary = entry.summary.as_ref().map(|s| s.content.clone());
     let content = entry
         .content
@@ -130,52 +133,30 @@ fn rss_item_from_entry(entry: &feed_rs::model::Entry, feed_url: &str) -> Content
         .and_then(|c| c.body.clone())
         .unwrap_or_default();
 
-    let mut blocks = Vec::new();
-    if let Some(summary_text) = summary.clone() {
-        blocks.push(ContentBlock {
-            block_ref: format!("{}:summary", item_ref),
-            block_kind: "summary".to_string(),
-            text: summary_text,
-            author: None,
-            created_at: entry.published.map(|d| d.to_rfc3339()),
-            reply_to: None,
-            position: None,
-            score: None,
-            attachments: Vec::new(),
-            metadata: None,
-        });
-    } else if !content.trim().is_empty() {
-        blocks.push(ContentBlock {
-            block_ref: format!("{}:content", item_ref),
-            block_kind: "content".to_string(),
-            text: content,
-            author: None,
-            created_at: entry.published.map(|d| d.to_rfc3339()),
-            reply_to: None,
-            position: None,
-            score: None,
-            attachments: Vec::new(),
-            metadata: None,
-        });
+    let mut item = Item::new(rss_item_ref(&base_id), "entry", url)
+        .with_title(
+            entry
+                .title
+                .as_ref()
+                .map(|t| t.content.clone())
+                .unwrap_or_default(),
+        )
+        .with_author(author)
+        .with_published_at(entry.published.or(entry.updated).map(|d| d.to_rfc3339()))
+        .with_published_in(feed)
+        .with_marker(entry.updated.map(|d| d.to_rfc3339()))
+        .with_fields(json!({
+            "summary": summary,
+            "authors": entry.authors.iter().map(|a| a.name.clone()).collect::<Vec<_>>(),
+        }));
+    if !content.trim().is_empty() {
+        item.blocks
+            .push(Block::new("content", "paragraph", content));
+    } else if let Some(summary) = summary.filter(|s| !s.trim().is_empty()) {
+        item.blocks
+            .push(Block::new("summary", "paragraph", summary));
     }
-
-    ContentItem {
-        item_ref,
-        kind: "entry".to_string(),
-        canonical_url,
-        title,
-        created_at: entry.published.map(|d| d.to_rfc3339()),
-        source_updated_at: entry.updated.map(|d| d.to_rfc3339()),
-        authors,
-        tags: Vec::new(),
-        metadata: Some(json!({
-            "feed_url": feed_url,
-            "summary": summary
-        })),
-        blocks,
-        relationships: Vec::new(),
-        truncation: None,
-    }
+    item
 }
 
 #[async_trait]
@@ -230,9 +211,9 @@ Example: url=\"https://www.nasa.gov/rss/dyn/breaking_news.rss\" limit=5.",
                             },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                             }
                         },
                         "required": ["url"],
@@ -280,9 +261,9 @@ Example: url=\"https://example.com/feed.xml\" limit=10.",
                             },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                             }
                         },
                         "required": ["url"],
@@ -334,9 +315,9 @@ want matching items. Example: url=\"https://example.com/feed.xml\" query=\"rust\
                             },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                             }
                         },
                         "required": ["url", "query"],
@@ -408,20 +389,14 @@ URL, not a feed URL. Example: url=\"https://blog.rust-lang.org\".",
                 let feed = self.fetch_and_parse(&args.url).await?;
                 let limit = args.limit.unwrap_or(5);
 
-                if args.output_format == OutputFormat::NormalizedV1 {
+                if args.output_format == OutputFormat::ItemV2 {
                     let items = feed
                         .entries
                         .iter()
                         .take(limit)
                         .map(|e| rss_item_from_entry(e, &args.url))
                         .collect::<Vec<_>>();
-                    let page = NormalizedPageV1::new(
-                        items,
-                        None,
-                        false,
-                        Partial::complete(Some(ingest::limits_max_items(limit as u64))),
-                        Source::new("rss", "get_feed"),
-                    );
+                    let page = ItemsPage::new(items, None, Listing::Feed);
                     return crate::utils::structured_result(&page);
                 }
 
@@ -465,7 +440,7 @@ URL, not a feed URL. Example: url=\"https://blog.rust-lang.org\".",
                 let feed = self.fetch_and_parse(&args.url).await?;
                 let limit = args.limit.unwrap_or(10);
 
-                if args.output_format == OutputFormat::NormalizedV1 {
+                if args.output_format == OutputFormat::ItemV2 {
                     let cursor_str = args.cursor.as_deref();
                     let cursor = cursor_str.and_then(ingest::decode_cursor::<RssCursor>);
                     if cursor_str.is_some() && cursor.is_none() {
@@ -496,14 +471,7 @@ URL, not a feed URL. Example: url=\"https://blog.rust-lang.org\".",
                     } else {
                         None
                     };
-                    let has_more = next_cursor.is_some();
-                    let page = NormalizedPageV1::new(
-                        items,
-                        next_cursor,
-                        has_more,
-                        Partial::complete(Some(ingest::limits_max_items(limit as u64))),
-                        Source::new("rss", "list_entries"),
-                    );
+                    let page = ItemsPage::new(items, next_cursor, Listing::Feed);
                     return crate::utils::structured_result(&page);
                 }
 
@@ -558,7 +526,7 @@ URL, not a feed URL. Example: url=\"https://blog.rust-lang.org\".",
                     })
                     .collect();
 
-                if args.output_format == OutputFormat::NormalizedV1 {
+                if args.output_format == OutputFormat::ItemV2 {
                     let cursor_str = args.cursor.as_deref();
                     let cursor = cursor_str.and_then(ingest::decode_cursor::<RssCursor>);
                     if cursor_str.is_some() && cursor.is_none() {
@@ -588,14 +556,7 @@ URL, not a feed URL. Example: url=\"https://blog.rust-lang.org\".",
                     } else {
                         None
                     };
-                    let has_more = next_cursor.is_some();
-                    let page = NormalizedPageV1::new(
-                        items,
-                        next_cursor,
-                        has_more,
-                        Partial::complete(Some(ingest::limits_max_items(limit as u64))),
-                        Source::new("rss", "search_feed"),
-                    );
+                    let page = ItemsPage::new(items, next_cursor, Listing::Feed);
                     return crate::utils::structured_result(&page);
                 }
 

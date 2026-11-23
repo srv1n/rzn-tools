@@ -1,8 +1,6 @@
 use crate::error::ConnectorError;
-use crate::ingest::{
-    self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
-    Partial, Relationship, Source,
-};
+use crate::ingest::{self, OutputFormat};
+use crate::item::{Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{build_reqwest_client, structured_result, structured_result_with_text};
 use crate::{
     CallToolRequestParam, Connector, ListToolsResult, PaginatedRequestParam, Tool,
@@ -2733,213 +2731,246 @@ impl PolymarketConnector {
         parts.join(" | ")
     }
 
-    fn event_summary_item(summary: &EventSummary) -> Result<ContentItem, ConnectorError> {
-        let block = ContentBlock {
-            block_ref: format!("polymarket:event:{}:summary", summary.id),
-            block_kind: "summary".to_string(),
-            text: Self::event_search_text(summary),
-            author: None,
-            created_at: None,
-            reply_to: None,
-            position: Some(json!({ "section": "search_result" })),
-            score: summary.volume_24hr,
-            attachments: Vec::new(),
-            metadata: Some(
+    fn event_summary_item(summary: &EventSummary) -> Result<Item, ConnectorError> {
+        let block = {
+            let mut b = Block::new(
+                format!("polymarket:event:{}:summary", summary.id),
+                "summary".to_string(),
+                Self::event_search_text(summary),
+            );
+            crate::item::merge_fields(&mut b.fields, json!({ "section": "search_result" }));
+            if let Some(score) = summary.volume_24hr.and_then(serde_json::Number::from_f64) {
+                b.counts.insert("score".to_string(), score);
+            }
+            if let Some(meta) = Some(
                 serde_json::to_value(summary).map_err(|e| ConnectorError::Other(e.to_string()))?,
-            ),
+            ) {
+                crate::item::merge_fields(&mut b.fields, meta);
+            }
+            b
         };
 
-        Ok(ContentItem {
-            item_ref: format!("polymarket:event:{}", summary.id),
-            kind: "prediction_event".to_string(),
-            canonical_url: summary.url.clone(),
-            title: Some(summary.title.clone()),
-            created_at: summary.start_date.clone(),
-            source_updated_at: summary.updated_at.clone(),
-            authors: Vec::new(),
-            tags: summary.tags.clone(),
-            metadata: Some(
+        Ok({
+            let mut item = Item::new(
+                format!("polymarket:event:{}", summary.id),
+                "prediction_event".to_string(),
+                (summary.url.clone()).unwrap_or_default(),
+            );
+            item.title = Some(summary.title.clone());
+            item.published_at = (summary.start_date.clone())
+                .as_deref()
+                .and_then(crate::item::rfc3339);
+            item.marker = summary.updated_at.clone();
+            item.published_in = Some(Party::named("Polymarket").with_id("polymarket.com"));
+            crate::item::merge_fields(
+                &mut item.fields,
+                serde_json::json!({"tags": summary.tags.clone()}),
+            );
+            if let Some(meta) = Some(
                 serde_json::to_value(summary).map_err(|e| ConnectorError::Other(e.to_string()))?,
-            ),
-            blocks: vec![block],
-            relationships: Vec::new(),
-            truncation: None,
+            ) {
+                crate::item::merge_fields(&mut item.fields, meta);
+            }
+            item.blocks = vec![block];
+            item
         })
     }
 
-    fn event_detail_item(detail: &EventDetail) -> Result<ContentItem, ConnectorError> {
+    fn event_detail_item(detail: &EventDetail) -> Result<Item, ConnectorError> {
         let mut blocks = Vec::new();
-        blocks.push(ContentBlock {
-            block_ref: format!("polymarket:event:{}:summary", detail.id),
-            block_kind: "summary".to_string(),
-            text: detail.title.clone(),
-            author: None,
-            created_at: detail.created_at.clone(),
-            reply_to: None,
-            position: Some(json!({ "section": "header" })),
-            score: detail.volume_24hr,
-            attachments: Vec::new(),
-            metadata: Some(json!({
+        blocks.push({
+            let mut b = Block::new(
+                format!("polymarket:event:{}:summary", detail.id),
+                "summary".to_string(),
+                detail.title.clone(),
+            );
+            b.published_at = detail.created_at.clone();
+            crate::item::merge_fields(&mut b.fields, json!({ "section": "header" }));
+            if let Some(score) = detail.volume_24hr.and_then(serde_json::Number::from_f64) {
+                b.counts.insert("score".to_string(), score);
+            }
+            if let Some(meta) = Some(json!({
                 "liquidity": detail.liquidity,
                 "open_interest": detail.open_interest,
                 "volume_24hr": detail.volume_24hr,
                 "volume_1mo": detail.volume_1mo,
                 "comment_count": detail.comment_count,
-            })),
+            })) {
+                crate::item::merge_fields(&mut b.fields, meta);
+            }
+            b
         });
 
         if let Some(description) = detail.description.as_ref() {
             if !description.trim().is_empty() {
-                blocks.push(ContentBlock {
-                    block_ref: format!("polymarket:event:{}:description", detail.id),
-                    block_kind: "description".to_string(),
-                    text: description.trim().to_string(),
-                    author: None,
-                    created_at: None,
-                    reply_to: None,
-                    position: Some(json!({ "section": "description" })),
-                    score: None,
-                    attachments: Vec::new(),
-                    metadata: None,
+                blocks.push({
+                    let mut b = Block::new(
+                        format!("polymarket:event:{}:description", detail.id),
+                        "description".to_string(),
+                        description.trim().to_string(),
+                    );
+                    crate::item::merge_fields(&mut b.fields, json!({ "section": "description" }));
+                    b
                 });
             }
         }
 
         let market_limit = 5usize;
         for (index, market) in detail.markets.iter().take(market_limit).enumerate() {
-            blocks.push(ContentBlock {
-                block_ref: format!("polymarket:event:{}:market:{}", detail.id, market.id),
-                block_kind: "market".to_string(),
-                text: Self::market_detail_text(&MarketDetail {
-                    id: market.id.clone(),
-                    slug: market.slug.clone(),
-                    question: market.question.clone(),
-                    description: None,
-                    url: market.url.clone(),
-                    active: market.active,
-                    closed: market.closed,
-                    accepting_orders: market.accepting_orders,
-                    start_date: market.start_date.clone(),
-                    end_date: market.end_date.clone(),
-                    updated_at: market.updated_at.clone(),
-                    condition_id: None,
-                    resolution_source: None,
-                    last_trade_price: market.last_trade_price,
-                    best_bid: market.best_bid,
-                    best_ask: market.best_ask,
-                    liquidity: market.liquidity,
-                    volume: None,
-                    volume_24hr: market.volume_24hr,
-                    volume_1wk: market.volume_1wk,
-                    volume_1mo: market.volume_1mo,
-                    clob_token_ids: Vec::new(),
-                    outcomes: market.outcomes.clone(),
-                    events: Vec::new(),
-                }),
-                author: None,
-                created_at: None,
-                reply_to: None,
-                position: Some(json!({ "section": "markets", "index": index })),
-                score: market.volume_24hr,
-                attachments: Vec::new(),
-                metadata: Some(
+            blocks.push({
+                let mut b = Block::new(
+                    format!("polymarket:event:{}:market:{}", detail.id, market.id),
+                    "market".to_string(),
+                    Self::market_detail_text(&MarketDetail {
+                        id: market.id.clone(),
+                        slug: market.slug.clone(),
+                        question: market.question.clone(),
+                        description: None,
+                        url: market.url.clone(),
+                        active: market.active,
+                        closed: market.closed,
+                        accepting_orders: market.accepting_orders,
+                        start_date: market.start_date.clone(),
+                        end_date: market.end_date.clone(),
+                        updated_at: market.updated_at.clone(),
+                        condition_id: None,
+                        resolution_source: None,
+                        last_trade_price: market.last_trade_price,
+                        best_bid: market.best_bid,
+                        best_ask: market.best_ask,
+                        liquidity: market.liquidity,
+                        volume: None,
+                        volume_24hr: market.volume_24hr,
+                        volume_1wk: market.volume_1wk,
+                        volume_1mo: market.volume_1mo,
+                        clob_token_ids: Vec::new(),
+                        outcomes: market.outcomes.clone(),
+                        events: Vec::new(),
+                    }),
+                );
+                crate::item::merge_fields(
+                    &mut b.fields,
+                    json!({ "section": "markets", "index": index }),
+                );
+                if let Some(score) = market.volume_24hr.and_then(serde_json::Number::from_f64) {
+                    b.counts.insert("score".to_string(), score);
+                }
+                if let Some(meta) = Some(
                     serde_json::to_value(market)
                         .map_err(|e| ConnectorError::Other(e.to_string()))?,
-                ),
+                ) {
+                    crate::item::merge_fields(&mut b.fields, meta);
+                }
+                b
             });
         }
 
         let truncation = if detail.markets.len() > market_limit {
-            Some(crate::ingest::Truncation {
-                is_truncated: true,
+            Some(crate::item::Truncated {
                 reason: format!(
                     "Included the top {} markets by 24h volume out of {} total markets.",
                     market_limit,
                     detail.markets.len()
                 ),
+                returned_blocks: blocks.len() as u64,
                 total_blocks_hint: Some(
                     detail.markets.len() as u64 + blocks.len() as u64 - market_limit as u64,
                 ),
-                returned_blocks: blocks.len() as u64,
-                policy: Some("top_markets_by_volume_24hr".to_string()),
             })
         } else {
             None
         };
 
-        Ok(ContentItem {
-            item_ref: format!("polymarket:event:{}", detail.id),
-            kind: "prediction_event".to_string(),
-            canonical_url: detail.url.clone(),
-            title: Some(detail.title.clone()),
-            created_at: detail
+        Ok({
+            let mut item = Item::new(
+                format!("polymarket:event:{}", detail.id),
+                "prediction_event".to_string(),
+                (detail.url.clone()).unwrap_or_default(),
+            );
+            item.title = Some(detail.title.clone());
+            item.published_at = (detail
                 .created_at
                 .clone()
-                .or_else(|| detail.start_date.clone()),
-            source_updated_at: detail.updated_at.clone(),
-            authors: Vec::new(),
-            tags: detail.tags.clone(),
-            metadata: Some(
+                .or_else(|| detail.start_date.clone()))
+            .as_deref()
+            .and_then(crate::item::rfc3339);
+            item.marker = detail.updated_at.clone();
+            item.published_in = Some(Party::named("Polymarket").with_id("polymarket.com"));
+            crate::item::merge_fields(
+                &mut item.fields,
+                serde_json::json!({"tags": detail.tags.clone()}),
+            );
+            if let Some(meta) = Some(
                 serde_json::to_value(detail).map_err(|e| ConnectorError::Other(e.to_string()))?,
-            ),
-            blocks,
-            relationships: Vec::new(),
-            truncation,
+            ) {
+                crate::item::merge_fields(&mut item.fields, meta);
+            }
+            item.blocks = blocks;
+            item.truncated = (truncation).map(|t| crate::item::Truncated {
+                reason: t.reason,
+                returned_blocks: t.returned_blocks,
+                total_blocks_hint: t.total_blocks_hint,
+            });
+            item
         })
     }
 
-    fn market_detail_item(detail: &MarketDetail) -> Result<ContentItem, ConnectorError> {
-        let mut relationships = Vec::new();
-        for event in &detail.events {
-            if let Some(event_id) = event.id.as_ref() {
-                relationships.push(Relationship {
-                    rel: "belongs_to".to_string(),
-                    from: format!("polymarket:market:{}", detail.id),
-                    to: format!("polymarket:event:{}", event_id),
-                });
-            }
-        }
-
+    fn market_detail_item(detail: &MarketDetail) -> Result<Item, ConnectorError> {
         let authors = detail
             .events
             .iter()
             .filter_map(|event| event.title.as_ref())
-            .map(|title| Author {
+            .map(|title| Party {
                 name: title.clone(),
                 id: None,
+                url: None,
             })
             .collect::<Vec<_>>();
 
-        let blocks = vec![ContentBlock {
-            block_ref: format!("polymarket:market:{}:summary", detail.id),
-            block_kind: "market".to_string(),
-            text: Self::market_detail_text(detail),
-            author: authors.first().cloned(),
-            created_at: detail.start_date.clone(),
-            reply_to: None,
-            position: Some(json!({ "section": "market" })),
-            score: detail.volume_24hr,
-            attachments: Vec::new(),
-            metadata: Some(
+        let blocks = vec![{
+            let mut b = Block::new(
+                format!("polymarket:market:{}:summary", detail.id),
+                "market".to_string(),
+                Self::market_detail_text(detail),
+            );
+            b.author = authors.first().cloned();
+            b.published_at = detail.start_date.clone();
+            crate::item::merge_fields(&mut b.fields, json!({ "section": "market" }));
+            if let Some(score) = detail.volume_24hr.and_then(serde_json::Number::from_f64) {
+                b.counts.insert("score".to_string(), score);
+            }
+            if let Some(meta) = Some(
                 serde_json::to_value(detail).map_err(|e| ConnectorError::Other(e.to_string()))?,
-            ),
+            ) {
+                crate::item::merge_fields(&mut b.fields, meta);
+            }
+            b
         }];
 
-        Ok(ContentItem {
-            item_ref: format!("polymarket:market:{}", detail.id),
-            kind: "prediction_market".to_string(),
-            canonical_url: detail.url.clone(),
-            title: Some(detail.question.clone()),
-            created_at: detail.start_date.clone(),
-            source_updated_at: detail.updated_at.clone(),
-            authors,
-            tags: vec!["polymarket".to_string()],
-            metadata: Some(
+        Ok({
+            let mut item = Item::new(
+                format!("polymarket:market:{}", detail.id),
+                "prediction_market".to_string(),
+                (detail.url.clone()).unwrap_or_default(),
+            );
+            item.title = Some(detail.question.clone());
+            item.published_at = (detail.start_date.clone())
+                .as_deref()
+                .and_then(crate::item::rfc3339);
+            item.marker = detail.updated_at.clone();
+            item.author = (authors).into_iter().next();
+            item.published_in = Some(Party::named("Polymarket").with_id("polymarket.com"));
+            crate::item::merge_fields(
+                &mut item.fields,
+                serde_json::json!({"tags": vec!["polymarket".to_string()]}),
+            );
+            if let Some(meta) = Some(
                 serde_json::to_value(detail).map_err(|e| ConnectorError::Other(e.to_string()))?,
-            ),
-            blocks,
-            relationships,
-            truncation: None,
+            ) {
+                crate::item::merge_fields(&mut item.fields, meta);
+            }
+            item.blocks = blocks;
+            item
         })
     }
 }
@@ -3128,8 +3159,8 @@ impl Connector for PolymarketConnector {
                             },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                                "enum": ["raw", "item_v2", "display_v1"],
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                                 "default": "raw"
                             }
                         },
@@ -3141,7 +3172,7 @@ impl Connector for PolymarketConnector {
                             },
                             {
                                 "description": "Search election markets as normalized output",
-                                "input": { "query": "US election", "limit": 15, "output_format": "normalized_v1" }
+                                "input": { "query": "US election", "limit": 15, "output_format": "item_v2" }
                             }
                         ],
                         "_meta": {
@@ -3369,8 +3400,8 @@ impl Connector for PolymarketConnector {
                             },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                                "enum": ["raw", "item_v2", "display_v1"],
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                                 "default": "raw"
                             }
                         },
@@ -3381,7 +3412,7 @@ impl Connector for PolymarketConnector {
                             },
                             {
                                 "description": "Fetch an event by slug as normalized output",
-                                "input": { "slug": "cbb-pur-arz-2026-03-28", "output_format": "normalized_v1" }
+                                "input": { "slug": "cbb-pur-arz-2026-03-28", "output_format": "item_v2" }
                             }
                         ],
                         "_meta": {
@@ -3424,8 +3455,8 @@ impl Connector for PolymarketConnector {
                             },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                                "enum": ["raw", "item_v2", "display_v1"],
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                                 "default": "raw"
                             }
                         },
@@ -3436,7 +3467,7 @@ impl Connector for PolymarketConnector {
                             },
                             {
                                 "description": "Fetch a market by slug",
-                                "input": { "slug": "cbb-pur-arz-2026-03-28", "output_format": "normalized_v1" }
+                                "input": { "slug": "cbb-pur-arz-2026-03-28", "output_format": "item_v2" }
                             }
                         ],
                         "_meta": {
@@ -3685,18 +3716,12 @@ impl Connector for PolymarketConnector {
                 let summaries: Vec<EventSummary> =
                     events.iter().map(Self::to_event_summary).collect();
 
-                if args.output_format.is_normalized() || args.output_format.is_display() {
+                if args.output_format.is_item() || args.output_format.is_display() {
                     let items = summaries
                         .iter()
                         .map(Self::event_summary_item)
                         .collect::<Result<Vec<_>, _>>()?;
-                    let page = NormalizedPageV1::new(
-                        items,
-                        next_cursor.clone(),
-                        has_more,
-                        Partial::complete(Some(ingest::limits_max_items(args.limit as u64))),
-                        Source::new("polymarket", "search"),
-                    );
+                    let page = ItemsPage::new(items, next_cursor.clone(), Listing::Feed);
                     return structured_result(&page);
                 }
 
@@ -3836,10 +3861,9 @@ impl Connector for PolymarketConnector {
                 };
                 let detail = Self::to_event_detail(&event);
 
-                if args.output_format.is_normalized() || args.output_format.is_display() {
+                if args.output_format.is_item() || args.output_format.is_display() {
                     let item = Self::event_detail_item(&detail)?;
-                    let normalized =
-                        NormalizedItemV1::complete(item, Source::new("polymarket", "get"));
+                    let normalized = item;
                     return structured_result(&normalized);
                 }
 
@@ -3855,10 +3879,9 @@ impl Connector for PolymarketConnector {
                     .await?;
                 let detail = Self::to_market_detail(&market);
 
-                if args.output_format.is_normalized() || args.output_format.is_display() {
+                if args.output_format.is_item() || args.output_format.is_display() {
                     let item = Self::market_detail_item(&detail)?;
-                    let normalized =
-                        NormalizedItemV1::complete(item, Source::new("polymarket", "get_market"));
+                    let normalized = item;
                     return structured_result(&normalized);
                 }
 
@@ -4125,7 +4148,7 @@ mod tests {
         };
 
         let item = PolymarketConnector::event_summary_item(&summary).expect("content item");
-        assert_eq!(item.item_ref, "polymarket:event:312712");
+        assert_eq!(item.key, "polymarket:event:312712");
         assert_eq!(item.kind, "prediction_event");
         assert_eq!(
             item.title.as_deref(),

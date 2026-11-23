@@ -16,7 +16,8 @@ use url::Url;
 use crate::auth::AuthDetails;
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
-use crate::ingest::{ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat};
+use crate::ingest::OutputFormat;
+use crate::item::{Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{structured_result, structured_result_with_text};
 use crate::Connector;
 
@@ -690,7 +691,7 @@ impl CaldavConnector {
         Ok(events)
     }
 
-    fn event_to_item(event: &CaldavEvent) -> ContentItem {
+    fn event_to_item(event: &CaldavEvent) -> Item {
         let block_text = event
             .description
             .as_ref()
@@ -699,20 +700,18 @@ impl CaldavConnector {
             .filter(|value| !value.is_empty())
             .unwrap_or_else(|| "(no description)".to_string());
 
-        let block = ContentBlock {
-            block_ref: format!("caldav:event_body:{}", event_item_id_from_url(&event.url)),
-            block_kind: "description".to_string(),
-            text: block_text,
-            author: event.organizer.as_ref().map(|name| crate::ingest::Author {
-                name: name.to_string(),
-                id: None,
-            }),
-            created_at: event.start.clone(),
-            reply_to: None,
-            position: None,
-            score: None,
-            attachments: Vec::new(),
-            metadata: None,
+        let block = {
+            let mut b = Block::new(
+                format!("caldav:event_body:{}", event_item_id_from_url(&event.url)),
+                "description".to_string(),
+                block_text,
+            );
+            b.author = event
+                .organizer
+                .as_ref()
+                .map(|name| Party::named(name.to_string()));
+            b.published_at = event.start.clone();
+            b
         };
 
         let metadata = json!({
@@ -726,28 +725,30 @@ impl CaldavConnector {
             "event_url": event.url
         });
 
-        ContentItem {
-            item_ref: event.item_ref.clone(),
-            kind: "event".to_string(),
-            canonical_url: Some(event.url.clone()),
-            title: event.summary.clone(),
-            created_at: event.start.clone(),
-            source_updated_at: event.last_modified.clone(),
-            authors: event
+        {
+            let mut item = Item::new(
+                event.item_ref.clone(),
+                "event".to_string(),
+                event.url.clone(),
+            );
+            item.title = event.summary.clone();
+            item.published_at = (event.start.clone())
+                .as_deref()
+                .and_then(crate::item::rfc3339);
+            item.marker = event.last_modified.clone();
+            item.author = (event
                 .organizer
                 .as_ref()
-                .map(|name| {
-                    vec![crate::ingest::Author {
-                        name: name.to_string(),
-                        id: None,
-                    }]
-                })
-                .unwrap_or_default(),
-            tags: Vec::new(),
-            metadata: Some(metadata),
-            blocks: vec![block],
-            relationships: Vec::new(),
-            truncation: None,
+                .map(|name| vec![Party::named(name.to_string())])
+                .unwrap_or_default())
+            .into_iter()
+            .next();
+            item.published_in = Some(Party::named("Calendar"));
+            if let Some(meta) = Some(metadata) {
+                crate::item::merge_fields(&mut item.fields, meta);
+            }
+            item.blocks = vec![block];
+            item
         }
     }
 
@@ -877,19 +878,9 @@ impl CaldavConnector {
             None
         };
 
-        if args.output_format == OutputFormat::NormalizedV1 {
-            let items: Vec<ContentItem> = page_events.iter().map(Self::event_to_item).collect();
-            let normalized = NormalizedPageV1::new(
-                items,
-                next_cursor,
-                has_more,
-                crate::ingest::Partial::complete(Some(json!({
-                    "max_items": limit,
-                    "offset": offset,
-                    "total_hint": total
-                }))),
-                crate::ingest::Source::new(self.name(), "list"),
-            );
+        if args.output_format == OutputFormat::ItemV2 {
+            let items: Vec<Item> = page_events.iter().map(Self::event_to_item).collect();
+            let normalized = ItemsPage::new(items, next_cursor, Listing::Feed);
             return structured_result(&normalized);
         }
 
@@ -921,11 +912,8 @@ impl CaldavConnector {
         let raw_ical = self.send_event_get(config, &event_url).await?;
         let event = build_event_from_raw(event_url, raw_ical, None);
 
-        if args.output_format == OutputFormat::NormalizedV1 {
-            let normalized = NormalizedItemV1::complete(
-                Self::event_to_item(&event),
-                crate::ingest::Source::new(self.name(), "get"),
-            );
+        if args.output_format == OutputFormat::ItemV2 {
+            let normalized = Self::event_to_item(&event);
             return structured_result(&normalized);
         }
 
@@ -1011,11 +999,8 @@ impl CaldavConnector {
             .unwrap_or(raw_ical);
         let event = build_event_from_raw(event_url.clone(), fetched_raw, etag);
 
-        if args.output_format == OutputFormat::NormalizedV1 {
-            let normalized = NormalizedItemV1::complete(
-                Self::event_to_item(&event),
-                crate::ingest::Source::new(self.name(), "create"),
-            );
+        if args.output_format == OutputFormat::ItemV2 {
+            let normalized = Self::event_to_item(&event);
             return structured_result(&normalized);
         }
 
@@ -1133,11 +1118,8 @@ impl CaldavConnector {
             .unwrap_or(raw_ical);
         let event = build_event_from_raw(event_url, fetched_raw, etag);
 
-        if args.output_format == OutputFormat::NormalizedV1 {
-            let normalized = NormalizedItemV1::complete(
-                Self::event_to_item(&event),
-                crate::ingest::Source::new(self.name(), "update"),
-            );
+        if args.output_format == OutputFormat::ItemV2 {
+            let normalized = Self::event_to_item(&event);
             return structured_result(&normalized);
         }
 
@@ -1241,9 +1223,9 @@ impl Connector for CaldavConnector {
                             "time_max": { "type": "string", "description": "RFC3339 end time. Defaults to now+365 days." },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                             },
                             "response_format": { "type": "string", "enum": ["concise", "detailed"], "default": "concise" }
                         }
@@ -1270,9 +1252,9 @@ impl Connector for CaldavConnector {
                             "url": { "type": "string", "description": "Event URL (.ics or CalDAV resource URL)." },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                             },
                             "response_format": { "type": "string", "enum": ["concise", "detailed"], "default": "concise" }
                         }
@@ -1309,9 +1291,9 @@ impl Connector for CaldavConnector {
                             "raw_ical": { "type": "string", "description": "Raw VCALENDAR payload. When provided, structured fields are optional." },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                             },
                             "response_format": { "type": "string", "enum": ["concise", "detailed"], "default": "concise" }
                         }
@@ -1348,9 +1330,9 @@ impl Connector for CaldavConnector {
                             "raw_ical": { "type": "string", "description": "Raw VCALENDAR payload to fully replace the resource." },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                             },
                             "response_format": { "type": "string", "enum": ["concise", "detailed"], "default": "concise" }
                         }

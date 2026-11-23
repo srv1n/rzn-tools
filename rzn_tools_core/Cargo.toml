@@ -19,7 +19,6 @@ toml = "0.9.10"
 tokio = { version = "1.47.1", default-features = false, features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "io-std", "process"] }
 thiserror = "2.0.17"
 reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
-reqwest011 = { package = "reqwest", version = "0.11.27", default-features = false, optional = true }
 tracing = { version = "0.1.41", default-features = false, features = ["std"] }
 regex = { version = "1.11.3", default-features = false, features = [
     "std",
@@ -34,7 +33,6 @@ rmcp = "0.8.0"
 # Data source specific (mark connector deps optional)
 # Using forked rookie with rusqlite compatible with libsqlite3-sys v0.30 (for sqlx compatibility)
 rookie = { git = "https://github.com/srv1n/rookie", rev = "2bfc235991692bc2e72f2c684b2137146e91b375", optional = true }
-agent-twitter-client = { version = "0.1.2", optional = true }
 scraper = { version = "0.23.1", default-features = false, features = ["errors"], optional = true }
 htmd = { version = "0.1.6", optional = true }
 urlencoding = "2.1.3"
@@ -77,6 +75,9 @@ hyper = { version = "0.14.32", features = ["full"], optional = true }
 hyper-rustls = { version = "0.24.2", optional = true }
 dirs = { version = "5.0.1" }
 
+[dev-dependencies]
+jsonschema = { version = "0.18", default-features = false }
+
 [features]
 default = []
 examples = []
@@ -86,7 +87,7 @@ server-full = ["server-connectors"]
 # Telegram remains available to local distributions, but its upstream MTProto
 # dependency chain cannot resolve from a fresh Cargo consumer because it pins a
 # yanked crate. Keep the backend profile independently consumable.
-desktop-full = ["all-connectors", "browser-cookie-import", "x-browser"]
+desktop-full = ["all-connectors", "browser-cookie-import"]
 server-connectors = [
     "youtube", "reddit", "hackernews", "wikipedia", "arxiv", "pubmed", "play-store", "app-store",
     "app-store-connect", "apple-search-ads",
@@ -121,8 +122,6 @@ arxiv = ["dep:quick-xml"]
 pubmed = ["dep:quick-xml", "dep:scraper"]
 semantic-scholar = []
 web = ["dep:scraper", "dep:htmd"]
-x-twitter = ["dep:agent-twitter-client", "dep:reqwest011"]
-x-browser = ["x-twitter"]
 x = ["x-api"]
 x-api = ["dep:hmac", "dep:sha1"]
 scihub = []

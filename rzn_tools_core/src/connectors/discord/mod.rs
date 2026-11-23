@@ -1,9 +1,7 @@
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
-use crate::ingest::{
-    self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
-    Partial, Relationship, Source, Truncation,
-};
+use crate::ingest::{self, OutputFormat};
+use crate::item::{Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{structured_result, structured_result_with_text};
 use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
@@ -277,13 +275,13 @@ impl Connector for DiscordConnector {
                         "channel_id": { "type": "integer", "description": "ID of the channel" },
                         "days": { "type": "integer", "minimum": 1, "maximum": 30, "default": 1, "description": "How many day windows to return." },
                         "start_days_ago": { "type": "integer", "minimum": 1, "maximum": 3650, "default": 1, "description": "How many days ago to start (1 = yesterday)." },
-                        "output_format": { "type": "string", "enum": ["raw", "normalized_v1", "display_v1"], "default": "raw" }
+                        "output_format": { "type": "string", "enum": ["raw", "item_v2", "display_v1"], "default": "raw" }
                     },
                     "required": ["guild_id", "channel_id"],
                     "examples": [
                         {
                             "description": "Discover yesterday's daily window (normalized)",
-                            "input": { "guild_id": 123456789, "channel_id": 987654321, "output_format": "normalized_v1" }
+                            "input": { "guild_id": 123456789, "channel_id": 987654321, "output_format": "item_v2" }
                         },
                         {
                             "description": "Discover last 7 daily windows (raw metadata)",
@@ -314,13 +312,13 @@ impl Connector for DiscordConnector {
                         "guild_id": { "type": "integer", "description": "ID of the server/guild" },
                         "channel_id": { "type": "integer", "description": "ID of the channel" },
                         "last_n": { "type": "integer", "minimum": 1, "maximum": 5000, "default": 500, "description": "Number of most recent messages to represent." },
-                        "output_format": { "type": "string", "enum": ["raw", "normalized_v1", "display_v1"], "default": "raw" }
+                        "output_format": { "type": "string", "enum": ["raw", "item_v2", "display_v1"], "default": "raw" }
                     },
                     "required": ["guild_id", "channel_id"],
                     "examples": [
                         {
                             "description": "Discover rolling item for last 500 messages (normalized)",
-                            "input": { "guild_id": 123456789, "channel_id": 987654321, "last_n": 500, "output_format": "normalized_v1" }
+                            "input": { "guild_id": 123456789, "channel_id": 987654321, "last_n": 500, "output_format": "item_v2" }
                         }
                     ],
                     "_meta": {
@@ -349,17 +347,17 @@ impl Connector for DiscordConnector {
                         "window_size": { "type": "integer", "minimum": 1, "maximum": 100, "default": 100, "description": "Messages per window (Discord API max 100)." },
                         "page_limit": { "type": "integer", "minimum": 1, "maximum": 25, "default": 3, "description": "How many windows to return per call." },
                         "cursor": { "type": ["string", "null"], "description": "Opaque cursor from a previous response (fetch older windows)." },
-                        "output_format": { "type": "string", "enum": ["raw", "normalized_v1", "display_v1"], "default": "raw" }
+                        "output_format": { "type": "string", "enum": ["raw", "item_v2", "display_v1"], "default": "raw" }
                     },
                     "required": ["guild_id", "channel_id"],
                     "examples": [
                         {
                             "description": "Start backfill (newest-first) with normalized output",
-                            "input": { "guild_id": 123456789, "channel_id": 987654321, "page_limit": 3, "window_size": 100, "output_format": "normalized_v1" }
+                            "input": { "guild_id": 123456789, "channel_id": 987654321, "page_limit": 3, "window_size": 100, "output_format": "item_v2" }
                         },
                         {
                             "description": "Continue backfill using cursor",
-                            "input": { "guild_id": 123456789, "channel_id": 987654321, "cursor": "opaque-cursor", "page_limit": 3, "output_format": "normalized_v1" }
+                            "input": { "guild_id": 123456789, "channel_id": 987654321, "cursor": "opaque-cursor", "page_limit": 3, "output_format": "item_v2" }
                         }
                     ],
                     "_meta": {
@@ -386,7 +384,7 @@ impl Connector for DiscordConnector {
                         "channel_id": { "type": "integer", "description": "ID of the channel" },
                         "limit": { "type": "integer", "description": "Number of messages (max 100)" },
                         "cursor": { "type": ["string", "null"], "description": "Opaque cursor from a previous response (fetch older messages)." },
-                        "output_format": { "type": "string", "enum": ["raw", "normalized_v1", "display_v1"], "default": "raw", "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output." }
+                        "output_format": { "type": "string", "enum": ["raw", "item_v2", "display_v1"], "default": "raw", "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output." }
                     },
                     "required": ["channel_id"],
                     "examples": [
@@ -423,17 +421,17 @@ impl Connector for DiscordConnector {
                         "item_ref": { "type": "string", "description": "Ingest item_ref emitted by discord ingest_* tools." },
                         "max_messages": { "type": "integer", "minimum": 1, "maximum": 5000, "default": 5000, "description": "Hard cap on returned messages." },
                         "max_pages": { "type": "integer", "minimum": 1, "maximum": 500, "default": 200, "description": "Hard cap on Discord API pages." },
-                        "output_format": { "type": "string", "enum": ["raw", "normalized_v1", "display_v1"], "default": "raw" }
+                        "output_format": { "type": "string", "enum": ["raw", "item_v2", "display_v1"], "default": "raw" }
                     },
                     "required": ["item_ref"],
                     "examples": [
                         {
                             "description": "Fetch a daily window by item_ref (normalized)",
-                            "input": { "item_ref": "guild:123456789:channel:987654321:day:2025-01-01", "output_format": "normalized_v1" }
+                            "input": { "item_ref": "guild:123456789:channel:987654321:day:2025-01-01", "output_format": "item_v2" }
                         },
                         {
                             "description": "Fetch rolling last-N window by item_ref (normalized)",
-                            "input": { "item_ref": "guild:123456789:channel:987654321:rolling:last_n=500", "output_format": "normalized_v1" }
+                            "input": { "item_ref": "guild:123456789:channel:987654321:rolling:last_n=500", "output_format": "item_v2" }
                         }
                     ],
                     "_meta": {
@@ -583,7 +581,7 @@ impl Connector for DiscordConnector {
                 let start_days_ago = args.start_days_ago.unwrap_or(1).max(1);
                 let today = Utc::now().date_naive();
 
-                if output_format != OutputFormat::NormalizedV1 {
+                if output_format != OutputFormat::ItemV2 {
                     let data = json!({
                         "mode": "daily_windows",
                         "guild_id": args.guild_id,
@@ -599,7 +597,7 @@ impl Connector for DiscordConnector {
                     args.guild_id, args.channel_id
                 ));
 
-                let mut items: Vec<ContentItem> = Vec::with_capacity(days as usize);
+                let mut items: Vec<Item> = Vec::with_capacity(days as usize);
                 for i in 0..days {
                     let day = today - chrono::Duration::days((start_days_ago + i) as i64);
                     let date_str = day.format("%Y-%m-%d").to_string();
@@ -611,38 +609,35 @@ impl Connector for DiscordConnector {
                         .from_utc_datetime(&day.and_hms_opt(0, 0, 0).unwrap())
                         .to_rfc3339();
 
-                    items.push(ContentItem {
-                        item_ref: item_ref.clone(),
-                        kind: "daily_window".to_string(),
-                        canonical_url: channel_url.clone(),
-                        title: Some(format!(
+                    items.push({
+                        let mut item = Item::new(
+                            item_ref.clone(),
+                            "daily_window".to_string(),
+                            (channel_url.clone()).unwrap_or_default(),
+                        );
+                        item.title = Some(format!(
                             "Discord channel {} daily window {}",
                             args.channel_id, date_str
-                        )),
-                        created_at: Some(created_at.clone()),
-                        source_updated_at: Some(created_at),
-                        authors: Vec::new(),
-                        tags: Vec::new(),
-                        metadata: Some(json!({
+                        ));
+                        item.published_at = (Some(created_at.clone()))
+                            .as_deref()
+                            .and_then(crate::item::rfc3339);
+                        item.marker = Some(created_at);
+                        item.published_in = Some(Party::named("Discord").with_id("discord.com"));
+                        if let Some(meta) = Some(json!({
                             "mode": "daily",
                             "guild_id": args.guild_id,
                             "channel_id": args.channel_id,
                             "day": date_str,
                             "content_hash": item_ref,
-                        })),
-                        blocks: Vec::new(),
-                        relationships: Vec::new(),
-                        truncation: None,
+                        })) {
+                            crate::item::merge_fields(&mut item.fields, meta);
+                        }
+                        item
                     });
                 }
 
-                let normalized = NormalizedPageV1::new(
-                    items,
-                    None,
-                    false,
-                    Partial::complete(Some(ingest::limits_max_items(days))),
-                    Source::new("discord", "ingest_daily_windows"),
-                );
+                let normalized = ItemsPage::new(items, None, Listing::Feed);
                 Ok(structured_result(&normalized)?)
             }
             "ingest_rolling_last_n" => {
@@ -681,7 +676,7 @@ impl Connector for DiscordConnector {
                     None => format!("empty:n:{}", last_n),
                 };
 
-                if output_format != OutputFormat::NormalizedV1 {
+                if output_format != OutputFormat::ItemV2 {
                     let data = json!({
                         "mode": "rolling_last_n",
                         "guild_id": args.guild_id,
@@ -695,38 +690,35 @@ impl Connector for DiscordConnector {
                     return structured_result_with_text(&data, Some(serde_json::to_string(&data)?));
                 }
 
-                let item = ContentItem {
-                    item_ref: item_ref.clone(),
-                    kind: "rolling_window".to_string(),
-                    canonical_url: channel_url,
-                    title: Some(format!(
+                let item = {
+                    let mut item = Item::new(
+                        item_ref.clone(),
+                        "rolling_window".to_string(),
+                        (channel_url).unwrap_or_default(),
+                    );
+                    item.title = Some(format!(
                         "Discord channel {} rolling last {} messages",
                         args.channel_id, last_n
-                    )),
-                    created_at: last_message_at.clone(),
-                    source_updated_at: last_message_at,
-                    authors: Vec::new(),
-                    tags: Vec::new(),
-                    metadata: Some(json!({
+                    ));
+                    item.published_at = (last_message_at.clone())
+                        .as_deref()
+                        .and_then(crate::item::rfc3339);
+                    item.marker = last_message_at;
+                    item.published_in = Some(Party::named("Discord").with_id("discord.com"));
+                    if let Some(meta) = Some(json!({
                         "mode": "rolling",
                         "guild_id": args.guild_id,
                         "channel_id": args.channel_id,
                         "last_n": last_n,
                         "content_hash": content_hash,
                         "last_message_id": last_message_id,
-                    })),
-                    blocks: Vec::new(),
-                    relationships: Vec::new(),
-                    truncation: None,
+                    })) {
+                        crate::item::merge_fields(&mut item.fields, meta);
+                    }
+                    item
                 };
 
-                let normalized = NormalizedPageV1::new(
-                    vec![item],
-                    None,
-                    false,
-                    Partial::complete(Some(ingest::limits_max_items(1))),
-                    Source::new("discord", "ingest_rolling_last_n"),
-                );
+                let normalized = ItemsPage::new(vec![item], None, Listing::Feed);
                 Ok(structured_result(&normalized)?)
             }
             "ingest_backfill_windows" => {
@@ -754,7 +746,7 @@ impl Connector for DiscordConnector {
                     }
                 }
 
-                if output_format != OutputFormat::NormalizedV1 {
+                if output_format != OutputFormat::ItemV2 {
                     let data = json!({
                         "mode": "backfill_windows",
                         "guild_id": args.guild_id,
@@ -771,9 +763,8 @@ impl Connector for DiscordConnector {
                     args.guild_id, args.channel_id
                 ));
 
-                let mut items: Vec<ContentItem> = Vec::new();
+                let mut items: Vec<Item> = Vec::new();
                 let mut next_cursor: Option<String> = None;
-                let mut has_more = false;
 
                 let mut last_oldest: Option<u64> = None;
                 let mut last_full: bool = false;
@@ -805,19 +796,20 @@ impl Connector for DiscordConnector {
                     let created_at = messages.last().and_then(|m| m.timestamp.to_rfc3339());
                     let updated_at = messages.first().and_then(|m| m.timestamp.to_rfc3339());
 
-                    items.push(ContentItem {
-                        item_ref: item_ref.clone(),
-                        kind: "backfill_range".to_string(),
-                        canonical_url: channel_url.clone(),
-                        title: Some(format!(
+                    items.push({
+                        let mut item = Item::new(
+                            item_ref.clone(),
+                            "backfill_range".to_string(),
+                            (channel_url.clone()).unwrap_or_default(),
+                        );
+                        item.title = Some(format!(
                             "Discord channel {} messages {}-{}",
                             args.channel_id, oldest_id, newest_id
-                        )),
-                        created_at,
-                        source_updated_at: updated_at,
-                        authors: Vec::new(),
-                        tags: Vec::new(),
-                        metadata: Some(json!({
+                        ));
+                        item.published_at = (created_at).as_deref().and_then(crate::item::rfc3339);
+                        item.marker = updated_at;
+                        item.published_in = Some(Party::named("Discord").with_id("discord.com"));
+                        if let Some(meta) = Some(json!({
                             "mode": "backfill",
                             "guild_id": args.guild_id,
                             "channel_id": args.channel_id,
@@ -825,10 +817,10 @@ impl Connector for DiscordConnector {
                             "range_end": newest_id,
                             "window_size": window_size,
                             "content_hash": item_ref,
-                        })),
-                        blocks: Vec::new(),
-                        relationships: Vec::new(),
-                        truncation: None,
+                        })) {
+                            crate::item::merge_fields(&mut item.fields, meta);
+                        }
+                        item
                     });
 
                     pagination = Some(MessagePagination::Before(MessageId::new(oldest_id)));
@@ -837,19 +829,10 @@ impl Connector for DiscordConnector {
                 if let Some(oldest) = last_oldest {
                     if last_full {
                         next_cursor = ingest::encode_cursor(&DiscordCursor { before: oldest }).ok();
-                        has_more = next_cursor.is_some();
                     }
                 }
 
-                let partial =
-                    Partial::complete(Some(ingest::limits_window_size(window_size as u64)));
-                let normalized = NormalizedPageV1::new(
-                    items,
-                    next_cursor,
-                    has_more,
-                    partial,
-                    Source::new("discord", "ingest_backfill_windows"),
-                );
+                let normalized = ItemsPage::new(items, next_cursor, Listing::Feed);
                 Ok(structured_result(&normalized)?)
             }
             "read_messages" => {
@@ -884,7 +867,7 @@ impl Connector for DiscordConnector {
                     .await
                     .map_err(|e| ConnectorError::Other(e.to_string()))?;
 
-                if output_format == OutputFormat::NormalizedV1 {
+                if output_format == OutputFormat::ItemV2 {
                     let newest_id = messages.first().map(|m| m.id.get());
                     let oldest_id = messages.last().map(|m| m.id.get());
                     let item_ref = match (oldest_id, newest_id) {
@@ -897,30 +880,22 @@ impl Connector for DiscordConnector {
                         _ => format!("discord:channel_window:{}", args.channel_id),
                     };
 
-                    let mut blocks: Vec<ContentBlock> = Vec::new();
-                    let mut relationships: Vec<Relationship> = Vec::new();
-
+                    let mut blocks: Vec<Block> = Vec::new();
                     for msg in &messages {
                         let block_ref = format!("discord:message:{}", msg.id.get());
-                        blocks.push(ContentBlock {
-                            block_ref: block_ref.clone(),
-                            block_kind: "message".to_string(),
-                            text: msg.content.clone(),
-                            author: Some(Author {
+                        blocks.push({
+                            let mut b = Block::new(
+                                block_ref.clone(),
+                                "message".to_string(),
+                                msg.content.clone(),
+                            );
+                            b.author = Some(Party {
                                 name: msg.author.name.clone(),
                                 id: Some(format!("discord:user:{}", msg.author.id.get())),
-                            }),
-                            created_at: msg.timestamp.to_rfc3339(),
-                            reply_to: None,
-                            position: None,
-                            score: None,
-                            attachments: Vec::new(),
-                            metadata: None,
-                        });
-                        relationships.push(Relationship {
-                            rel: "has_block".to_string(),
-                            from: item_ref.clone(),
-                            to: block_ref,
+                                url: None,
+                            });
+                            b.published_at = msg.timestamp.to_rfc3339();
+                            b
                         });
                     }
 
@@ -932,49 +907,38 @@ impl Connector for DiscordConnector {
                     } else {
                         None
                     };
-                    let has_more = next_cursor.is_some();
-
                     let truncation = if window_full {
-                        Some(Truncation {
-                            is_truncated: true,
+                        Some(crate::item::Truncated {
                             reason: "window_limit".to_string(),
-                            total_blocks_hint: None,
                             returned_blocks: blocks.len() as u64,
-                            policy: Some("newest_first_window".to_string()),
+                            total_blocks_hint: None,
                         })
                     } else {
                         None
                     };
 
-                    let item = ContentItem {
-                        item_ref: item_ref.clone(),
-                        kind: "channel_window".to_string(),
-                        canonical_url: None,
-                        title: None,
-                        created_at: None,
-                        source_updated_at: None,
-                        authors: Vec::new(),
-                        tags: Vec::new(),
-                        metadata: Some(json!({
+                    let item = {
+                        let mut item = Item::new(
+                            item_ref.clone(),
+                            "channel_window".to_string(),
+                            String::new(),
+                        );
+                        item.published_in = Some(Party::named("Discord").with_id("discord.com"));
+                        if let Some(meta) = Some(json!({
                             "channel_id": args.channel_id,
-                        })),
-                        blocks,
-                        relationships,
-                        truncation,
+                        })) {
+                            crate::item::merge_fields(&mut item.fields, meta);
+                        }
+                        item.blocks = blocks;
+                        item.truncated = (truncation).map(|t| crate::item::Truncated {
+                            reason: t.reason,
+                            returned_blocks: t.returned_blocks,
+                            total_blocks_hint: t.total_blocks_hint,
+                        });
+                        item
                     };
 
-                    let partial = if window_full {
-                        Partial::truncated("window_limit", Some(ingest::limits_window_size(limit)))
-                    } else {
-                        Partial::complete(Some(ingest::limits_window_size(limit)))
-                    };
-                    let normalized = NormalizedPageV1::new(
-                        vec![item],
-                        next_cursor,
-                        has_more,
-                        partial,
-                        Source::new("discord", "read_messages"),
-                    );
+                    let normalized = ItemsPage::new(vec![item], next_cursor, Listing::Feed);
                     return structured_result(&normalized);
                 }
 
@@ -1006,11 +970,11 @@ impl Connector for DiscordConnector {
                 let max_messages = args.max_messages.unwrap_or(5_000).clamp(1, 5_000) as usize;
                 let max_pages = args.max_pages.unwrap_or(200).clamp(1, 500) as usize;
 
-                if output_format != OutputFormat::NormalizedV1 {
+                if output_format != OutputFormat::ItemV2 {
                     let data = json!({
                         "item_ref": args.item_ref,
                         "parsed": format!("{:?}", ingest_ref),
-                        "note": "Use output_format=normalized_v1 for ingestion."
+                        "note": "Use output_format=item_v2 for ingestion."
                     });
                     return structured_result_with_text(&data, Some(serde_json::to_string(&data)?));
                 }
@@ -1058,7 +1022,7 @@ impl Connector for DiscordConnector {
                     }
                 };
 
-                let normalized = NormalizedItemV1::complete(item, Source::new("discord", "get"));
+                let normalized = item;
                 Ok(structured_result(&normalized)?)
             }
             "send_message" => {
@@ -1210,7 +1174,7 @@ async fn fetch_rolling_item(
     last_n: u64,
     max_messages: usize,
     max_pages: usize,
-) -> Result<ContentItem, ConnectorError> {
+) -> Result<Item, ConnectorError> {
     let want = (last_n as usize).min(max_messages).min(5_000);
     let mut pagination: Option<MessagePagination> = None;
     let mut out: Vec<serenity::model::channel::Message> = Vec::new();
@@ -1266,7 +1230,7 @@ async fn fetch_range_item(
     end_id: u64,
     max_messages: usize,
     max_pages: usize,
-) -> Result<ContentItem, ConnectorError> {
+) -> Result<Item, ConnectorError> {
     let mut pagination: Option<MessagePagination> = Some(MessagePagination::Before(
         MessageId::new(end_id.saturating_add(1)),
     ));
@@ -1334,7 +1298,7 @@ async fn fetch_daily_item(
     day: NaiveDate,
     max_messages: usize,
     max_pages: usize,
-) -> Result<ContentItem, ConnectorError> {
+) -> Result<Item, ConnectorError> {
     let day_start_dt = Utc.from_utc_datetime(&day.and_hms_opt(0, 0, 0).unwrap());
     let day_end_dt = day_start_dt + chrono::Duration::days(1);
     let day_start_ts = day_start_dt.timestamp();
@@ -1408,39 +1372,32 @@ fn build_discord_item(
     mode: &str,
     extra_meta: Value,
     mut messages: Vec<serenity::model::channel::Message>,
-) -> Result<ContentItem, ConnectorError> {
+) -> Result<Item, ConnectorError> {
     messages.reverse();
 
     let created_at = messages.first().and_then(|m| m.timestamp.to_rfc3339());
     let source_updated_at = messages.last().and_then(|m| m.timestamp.to_rfc3339());
 
-    let mut blocks: Vec<ContentBlock> = Vec::with_capacity(messages.len());
-    let mut relationships: Vec<Relationship> = Vec::with_capacity(messages.len());
-
+    let mut blocks: Vec<Block> = Vec::with_capacity(messages.len());
     for msg in messages.iter() {
         let block_ref = format!("discord:message:{}", msg.id.get());
-        blocks.push(ContentBlock {
-            block_ref: block_ref.clone(),
-            block_kind: "message".to_string(),
-            text: msg.content.clone(),
-            author: Some(Author {
+        blocks.push({
+            let mut b = Block::new(
+                block_ref.clone(),
+                "message".to_string(),
+                msg.content.clone(),
+            );
+            b.author = Some(Party {
                 name: msg.author.name.clone(),
                 id: Some(format!("discord:user:{}", msg.author.id.get())),
-            }),
-            created_at: msg.timestamp.to_rfc3339(),
-            reply_to: msg
+                url: None,
+            });
+            b.published_at = msg.timestamp.to_rfc3339();
+            b.parent = msg
                 .referenced_message
                 .as_ref()
-                .map(|rm| format!("discord:message:{}", rm.id.get())),
-            position: None,
-            score: None,
-            attachments: Vec::new(),
-            metadata: None,
-        });
-        relationships.push(Relationship {
-            rel: "has_block".to_string(),
-            from: item_ref.clone(),
-            to: block_ref,
+                .map(|rm| format!("discord:message:{}", rm.id.get()));
+            b
         });
     }
 
@@ -1457,18 +1414,20 @@ fn build_discord_item(
         }
     }
 
-    Ok(ContentItem {
-        item_ref,
-        kind: kind.to_string(),
-        canonical_url,
-        title: Some(title),
-        created_at,
-        source_updated_at,
-        authors: Vec::new(),
-        tags: Vec::new(),
-        metadata: Some(metadata),
-        blocks,
-        relationships,
-        truncation: None,
+    Ok({
+        let mut item = Item::new(
+            item_ref,
+            kind.to_string(),
+            (canonical_url).unwrap_or_default(),
+        );
+        item.title = Some(title);
+        item.published_at = (created_at).as_deref().and_then(crate::item::rfc3339);
+        item.marker = source_updated_at;
+        item.published_in = Some(Party::named("Discord").with_id("discord.com"));
+        if let Some(meta) = Some(metadata) {
+            crate::item::merge_fields(&mut item.fields, meta);
+        }
+        item.blocks = blocks;
+        item
     })
 }

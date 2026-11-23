@@ -1,8 +1,6 @@
 use crate::error::ConnectorError;
-use crate::ingest::{
-    self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
-    Partial, Source,
-};
+use crate::ingest::{self, OutputFormat};
+use crate::item::{rfc3339, Block, Item, ItemsPage, Listing, Party};
 use crate::utils::structured_result_with_text;
 use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
@@ -235,69 +233,60 @@ fn resolve_biorxiv_doi(args: &GetByDoiArgs) -> Result<String, ConnectorError> {
     ))
 }
 
-fn parse_authors_list(authors: &str) -> Vec<Author> {
+fn parse_authors_list(authors: &str) -> Vec<String> {
     authors
-        .split(',')
-        .map(|a| a.trim())
+        .split(';')
+        .flat_map(|a| a.split(','))
+        .map(str::trim)
         .filter(|a| !a.is_empty())
-        .map(|name| Author {
-            name: name.to_string(),
-            id: None,
-        })
+        .map(str::to_string)
         .collect()
 }
 
-fn biorxiv_item_from_paper(paper: &BiorxivPaperRaw) -> ContentItem {
-    let item_ref = biorxiv_item_ref(&paper.doi);
-    let abstract_url = format!(
-        "https://www.{}.org/content/{}",
-        paper.server.to_lowercase(),
-        paper.doi
-    );
-    let pdf_url = format!(
-        "https://www.{}.org/content/{}.full.pdf",
-        paper.server.to_lowercase(),
-        paper.doi
-    );
-
-    let mut blocks = Vec::new();
-    if let Some(ref abstract_text) = paper.abstract_text {
-        blocks.push(ContentBlock {
-            block_ref: format!("{}:abstract", item_ref),
-            block_kind: "abstract".to_string(),
-            text: abstract_text.to_string(),
-            author: None,
-            created_at: None,
-            reply_to: None,
-            position: None,
-            score: None,
-            attachments: Vec::new(),
-            metadata: None,
-        });
+fn biorxiv_item_from_paper(paper: &BiorxivPaperRaw) -> Item {
+    let server = paper.server.to_lowercase();
+    let abstract_url = format!("https://www.{server}.org/content/{}", paper.doi);
+    let pdf_url = format!("https://www.{server}.org/content/{}.full.pdf", paper.doi);
+    let authors = parse_authors_list(&paper.authors);
+    let site = format!("{server}.org");
+    let mut item = Item::new(
+        biorxiv_item_ref(&paper.doi),
+        "paper",
+        format!("https://doi.org/{}", paper.doi),
+    )
+    .with_title(paper.title.clone())
+    .with_published_at(rfc3339(&paper.date))
+    .with_published_in(
+        Party::named(paper.server.clone())
+            .with_id(site.clone())
+            .with_url(format!("https://www.{site}")),
+    )
+    .with_marker(Some(paper.version.clone()))
+    .with_fields(json!({
+        "doi": paper.doi,
+        "version": paper.version,
+        "license": paper.license,
+        "category": paper.category,
+        "abstract_url": abstract_url,
+        "pdf_url": pdf_url,
+        "published_doi": paper.published,
+        "all_authors": authors,
+    }));
+    if let Some(first) = authors.first() {
+        item = item.with_author(Party::named(first.clone()));
     }
-
-    ContentItem {
-        item_ref,
-        kind: "paper".to_string(),
-        canonical_url: Some(format!("https://doi.org/{}", paper.doi)),
-        title: Some(paper.title.clone()),
-        created_at: Some(paper.date.clone()),
-        source_updated_at: None,
-        authors: parse_authors_list(&paper.authors),
-        tags: vec![paper.category.clone()],
-        metadata: Some(json!({
-            "doi": paper.doi,
-            "server": paper.server,
-            "version": paper.version,
-            "license": paper.license,
-            "abstract_url": abstract_url,
-            "pdf_url": pdf_url,
-            "published_in": paper.published
-        })),
-        blocks,
-        relationships: Vec::new(),
-        truncation: None,
+    if let Some(abstract_text) = paper
+        .abstract_text
+        .as_ref()
+        .filter(|t| !t.trim().is_empty())
+    {
+        item.blocks.push(Block::new(
+            "abstract",
+            "abstract",
+            abstract_text.to_string(),
+        ));
     }
+    item
 }
 
 #[async_trait]
@@ -361,9 +350,9 @@ without a query. Example: server=\"biorxiv\" count=10.",
                             },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                             }
                         },
                         "required": ["server"],
@@ -412,9 +401,9 @@ Example: server=\"medrxiv\" start_date=\"2024-01-01\" end_date=\"2024-01-31\".",
                             },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                             }
                         },
                         "required": ["server", "start_date", "end_date"],
@@ -461,9 +450,9 @@ server=\"biorxiv\" doi=\"10.1101/2024.01.01.000000\".",
                             },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
+                                "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output."
                             }
                         },
                         "required": ["server"],
@@ -518,18 +507,12 @@ server=\"biorxiv\" doi=\"10.1101/2024.01.01.000000\".",
                 let mut papers = self.fetch_from_api(&path).await?;
                 papers.truncate(count);
 
-                if args.output_format == OutputFormat::NormalizedV1 {
+                if args.output_format == OutputFormat::ItemV2 {
                     let items = papers
                         .iter()
                         .map(biorxiv_item_from_paper)
                         .collect::<Vec<_>>();
-                    let page = NormalizedPageV1::new(
-                        items,
-                        None,
-                        false,
-                        Partial::complete(Some(ingest::limits_max_items(count as u64))),
-                        Source::new("biorxiv", "get_recent_preprints"),
-                    );
+                    let page = ItemsPage::new(items, None, Listing::Feed);
                     return crate::utils::structured_result(&page);
                 }
 
@@ -558,19 +541,12 @@ server=\"biorxiv\" doi=\"10.1101/2024.01.01.000000\".",
                 let path = format!("{}/{}/{}", args.server, args.start_date, args.end_date);
                 let papers = self.fetch_from_api(&path).await?;
 
-                if args.output_format == OutputFormat::NormalizedV1 {
+                if args.output_format == OutputFormat::ItemV2 {
                     let items = papers
                         .iter()
                         .map(biorxiv_item_from_paper)
                         .collect::<Vec<_>>();
-                    let items_len = items.len();
-                    let page = NormalizedPageV1::new(
-                        items,
-                        None,
-                        false,
-                        Partial::complete(Some(ingest::limits_max_items(items_len as u64))),
-                        Source::new("biorxiv", "get_preprints_by_date"),
-                    );
+                    let page = ItemsPage::new(items, None, Listing::Feed);
                     return crate::utils::structured_result(&page);
                 }
 
@@ -601,15 +577,9 @@ server=\"biorxiv\" doi=\"10.1101/2024.01.01.000000\".",
                 let path = format!("{}/{}", args.server, doi);
                 let papers = self.fetch_from_api(&path).await?;
 
-                if args.output_format == OutputFormat::NormalizedV1 {
+                if args.output_format == OutputFormat::ItemV2 {
                     if let Some(paper) = papers.first() {
-                        let item = biorxiv_item_from_paper(paper);
-                        let normalized = NormalizedItemV1::new(
-                            item,
-                            Partial::complete(None),
-                            Source::new("biorxiv", "get"),
-                        );
-                        return crate::utils::structured_result(&normalized);
+                        return crate::utils::structured_result(&biorxiv_item_from_paper(paper));
                     }
                     return Err(ConnectorError::ResourceNotFound);
                 }

@@ -113,7 +113,7 @@ pub enum Commands {
     },
     Fetch {
         input: String,
-        #[arg(long, default_value = "raw", value_parser = ["raw", "normalized_v1", "display_v1"])]
+        #[arg(long, default_value = "raw", value_parser = ["raw", "item_v2", "display_v1"])]
         output_format: String,
     },
     Formats,

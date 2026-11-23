@@ -1,10 +1,9 @@
 // src/connectors/youtube/mod.rs
 
 use crate::error::ConnectorError;
-use crate::ingest::{
-    self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
-    Partial, Relationship, Source,
-};
+mod item_v2;
+
+use crate::ingest::{self, OutputFormat};
 use crate::utils::{clean_html_entities, structured_result, structured_result_with_text};
 #[cfg(feature = "browser-cookie-import")]
 use crate::utils::{get_cookies, match_browser};
@@ -38,12 +37,7 @@ fn inline_output_format_property(schema: &mut Value) {
         .expect("Input schema must have properties");
     properties.insert(
         "output_format".to_string(),
-        json!({
-            "type": "string",
-            "enum": ["raw", "normalized_v1", "display_v1"],
-            "default": "raw",
-            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output."
-        }),
+        ingest::output_format_property(),
     );
 
     if let Some(required) = schema_obj
@@ -80,7 +74,7 @@ pub struct GetVideoDetailsInput {
     /// Response verbosity: 'concise' returns only title and transcript/chapters, 'detailed' includes description and all metadata
     #[serde(default)]
     pub response_format: ResponseFormat,
-    /// Output format: 'raw' (default) or 'normalized_v1' for ingestion pipelines
+    /// Output format: 'raw' (default), 'item_v2' for ingestion, or 'display_v1'
     #[serde(default)]
     pub output_format: OutputFormat,
 }
@@ -106,7 +100,7 @@ pub struct SearchVideosInput {
     /// Response verbosity: 'concise' returns only id/title/url, 'detailed' includes all metadata
     #[serde(default)]
     pub response_format: ResponseFormat,
-    /// Output format: 'raw' (default) or 'normalized_v1' for ingestion pipelines
+    /// Output format: 'raw' (default), 'item_v2' for ingestion, or 'display_v1'
     #[serde(default)]
     pub output_format: OutputFormat,
 }
@@ -155,7 +149,7 @@ pub struct ListVideosInput {
     #[serde(default)]
     pub published_within_days: Option<u32>,
 
-    /// Output format: 'raw' (default) or 'normalized_v1' for ingestion pipelines
+    /// Output format: 'raw' (default), 'item_v2' for ingestion, or 'display_v1'
     #[serde(default)]
     pub output_format: OutputFormat,
 }
@@ -897,7 +891,7 @@ impl Connector for YouTubeConnector {
                         "input": {
                             "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
                             "response_format": "concise",
-                            "output_format": "normalized_v1"
+                            "output_format": "item_v2"
                         }
                     },
                     {
@@ -941,7 +935,7 @@ impl Connector for YouTubeConnector {
                             "query": "rust async",
                             "limit": 5,
                             "search_type": "video",
-                            "output_format": "normalized_v1"
+                            "output_format": "item_v2"
                         }
                     },
                     {
@@ -975,7 +969,7 @@ impl Connector for YouTubeConnector {
                             "source": "channel",
                             "channel": "@hubermanlab",
                             "published_within_days": 30,
-                            "output_format": "normalized_v1"
+                            "output_format": "item_v2"
                         }
                     },
                     {
@@ -984,7 +978,7 @@ impl Connector for YouTubeConnector {
                             "source": "playlist",
                             "playlist": "PL590L5WQmH8fJ54F9CrK3KrhE6i2yWm9n",
                             "limit": 10,
-                            "output_format": "normalized_v1"
+                            "output_format": "item_v2"
                         }
                     }
                 ]),
@@ -1034,7 +1028,7 @@ impl Connector for YouTubeConnector {
                 name: Cow::Borrowed("get"),
                 title: Some("Get Video Or Enumerate Playlist/Channel".into()),
                 description: Some(Cow::Borrowed(
-                    "Default YouTube retrieval tool. Use this for a known video when you want transcript, chapters, and core metadata; playlist IDs/URLs and channel handles/URLs enumerate ordered `entries`. Accepts `url`, `video_id`, or `item_ref`. For agent use, prefer `response_format=\"concise\"` for videos and `output_format=\"normalized_v1\"` for ingestion. Key args: exactly one of url/video_id/item_ref, plus optional response_format and output_format.",
+                    "Default YouTube retrieval tool. Use this for a known video when you want transcript, chapters, and core metadata; playlist IDs/URLs and channel handles/URLs enumerate ordered `entries`. Accepts `url`, `video_id`, or `item_ref`. For agent use, prefer `response_format=\"concise\"` for videos and `output_format=\"item_v2\"` for ingestion. Key args: exactly one of url/video_id/item_ref, plus optional response_format and output_format.",
                 )),
                 input_schema: Arc::new(
                     get_schema
@@ -1094,6 +1088,27 @@ impl Connector for YouTubeConnector {
                 annotations: Some(ToolAnnotations::new().read_only(true).open_world(true)),
                 icons: None,
             },
+            Tool {
+                name: Cow::Borrowed("describe"),
+                title: Some("Describe For Ingestion".into()),
+                description: Some(Cow::Borrowed(
+                    "What this connector gives an index: per item kind, the identity rule, the listing type, the scopes the list tool takes, and every field. Takes no arguments. Returns rzn.describe/v2.",
+                )),
+                input_schema: Arc::new(
+                    json!({"type": "object", "properties": {}, "_meta": {"category": "describe", "supports_output_format": false}})
+                        .as_object()
+                        .cloned()
+                        .unwrap_or_default(),
+                ),
+                output_schema: Some(Arc::new(
+                    crate::item::description_schema()
+                        .as_object()
+                        .cloned()
+                        .unwrap_or_default(),
+                )),
+                annotations: Some(ToolAnnotations::new().read_only(true).open_world(false)),
+                icons: None,
+            },
         ];
 
         Ok(ListToolsResult {
@@ -1111,6 +1126,7 @@ impl Connector for YouTubeConnector {
         let args_map = serde_json::Map::from_iter(args);
 
         match name {
+            "describe" => structured_result(&item_v2::description()),
             "get" => {
                 let input: GetVideoDetailsInput =
                     serde_json::from_value(Value::Object(args_map))
@@ -1144,7 +1160,7 @@ impl Connector for YouTubeConnector {
                         .await;
                     }
                 };
-                let want_normalized = input.output_format == OutputFormat::NormalizedV1;
+                let want_item = input.output_format == OutputFormat::ItemV2;
                 let client = youtube_http_client(self.cookie_header.as_deref())?;
                 let watch_html = fetch_youtube_watch_html(&client, &video_id).await?;
                 let player = extract_player_response(&watch_html)?;
@@ -1152,20 +1168,30 @@ impl Connector for YouTubeConnector {
                 let video_info = parse_video_details(&player, &video_id)?;
                 let chapters = video_info.chapters.clone();
 
-                let mut transcript_segments: Option<Vec<TimedTextSegment>> = None;
-                let mut transcript_meta: Option<(String, String, bool)> = None;
                 let mut transcript_unavailable_reason: Option<&'static str> = None;
                 let transcript = fetch_transcript_with_fallback(&client, &player, &video_id).await;
+                if want_item {
+                    let fetched = match &transcript {
+                        Ok(fetched) => Ok((
+                            fetched.segments.as_slice(),
+                            fetched.language_code.as_str(),
+                            fetched.is_generated,
+                        )),
+                        Err((code, detail)) => {
+                            tracing::warn!(
+                                reason = code,
+                                detail = %detail,
+                                video_id = %video_id,
+                                "Failed to fetch YouTube transcript"
+                            );
+                            Err(*code)
+                        }
+                    };
+                    let item = item_v2::video_item(&video_id, &video_info, fetched)?;
+                    return structured_result(&item);
+                }
                 let (chapters_out, transcript_out) = match transcript {
                     Ok(fetched) => {
-                        if want_normalized {
-                            transcript_segments = Some(fetched.segments.clone());
-                            transcript_meta = Some((
-                                fetched.language_code.clone(),
-                                fetched.language_code.clone(),
-                                fetched.is_generated,
-                            ));
-                        }
                         if !chapters.is_empty() {
                             let grouped = group_timedtext_by_chapters(&chapters, &fetched.segments);
                             if !grouped.is_empty() {
@@ -1193,146 +1219,6 @@ impl Connector for YouTubeConnector {
                         (Vec::new(), None)
                     }
                 };
-
-                if want_normalized {
-                    let item_ref = format!("youtube:video:{}", video_id);
-                    let canonical_url = format!("https://www.youtube.com/watch?v={}", video_id);
-                    let mut blocks: Vec<ContentBlock> = Vec::new();
-                    let mut relationships: Vec<Relationship> = Vec::new();
-
-                    if !video_info.description.is_empty() {
-                        let desc_ref = format!("youtube:description:{}", video_id);
-                        blocks.push(ContentBlock {
-                            block_ref: desc_ref.clone(),
-                            block_kind: "description".to_string(),
-                            text: video_info.description.clone(),
-                            author: Some(Author {
-                                name: video_info.channel_name.clone(),
-                                id: Some(format!("youtube:channel:{}", video_info.channel_id)),
-                            }),
-                            created_at: None,
-                            reply_to: None,
-                            position: None,
-                            score: None,
-                            attachments: Vec::new(),
-                            metadata: None,
-                        });
-                        relationships.push(Relationship {
-                            rel: "has_block".to_string(),
-                            from: item_ref.clone(),
-                            to: desc_ref,
-                        });
-                    }
-
-                    if let Some(parts) = transcript_segments {
-                        append_timedtext_blocks(
-                            &video_id,
-                            &item_ref,
-                            parts,
-                            &mut blocks,
-                            &mut relationships,
-                        );
-                    } else if !chapters_out.is_empty() {
-                        for (idx, chapter) in chapters_out.iter().enumerate() {
-                            let start_ms = (chapter.start_time as i64).max(0) as u64 * 1000;
-                            let end_ms = chapters_out
-                                .get(idx + 1)
-                                .map(|next| (next.start_time as i64).max(0) as u64 * 1000)
-                                .unwrap_or(start_ms);
-                            let seg_ref =
-                                format!("youtube:segment:{}:{}-{}", video_id, start_ms, end_ms);
-                            blocks.push(ContentBlock {
-                                block_ref: seg_ref.clone(),
-                                block_kind: "transcript_segment".to_string(),
-                                text: chapter.content.clone(),
-                                author: None,
-                                created_at: None,
-                                reply_to: None,
-                                position: Some(json!({
-                                    "kind": "time_range",
-                                    "start_ms": start_ms,
-                                    "end_ms": end_ms,
-                                })),
-                                score: None,
-                                attachments: Vec::new(),
-                                metadata: Some(json!({
-                                    "chapter": chapter.heading,
-                                })),
-                            });
-                            relationships.push(Relationship {
-                                rel: "has_block".to_string(),
-                                from: item_ref.clone(),
-                                to: seg_ref,
-                            });
-                        }
-                    } else if let Some(transcript) = transcript_out.as_ref() {
-                        if !transcript.is_empty() {
-                            let seg_ref = format!("youtube:transcript:{}", video_id);
-                            blocks.push(ContentBlock {
-                                block_ref: seg_ref.clone(),
-                                block_kind: "transcript".to_string(),
-                                text: transcript.clone(),
-                                author: None,
-                                created_at: None,
-                                reply_to: None,
-                                position: None,
-                                score: None,
-                                attachments: Vec::new(),
-                                metadata: None,
-                            });
-                            relationships.push(Relationship {
-                                rel: "has_block".to_string(),
-                                from: item_ref.clone(),
-                                to: seg_ref,
-                            });
-                        }
-                    }
-
-                    let created_at = video_info
-                        .publish_date
-                        .as_deref()
-                        .and_then(parse_video_date)
-                        .or_else(|| video_info.upload_date.as_deref().and_then(parse_video_date));
-                    let authors = vec![Author {
-                        name: video_info.channel_name.clone(),
-                        id: Some(format!("youtube:channel:{}", video_info.channel_id)),
-                    }];
-                    let metadata = json!({
-                        "channel_id": video_info.channel_id.clone(),
-                        "channel_name": video_info.channel_name.clone(),
-                        "view_count": video_info.view_count,
-                        "length_seconds": video_info.duration_seconds,
-                        "keywords": video_info.keywords.clone(),
-                        "is_live_content": video_info.is_live_content,
-                        "transcript": transcript_meta.as_ref().map(|(lang, code, generated)| json!({
-                            "language": lang,
-                            "language_code": code,
-                            "is_generated": generated,
-                        })),
-                    });
-
-                    let item = ContentItem {
-                        item_ref: item_ref.clone(),
-                        kind: "video".to_string(),
-                        canonical_url: Some(canonical_url),
-                        title: Some(video_info.title.clone()),
-                        created_at,
-                        source_updated_at: None,
-                        authors,
-                        tags: Vec::new(),
-                        metadata: Some(metadata),
-                        blocks,
-                        relationships,
-                        truncation: None,
-                    };
-
-                    let normalized = NormalizedItemV1::new(
-                        item,
-                        Partial::complete(None),
-                        Source::new("youtube", "get"),
-                    );
-                    return structured_result(&normalized);
-                }
 
                 // Only surface a reason when the transcript and chapters
                 // both came back empty — if we produced chapterized content,
@@ -1398,87 +1284,8 @@ impl Connector for YouTubeConnector {
                     mapped_results.truncate(input.limit as usize);
                 }
 
-                if input.output_format == OutputFormat::NormalizedV1 {
-                    let items: Vec<ContentItem> = mapped_results
-                        .iter()
-                        .map(|r| match r {
-                            SearchResultItem::Video(v) => ContentItem {
-                                item_ref: format!("youtube:video:{}", v.id),
-                                kind: "video".to_string(),
-                                canonical_url: Some(v.url.clone()),
-                                title: Some(v.title.clone()),
-                                created_at: v.uploaded_at.as_deref().and_then(parse_video_date),
-                                source_updated_at: None,
-                                authors: if v.channel_name.is_empty() {
-                                    Vec::new()
-                                } else {
-                                    vec![Author {
-                                        name: v.channel_name.clone(),
-                                        id: None,
-                                    }]
-                                },
-                                tags: Vec::new(),
-                                metadata: Some(json!({
-                                    "duration_seconds": v.duration_seconds,
-                                    "views": v.views,
-                                    "channel_name": v.channel_name,
-                                })),
-                                blocks: Vec::new(),
-                                relationships: Vec::new(),
-                                truncation: None,
-                            },
-                            SearchResultItem::Playlist(p) => ContentItem {
-                                item_ref: format!("youtube:playlist:{}", p.id),
-                                kind: "playlist".to_string(),
-                                canonical_url: Some(p.url.clone()),
-                                title: Some(p.title.clone()),
-                                created_at: p.last_update.as_deref().and_then(parse_video_date),
-                                source_updated_at: None,
-                                authors: if p.channel.title.is_empty() {
-                                    Vec::new()
-                                } else {
-                                    vec![Author {
-                                        name: p.channel.title.clone(),
-                                        id: None,
-                                    }]
-                                },
-                                tags: Vec::new(),
-                                metadata: Some(json!({
-                                    "video_count": p.video_count,
-                                    "views": p.views,
-                                })),
-                                blocks: Vec::new(),
-                                relationships: Vec::new(),
-                                truncation: None,
-                            },
-                            SearchResultItem::Channel(c) => ContentItem {
-                                item_ref: format!("youtube:channel:{}", c.id),
-                                kind: "channel".to_string(),
-                                canonical_url: Some(c.url.clone()),
-                                title: Some(c.title.clone()),
-                                created_at: None,
-                                source_updated_at: None,
-                                authors: Vec::new(),
-                                tags: Vec::new(),
-                                metadata: Some(json!({
-                                    "verified": c.verified,
-                                    "subscribers": c.subscribers,
-                                })),
-                                blocks: Vec::new(),
-                                relationships: Vec::new(),
-                                truncation: None,
-                            },
-                        })
-                        .collect();
-
-                    let page = NormalizedPageV1::new(
-                        items,
-                        None,
-                        false,
-                        Partial::complete(Some(ingest::limits_max_items(input.limit as u64))),
-                        Source::new("youtube", "search"),
-                    );
-                    return structured_result(&page);
+                if input.output_format == OutputFormat::ItemV2 {
+                    return structured_result(&item_v2::search_page(&mapped_results));
                 }
 
                 // Return concise or detailed based on response_format
@@ -1641,10 +1448,11 @@ enum YouTubeGetTarget {
 
 async fn list_videos_call_result(input: ListVideosInput) -> Result<CallToolResult, ConnectorError> {
     let output_format = input.output_format;
+    let listing = item_v2::listing_kind(&input, effective_list_source(&input)?);
     let out = list_videos_output(input).await?;
 
-    if output_format == OutputFormat::NormalizedV1 {
-        return list_videos_normalized_result(&out);
+    if output_format == OutputFormat::ItemV2 {
+        return structured_result(&item_v2::listing_page(listing, &out));
     }
 
     let text = serde_json::to_string(&out)?;
@@ -1767,53 +1575,6 @@ fn finalize_list_entries(
             video.playlist_title = playlist_title.map(ToString::to_string);
         }
     }
-}
-
-fn list_videos_normalized_result(out: &ListVideosOutput) -> Result<CallToolResult, ConnectorError> {
-    let items: Vec<ContentItem> = out
-        .entries
-        .iter()
-        .map(|v| ContentItem {
-            item_ref: format!("youtube:video:{}", v.id),
-            kind: "video".to_string(),
-            canonical_url: Some(v.url.clone()),
-            title: Some(v.title.clone()),
-            created_at: v.published_at.as_deref().and_then(parse_video_date),
-            source_updated_at: None,
-            authors: v
-                .channel
-                .as_deref()
-                .map(|name| {
-                    vec![Author {
-                        name: name.to_string(),
-                        id: v
-                            .channel_id
-                            .as_deref()
-                            .map(|id| format!("youtube:channel:{id}")),
-                    }]
-                })
-                .unwrap_or_default(),
-            tags: Vec::new(),
-            metadata: Some(json!({
-                "index": v.index,
-                "channel_id": v.channel_id.clone(),
-                "playlist_id": v.playlist_id.clone(),
-                "playlist_title": v.playlist_title.clone(),
-            })),
-            blocks: Vec::new(),
-            relationships: Vec::new(),
-            truncation: None,
-        })
-        .collect();
-
-    let page = NormalizedPageV1::new(
-        items,
-        None,
-        false,
-        Partial::complete(Some(ingest::limits_max_items(out.entries.len() as u64))),
-        Source::new("youtube", "list"),
-    );
-    structured_result(&page)
 }
 
 fn resolve_get_target(input: &GetVideoDetailsInput) -> Result<YouTubeGetTarget, ConnectorError> {
@@ -3786,40 +3547,6 @@ fn score_channel_candidate(
     score
 }
 
-fn append_timedtext_blocks(
-    video_id: &str,
-    item_ref: &str,
-    segments: Vec<TimedTextSegment>,
-    blocks: &mut Vec<ContentBlock>,
-    relationships: &mut Vec<Relationship>,
-) {
-    for segment in segments {
-        let end_ms = segment.start_ms.saturating_add(segment.duration_ms);
-        let block_ref = format!("youtube:segment:{video_id}:{}-{end_ms}", segment.start_ms);
-        blocks.push(ContentBlock {
-            block_ref: block_ref.clone(),
-            block_kind: "transcript_segment".to_string(),
-            text: segment.text,
-            author: None,
-            created_at: None,
-            reply_to: None,
-            position: Some(json!({
-                "kind": "time_range",
-                "start_ms": segment.start_ms,
-                "end_ms": end_ms,
-            })),
-            score: None,
-            attachments: Vec::new(),
-            metadata: None,
-        });
-        relationships.push(Relationship {
-            rel: "has_block".to_string(),
-            from: item_ref.to_string(),
-            to: block_ref,
-        });
-    }
-}
-
 fn group_timedtext_by_chapters(
     chapters: &[VideoChapter],
     segments: &[TimedTextSegment],
@@ -4070,7 +3797,7 @@ mod tests {
     }
 
     #[test]
-    fn concise_detailed_and_normalized_transcript_shapes_are_valid() {
+    fn concise_detailed_and_item_transcript_shapes_are_valid() {
         let concise = serde_json::to_value(YouTubeContentConcise {
             title: "Fixture title".to_string(),
             transcript: Some("Hello".to_string()),
@@ -4093,22 +3820,22 @@ mod tests {
         assert_eq!(detailed["id"], "fixture123");
         assert_eq!(detailed["description"], "Fixture description");
 
-        let mut blocks = Vec::new();
-        let mut relationships = Vec::new();
-        append_timedtext_blocks(
-            "fixture123",
-            "youtube:video:fixture123",
-            vec![TimedTextSegment {
+        let blocks = item_v2::transcript_blocks(
+            &[TimedTextSegment {
                 text: "Hello".to_string(),
                 start_ms: 100,
                 duration_ms: 900,
             }],
-            &mut blocks,
-            &mut relationships,
+            &[],
         );
-        assert_eq!(blocks[0].block_kind, "transcript_segment");
-        assert_eq!(blocks[0].position.as_ref().unwrap()["start_ms"], 100);
-        assert_eq!(relationships[0].rel, "has_block");
+        assert_eq!(blocks[0].kind, "transcript");
+        assert_eq!(
+            blocks[0].at,
+            Some(crate::item::At::Time {
+                start_ms: 100,
+                end_ms: 1000
+            })
+        );
     }
 
     #[test]

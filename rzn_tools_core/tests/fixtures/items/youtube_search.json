@@ -1,0 +1,18 @@
+{
+  "type": "rzn.items/v2",
+  "items": [
+    {
+      "type": "rzn.item/v2",
+      "key": "youtube:video:dQw4w9WgXcQ",
+      "kind": "video",
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "title": "Example Video",
+      "published_at": "2025-01-01T00:00:00Z",
+      "published_in": {
+        "name": "Example Channel"
+      }
+    }
+  ],
+  "next_cursor": null,
+  "listing": "feed"
+}

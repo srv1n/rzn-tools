@@ -64,10 +64,10 @@ Indexable list/search/get tools should support:
 
 - `limit` with clamping.
 - `cursor` for pageable results.
-- `output_format` with `raw` and `normalized_v1`.
+- `output_format` with `raw` and `item_v2` (see `normalized-output.md`), plus a `describe` tool.
 - `response_format` with `concise` and `detailed` when LLM-facing payload size matters.
 
-Mutation tools do not need normalized output unless there is a real ingestion use case.
+Mutation tools do not need item output unless there is a real ingestion use case.
 
 ## Auth Rules
 

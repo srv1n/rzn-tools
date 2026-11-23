@@ -1,0 +1,16 @@
+{
+  "type": "rzn.item/v2",
+  "key": "hackernews:item:8863",
+  "kind": "thread",
+  "url": "https://news.ycombinator.com/item?id=8863",
+  "title": "Example HN Story",
+  "author": {"name": "dhouston", "id": "dhouston"},
+  "published_at": "2025-01-01T00:00:00Z",
+  "published_in": {"name": "Hacker News", "id": "news.ycombinator.com"},
+  "counts": {"points": 111},
+  "blocks": [
+    {"id": "8863", "kind": "post", "text": "Example HN text."},
+    {"id": "9224", "kind": "comment", "text": "A reply.", "parent": "8863",
+     "author": {"name": "pg", "id": "pg"}, "fields": {"depth": 0}, "counts": {"points": 3}}
+  ]
+}

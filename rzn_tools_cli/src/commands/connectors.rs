@@ -284,9 +284,8 @@ use crate::cli::{YoutubeArgs, YoutubeTools};
 use crate::commands::copy_to_clipboard;
 use crate::commands::report::render_tool_failure_report_block;
 use crate::commands::usage_helpers::print_cost_summary;
-use rzn_tools_core::display::from_normalized::{
-    stash_original_structured_content_in_meta,
-    try_convert_normalized_structured_content_to_display_v1,
+use rzn_tools_core::display::from_item::{
+    stash_original_structured_content_in_meta, try_convert_item_structured_content_to_display_v1,
 };
 use rzn_tools_core::CallToolRequestParam;
 use serde_json::Map;
@@ -346,7 +345,7 @@ async fn call_tool_raw(
     if requested_display_v1 {
         args.insert(
             "output_format".to_string(),
-            Value::String("normalized_v1".to_string()),
+            Value::String("item_v2".to_string()),
         );
     }
 
@@ -371,14 +370,9 @@ async fn call_tool_raw(
 
     if requested_display_v1 && !result.is_error.unwrap_or(false) {
         if let Some(structured) = result.structured_content.as_ref() {
-            if let Some(converted) =
-                try_convert_normalized_structured_content_to_display_v1(structured)?
+            if let Some(converted) = try_convert_item_structured_content_to_display_v1(structured)?
             {
-                stash_original_structured_content_in_meta(
-                    &mut result.meta,
-                    structured,
-                    "normalized_v1",
-                );
+                stash_original_structured_content_in_meta(&mut result.meta, structured, "item_v2");
                 result.structured_content = Some(converted);
             }
         }

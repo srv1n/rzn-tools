@@ -65,8 +65,6 @@ pub mod whatsapp;
 pub mod wikipedia;
 #[cfg(feature = "x-api")]
 pub mod x;
-#[cfg(feature = "x-twitter")]
-pub mod x_browser;
 #[cfg(feature = "youtube")]
 pub mod youtube;
 

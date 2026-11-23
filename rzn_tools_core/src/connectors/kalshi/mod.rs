@@ -1,8 +1,6 @@
 use crate::error::ConnectorError;
-use crate::ingest::{
-    self, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat, Partial,
-    Relationship, Source,
-};
+use crate::ingest::{self, OutputFormat};
+use crate::item::{Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{build_reqwest_client, structured_result, structured_result_with_text};
 use crate::{
     CallToolRequestParam, CallToolResult, Connector, ListToolsResult, PaginatedRequestParam, Tool,
@@ -748,7 +746,7 @@ impl KalshiConnector {
         format!("{entity_type}: {}", parts.join(" | "))
     }
 
-    fn summary_to_item(summary: &Value) -> Result<ContentItem, ConnectorError> {
+    fn summary_to_item(summary: &Value) -> Result<Item, ConnectorError> {
         let item_ref = string_field(summary, "item_ref")
             .ok_or_else(|| ConnectorError::Other("Missing item_ref".to_string()))?;
         let entity_type =
@@ -770,54 +768,39 @@ impl KalshiConnector {
         tags.sort();
         tags.dedup();
 
-        let mut relationships = Vec::new();
-        if entity_type == "event" {
-            if let Some(series_ticker) =
-                string_field(summary, "series_ticker").filter(|value| !value.is_empty())
-            {
-                relationships.push(Relationship {
-                    rel: "part_of".to_string(),
-                    from: item_ref.clone(),
-                    to: format!("kalshi:series:{series_ticker}"),
-                });
+        Ok({
+            let mut item = Item::new(
+                item_ref.clone(),
+                format!("kalshi_{entity_type}"),
+                String::new(),
+            );
+            item.title = title;
+            item.marker = string_field(summary, "last_updated_ts")
+                .or_else(|| string_field(summary, "close_time"));
+            item.published_in = Some(Party::named("Kalshi").with_id("kalshi.com"));
+            crate::item::merge_fields(&mut item.fields, serde_json::json!({"tags": tags}));
+            if let Some(meta) = Some(summary.clone()) {
+                crate::item::merge_fields(&mut item.fields, meta);
             }
-        } else if entity_type == "market" {
-            if let Some(event_ticker) =
-                string_field(summary, "event_ticker").filter(|value| !value.is_empty())
-            {
-                relationships.push(Relationship {
-                    rel: "part_of".to_string(),
-                    from: item_ref.clone(),
-                    to: format!("kalshi:event:{event_ticker}"),
-                });
-            }
-        }
-
-        Ok(ContentItem {
-            item_ref: item_ref.clone(),
-            kind: format!("kalshi_{entity_type}"),
-            canonical_url: None,
-            title,
-            created_at: None,
-            source_updated_at: string_field(summary, "last_updated_ts")
-                .or_else(|| string_field(summary, "close_time")),
-            authors: Vec::new(),
-            tags,
-            metadata: Some(summary.clone()),
-            blocks: vec![ContentBlock {
-                block_ref: format!("{item_ref}:summary"),
-                block_kind: "summary".to_string(),
-                text: Self::entity_text(summary),
-                author: None,
-                created_at: None,
-                reply_to: None,
-                position: None,
-                score: summary.get("score").and_then(Value::as_f64),
-                attachments: Vec::new(),
-                metadata: Some(summary.clone()),
-            }],
-            relationships,
-            truncation: None,
+            item.blocks = vec![{
+                let mut b = Block::new(
+                    format!("{item_ref}:summary"),
+                    "summary".to_string(),
+                    Self::entity_text(summary),
+                );
+                if let Some(score) = summary
+                    .get("score")
+                    .and_then(Value::as_f64)
+                    .and_then(serde_json::Number::from_f64)
+                {
+                    b.counts.insert("score".to_string(), score);
+                }
+                if let Some(meta) = Some(summary.clone()) {
+                    crate::item::merge_fields(&mut b.fields, meta);
+                }
+                b
+            }];
+            item
         })
     }
 
@@ -1288,15 +1271,15 @@ impl Connector for KalshiConnector {
                             "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw",
-                                "description": "Default raw. Use normalized_v1/display_v1 for ingest/display pipelines."
+                                "description": "Default raw. Use item_v2/display_v1 for ingest/display pipelines."
                             }
                         },
                         "required": ["query"],
                         "examples": [
                             { "description": "Search election-related contracts", "input": { "query": "fed rates", "limit": 10 } },
-                            { "description": "Search as normalized output", "input": { "query": "elon mars", "limit": 8, "output_format": "normalized_v1" } }
+                            { "description": "Search as normalized output", "input": { "query": "elon mars", "limit": 8, "output_format": "item_v2" } }
                         ],
                         "_meta": {
                             "category": "search",
@@ -1361,13 +1344,13 @@ impl Connector for KalshiConnector {
                             "events_limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 10 },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw"
                             }
                         },
                         "examples": [
                             { "description": "Fetch one series", "input": { "ticker": "KXELONMARS" } },
-                            { "description": "Fetch as normalized output", "input": { "item_ref": "kalshi:series:KXELONMARS", "output_format": "normalized_v1" } }
+                            { "description": "Fetch as normalized output", "input": { "item_ref": "kalshi:series:KXELONMARS", "output_format": "item_v2" } }
                         ],
                         "_meta": {
                             "category": "read",
@@ -1435,7 +1418,7 @@ impl Connector for KalshiConnector {
                             "url": { "type": "string", "description": "Kalshi event page URL." },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw"
                             }
                         },
@@ -1575,7 +1558,7 @@ impl Connector for KalshiConnector {
                             "ticker": { "type": "string", "description": "Kalshi market ticker." },
                             "output_format": {
                                 "type": "string",
-                                "enum": ["raw", "normalized_v1", "display_v1"],
+                                "enum": ["raw", "item_v2", "display_v1"],
                                 "default": "raw"
                             }
                         },
@@ -1762,18 +1745,12 @@ impl Connector for KalshiConnector {
                 }
                 let results = self.search(query, args.limit).await?;
 
-                if args.output_format.is_normalized() || args.output_format.is_display() {
+                if args.output_format.is_item() || args.output_format.is_display() {
                     let items = results
                         .iter()
                         .map(Self::summary_to_item)
                         .collect::<Result<Vec<_>, _>>()?;
-                    let page = NormalizedPageV1::new(
-                        items,
-                        None,
-                        false,
-                        Partial::complete(Some(ingest::limits_max_items(results.len() as u64))),
-                        Source::new("kalshi", "search"),
-                    );
+                    let page = ItemsPage::new(items, None, Listing::Feed);
                     return structured_result(&page);
                 }
 
@@ -1855,16 +1832,13 @@ impl Connector for KalshiConnector {
                     .build_get_series_payload(&ticker, args.events_limit)
                     .await?;
 
-                if args.output_format.is_normalized() || args.output_format.is_display() {
+                if args.output_format.is_item() || args.output_format.is_display() {
                     let item = Self::summary_to_item(
                         payload
                             .get("series")
                             .ok_or_else(|| ConnectorError::Other("Missing series".to_string()))?,
                     )?;
-                    return structured_result(&NormalizedItemV1::complete(
-                        item,
-                        Source::new("kalshi", "get_series"),
-                    ));
+                    return structured_result(&item);
                 }
 
                 structured_result_with_text(&payload, None)
@@ -1904,16 +1878,13 @@ impl Connector for KalshiConnector {
                 )?;
                 let payload = self.build_get_event_payload(&ticker).await?;
 
-                if args.output_format.is_normalized() || args.output_format.is_display() {
+                if args.output_format.is_item() || args.output_format.is_display() {
                     let item = Self::summary_to_item(
                         payload
                             .get("event")
                             .ok_or_else(|| ConnectorError::Other("Missing event".to_string()))?,
                     )?;
-                    return structured_result(&NormalizedItemV1::complete(
-                        item,
-                        Source::new("kalshi", "get"),
-                    ));
+                    return structured_result(&item);
                 }
 
                 structured_result_with_text(&payload, None)
@@ -2054,16 +2025,13 @@ impl Connector for KalshiConnector {
                     Self::resolve_market_ticker(args.item_ref.as_deref(), args.ticker.as_deref())?;
                 let payload = self.build_get_market_payload(&ticker).await?;
 
-                if args.output_format.is_normalized() || args.output_format.is_display() {
+                if args.output_format.is_item() || args.output_format.is_display() {
                     let item = Self::summary_to_item(
                         payload
                             .get("market")
                             .ok_or_else(|| ConnectorError::Other("Missing market".to_string()))?,
                     )?;
-                    return structured_result(&NormalizedItemV1::complete(
-                        item,
-                        Source::new("kalshi", "get_market"),
-                    ));
+                    return structured_result(&item);
                 }
 
                 structured_result_with_text(&payload, None)

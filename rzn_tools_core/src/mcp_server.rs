@@ -13,9 +13,9 @@ use tracing::{debug, error, info};
 use crate::{
     auth::AuthDetails,
     capabilities::{ConnectorConfigSchema, FieldType},
-    display::from_normalized::{
+    display::from_item::{
         stash_original_structured_content_in_meta,
-        try_convert_normalized_structured_content_to_display_v1,
+        try_convert_item_structured_content_to_display_v1,
     },
     flow_failure::build_tool_flow_failure_draft,
     utils::structured_result_with_text,
@@ -826,7 +826,7 @@ impl McpServer {
                     .unwrap_or_default();
 
                 let mut default_args = JsonMap::new();
-                default_args.insert("output_format".to_string(), json!("normalized_v1"));
+                default_args.insert("output_format".to_string(), json!("item_v2"));
                 if let Some(props) = tool
                     .input_schema
                     .get("properties")
@@ -978,7 +978,7 @@ impl McpServer {
 
             if requested_display_v1 {
                 let mut args = unprefixed_request.arguments.unwrap_or_default();
-                args.insert("output_format".to_string(), json!("normalized_v1"));
+                args.insert("output_format".to_string(), json!("item_v2"));
                 unprefixed_request.arguments = Some(args);
             }
 
@@ -987,12 +987,12 @@ impl McpServer {
             if requested_display_v1 && !result.is_error.unwrap_or(false) {
                 if let Some(structured) = result.structured_content.as_ref() {
                     if let Some(converted) =
-                        try_convert_normalized_structured_content_to_display_v1(structured)?
+                        try_convert_item_structured_content_to_display_v1(structured)?
                     {
                         stash_original_structured_content_in_meta(
                             &mut result.meta,
                             structured,
-                            "normalized_v1",
+                            "item_v2",
                         );
                         result.structured_content = Some(converted);
                     }
@@ -1411,7 +1411,8 @@ pub fn connector_auth_slots(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ingest::{ContentItem, NormalizedPageV1, OutputFormat, Partial, Source};
+    use crate::ingest::OutputFormat;
+    use crate::item::{Item, ItemsPage, Listing};
     use async_trait::async_trait;
     use rmcp::model::{
         CallToolRequestParam, ListPromptsResult, ListResourcesResult, ListToolsResult,
@@ -1469,11 +1470,11 @@ mod tests {
                             "properties":{
                                 "output_format":{
                                     "type":"string",
-                                    "enum":["raw","normalized_v1","display_v1"],
+                                    "enum":["raw","item_v2","display_v1"],
                                     "default":"raw"
                                 }
                             },
-                            "examples":[{"description":"example","input":{"output_format":"normalized_v1"}}],
+                            "examples":[{"description":"example","input":{"output_format":"item_v2"}}],
                             "_meta":{
                                 "category":"search",
                                 "supports_output_format": true,
@@ -1499,29 +1500,11 @@ mod tests {
         ) -> Result<CallToolResult, ConnectorError> {
             let args = request.arguments.unwrap_or_default();
             let output_format = crate::ingest::output_format_from_args(&args)?;
-            assert_eq!(output_format, OutputFormat::NormalizedV1);
+            assert_eq!(output_format, OutputFormat::ItemV2);
 
-            let item = ContentItem {
-                item_ref: "fake:item:1".to_string(),
-                kind: "thing".to_string(),
-                canonical_url: None,
-                title: Some("Hello".to_string()),
-                created_at: None,
-                source_updated_at: None,
-                authors: Vec::new(),
-                tags: Vec::new(),
-                metadata: None,
-                blocks: Vec::new(),
-                relationships: Vec::new(),
-                truncation: None,
-            };
-            let page = NormalizedPageV1::new(
-                vec![item],
-                None,
-                false,
-                Partial::complete(None),
-                Source::new("fake", request.name.as_ref()),
-            );
+            let item =
+                Item::new("fake:item:1", "thing", "https://example.com/1").with_title("Hello");
+            let page = ItemsPage::new(vec![item], None, Listing::Feed);
             crate::utils::structured_result(&page)
         }
 
@@ -1666,7 +1649,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mcp_call_tool_display_v1_stashes_original_normalized() {
+    async fn mcp_call_tool_display_v1_stashes_original_items() {
         let mut registry = ProviderRegistry::new();
         registry.register_provider(Box::new(FakeConnector));
         let server = McpServer::new(Arc::new(Mutex::new(registry)));
@@ -1693,11 +1676,11 @@ mod tests {
         let meta = result.meta.expect("meta");
         let original = meta
             .0
-            .get(crate::display::from_normalized::META_ORIGINAL_STRUCTURED_CONTENT_KEY)
+            .get(crate::display::from_item::META_ORIGINAL_STRUCTURED_CONTENT_KEY)
             .expect("original structured");
         assert_eq!(
             original.get("type").and_then(|v| v.as_str()),
-            Some(crate::ingest::NORMALIZED_PAGE_V1_TYPE)
+            Some(crate::item::ITEMS_V2_TYPE)
         );
     }
 

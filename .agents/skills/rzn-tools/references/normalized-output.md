@@ -1,161 +1,37 @@
-# Normalized Output Reference
+# Item output (`rzn.item/v2`)
 
-Use this when adding ingestion/indexing support or reviewing `output_format=normalized_v1`.
+Use this when a connector feeds an index, or when reviewing `output_format=item_v2`. The types are in
+`rzn_tools_core/src/item.rs`; the design is `docs/plans/any-source/design.md` in the backend repo.
 
-## Contents
+`item_v2` is opt-in. Tools return raw output by default.
 
-- [Contract](#contract)
-- [Standard Inputs](#standard-inputs)
-- [Output Shapes](#output-shapes)
-- [Required Invariants](#required-invariants)
-- [Schema Advertising](#schema-advertising)
-- [Implementation Helpers](#implementation-helpers)
+## Shapes
 
-## Contract
+- A get returns one `rzn.item/v2`: `key`, `kind`, `url`, `title`, `author`, `published_at`,
+  `published_in`, `marker`, `fields`, `counts`, and a flat ordered list of `blocks` (or a
+  `document` pointer for document-like sources, never both).
+- A list or search returns `rzn.items/v2`: `items` (listing entries: key, kind and url required, the
+  rest when the listing has it), `next_cursor`, and `listing` (`full` when the pages name everything in
+  scope, `feed` otherwise; when in doubt, `feed`).
+- A `describe` tool returns `rzn.describe/v2`: per item kind, the identity rule, listing type, scopes,
+  list and get tools, and every field with `of` (item or passage), `type`, `list`, `changes`.
 
-`normalized_v1` is opt-in. Existing tools keep returning raw connector-specific output by default.
+## Rules
 
-Indexable tools are:
+- `key` is the identity, one rule per kind (`youtube:video:<id>`, `reddit:thread:<id>`,
+  `hackernews:item:<id>`). The same item through two tools has the same key.
+- A full item needs `author`, `published_at` (RFC 3339) and `published_in`; `Item::check` enforces
+  it. Use `item::rfc3339` to normalise source dates.
+- `counts` holds numbers that keep changing; nothing hourly goes into `fields` or block text.
+- A block has `id`, `kind`, `text`, and optionally `path` (headings above it), `parent` (an earlier
+  block it answers), `at` (`time` in ms, `chars`, or `order`), `url`, `author`, `published_at`,
+  `fields`, `counts`, `attachments`. A `transcript` block must have `at.time`.
+- If the connector returned fewer blocks than the item has, set `truncated`; an index refuses it.
+- Keep the connector's mapping thin: no per-source logic belongs downstream.
+- Put the payload in `structuredContent` with `utils::structured_result`.
 
-- list/feed tools,
-- search tools,
-- get/read-one tools,
-- windowed history reads such as messages/comments.
+## Schema advertising
 
-Mutation/admin tools usually stay raw.
-
-## Standard Inputs
-
-Indexable tools should accept:
-
-```json
-{
-  "limit": 100,
-  "cursor": null,
-  "output_format": "normalized_v1"
-}
-```
-
-Search-like tools may also accept:
-
-- `locale`
-- `language`
-- `region`
-- `since`
-- `until`
-- `date_preset`
-- `include_domains`
-- `exclude_domains`
-
-Canonical get tools should accept at least one of:
-
-- `item_ref`
-- `url`
-
-Provider IDs can remain when the live tool schema lists them.
-
-## Output Shapes
-
-List/search/pageable tools return a normalized page:
-
-```json
-{
-  "type": "rzn-tools.normalized_page.v1",
-  "items": [],
-  "next_cursor": null,
-  "has_more": false,
-  "partial": {
-    "is_partial": false,
-    "reason": null,
-    "limits": {}
-  },
-  "source": {
-    "connector": "reddit",
-    "tool": "list",
-    "fetched_at": "2026-04-28T00:00:00Z"
-  }
-}
-```
-
-Get/read-one tools return a normalized item:
-
-```json
-{
-  "type": "rzn-tools.normalized_item.v1",
-  "item": {
-    "item_ref": "hackernews:story:8863",
-    "kind": "thread",
-    "blocks": []
-  },
-  "partial": {
-    "is_partial": false,
-    "reason": null,
-    "limits": {}
-  },
-  "source": {
-    "connector": "hackernews",
-    "tool": "get_thread",
-    "fetched_at": "2026-04-28T00:00:00Z"
-  }
-}
-```
-
-## Required Invariants
-
-- Put normalized payloads in `CallToolResult.structured_content`.
-- Prefer empty `content` for normalized output to avoid duplicate payloads.
-- `next_cursor` belongs at the top level of the page.
-- `has_more` is true iff `next_cursor` is present.
-- Cursors are opaque and safe to persist.
-- Invalid cursors return `InvalidParams`.
-- `item_ref` format should be `{connector}:{kind}:{native_id}`.
-- Use base64url or another safe encoding when native IDs can contain separators.
-
-## Schema Advertising
-
-If a tool supports normalized output, its input schema should include:
-
-```json
-{
-  "output_format": {
-    "type": "string",
-    "enum": ["raw", "normalized_v1"],
-    "default": "raw",
-    "description": "Default raw. Use normalized_v1 for ingestion pipelines."
-  }
-}
-```
-
-If it supports paging:
-
-```json
-{
-  "cursor": {
-    "type": ["string", "null"],
-    "description": "Opaque cursor from a previous response."
-  },
-  "limit": {
-    "type": "integer",
-    "description": "Max results (connector clamps to safe max)."
-  }
-}
-```
-
-Some existing connectors also advertise `display_v1`. Preserve it if the connector already supports it.
-
-## Implementation Helpers
-
-Look for these helpers in `rzn_tools_core` before writing new parsing code:
-
-- `ingest::output_format_from_args(...)`
-- `ingest::encode_cursor(...)`
-- `ingest::decode_cursor(...)`
-- `ingest::parse_item_ref_for_connector(...)`
-- `utils::structured_result(...)`
-- `utils::structured_result_with_text(...)`
-
-Use existing implementations as examples:
-
-- `rzn_tools_core/src/connectors/hackernews/mod.rs`
-- `rzn_tools_core/src/connectors/rss/mod.rs`
-- `rzn_tools_core/src/connectors/web/mod.rs`
+Declare `output_format` with `ingest::output_format_property()`. Tools that page also declare
+`cursor` and `limit`. `item::item_schema()`, `items_page_schema()` and `description_schema()` are
+the published JSON Schemas.

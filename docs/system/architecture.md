@@ -49,11 +49,14 @@ Federated search is in [`rzn_tools_core/src/federated/`](../../rzn_tools_core/sr
 
 Global `--output` selects CLI rendering. The values are `pretty`, `json`, `yaml`, `text`, and `markdown`.
 
-Some tools accept `output_format`. The live values are `raw`, `normalized_v1`, and `display_v1`.
+Some tools accept `output_format`. The live values are `raw`, `item_v2`, and `display_v1`. `item_v2`
+returns `rzn.item/v2` for a get and `rzn.items/v2` for a list; a connector that feeds indexes also has a
+`describe` tool returning `rzn.describe/v2`.
 
 The `_v1` text is part of the current wire value. The running code requires the exact text.
 
-- [`ingest.rs`](../../rzn_tools_core/src/ingest.rs) defines normalized records.
+- [`item.rs`](../../rzn_tools_core/src/item.rs) defines the item, page and describe records.
+- [`ingest.rs`](../../rzn_tools_core/src/ingest.rs) defines output formats and cursors.
 - [`display/`](../../rzn_tools_core/src/display/) defines display records and conversion.
 
 Check the tool schema. Not every tool supports each value.

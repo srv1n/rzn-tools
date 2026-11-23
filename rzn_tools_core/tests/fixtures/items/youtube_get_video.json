@@ -1,0 +1,16 @@
+{
+  "type": "rzn.item/v2",
+  "key": "youtube:video:dQw4w9WgXcQ",
+  "kind": "video",
+  "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "title": "Example Video",
+  "author": {"name": "Example Channel", "id": "UCexample", "url": "https://www.youtube.com/channel/UCexample"},
+  "published_at": "2025-01-01T00:00:00+00:00",
+  "published_in": {"name": "Example Channel", "id": "UCexample", "url": "https://www.youtube.com/channel/UCexample"},
+  "fields": {"description": "About the video", "duration_s": 212, "tags": ["music"], "is_live": false, "language": "en", "captions": "manual"},
+  "counts": {"views": 1000},
+  "blocks": [
+    {"id": "t0", "kind": "transcript", "text": "We're no strangers to love.", "path": ["Intro"], "at": {"time": {"start_ms": 0, "end_ms": 3000}}},
+    {"id": "t1", "kind": "transcript", "text": "You know the rules and so do I.", "path": ["Verse"], "at": {"time": {"start_ms": 60000, "end_ms": 63500}}}
+  ]
+}

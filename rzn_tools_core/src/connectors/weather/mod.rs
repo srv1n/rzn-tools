@@ -1,5 +1,6 @@
 use crate::error::ConnectorError;
-use crate::ingest::{ContentBlock, ContentItem, NormalizedPageV1, OutputFormat, Partial, Source};
+use crate::ingest::OutputFormat;
+use crate::item::{Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{structured_result, structured_result_with_text};
 use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
@@ -364,20 +365,17 @@ impl WeatherConnector {
         days: usize,
         units: UnitSystem,
         current: Option<&WttrCurrentCondition>,
-    ) -> NormalizedPageV1 {
+    ) -> ItemsPage {
         let item_ref = Self::weather_item_ref(resolved_location);
         let mut blocks = Vec::new();
-        blocks.push(ContentBlock {
-            block_ref: format!("{}:current", item_ref),
-            block_kind: "summary".to_string(),
-            text: current_summary.to_string(),
-            author: None,
-            created_at: None,
-            reply_to: None,
-            position: Some(json!({ "section": "current" })),
-            score: None,
-            attachments: Vec::new(),
-            metadata: current.map(|condition| {
+        blocks.push({
+            let mut b = Block::new(
+                format!("{}:current", item_ref),
+                "summary".to_string(),
+                current_summary.to_string(),
+            );
+            crate::item::merge_fields(&mut b.fields, json!({ "section": "current" }));
+            if let Some(meta) = current.map(|condition| {
                 json!({
                     "temperature_c": condition.temp_c,
                     "temperature_f": condition.temp_f,
@@ -385,53 +383,51 @@ impl WeatherConnector {
                     "feels_like_f": condition.feels_like_f,
                     "humidity": condition.humidity,
                 })
-            }),
+            }) {
+                crate::item::merge_fields(&mut b.fields, meta);
+            }
+            b
         });
 
         for (index, summary) in forecast_summaries.iter().enumerate() {
-            blocks.push(ContentBlock {
-                block_ref: format!("{}:forecast:{}", item_ref, index),
-                block_kind: "forecast_day".to_string(),
-                text: summary.clone(),
-                author: None,
-                created_at: None,
-                reply_to: None,
-                position: Some(json!({ "section": "forecast", "index": index })),
-                score: None,
-                attachments: Vec::new(),
-                metadata: None,
+            blocks.push({
+                let mut b = Block::new(
+                    format!("{}:forecast:{}", item_ref, index),
+                    "forecast_day".to_string(),
+                    summary.clone(),
+                );
+                crate::item::merge_fields(
+                    &mut b.fields,
+                    json!({ "section": "forecast", "index": index }),
+                );
+                b
             });
         }
 
-        let item = ContentItem {
-            item_ref,
-            kind: "weather_report".to_string(),
-            canonical_url: Some("https://wttr.in".to_string()),
-            title: Some(format!("Weather for {}", resolved_location)),
-            created_at: None,
-            source_updated_at: None,
-            authors: Vec::new(),
-            tags: vec!["weather".to_string(), units.as_str().to_string()],
-            metadata: Some(json!({
+        let item = {
+            let mut item = Item::new(
+                item_ref,
+                "weather_report".to_string(),
+                "https://wttr.in".to_string(),
+            );
+            item.title = Some(format!("Weather for {}", resolved_location));
+            item.published_in = Some(Party::named("wttr.in").with_id("wttr.in"));
+            crate::item::merge_fields(
+                &mut item.fields,
+                serde_json::json!({"tags": vec!["weather".to_string(), units.as_str().to_string()]}),
+            );
+            if let Some(meta) = Some(json!({
                 "location": resolved_location,
                 "days": days,
                 "units": units.as_str(),
-            })),
-            blocks,
-            relationships: Vec::new(),
-            truncation: None,
+            })) {
+                crate::item::merge_fields(&mut item.fields, meta);
+            }
+            item.blocks = blocks;
+            item
         };
 
-        NormalizedPageV1::new(
-            vec![item],
-            None,
-            false,
-            Partial::complete(Some(json!({
-                "days": days,
-                "units": units.as_str(),
-            }))),
-            Source::new("weather", "get_weather"),
-        )
+        ItemsPage::new(vec![item], None, Listing::Feed)
     }
 }
 
@@ -488,7 +484,7 @@ Example: location=\"San Francisco\" days=2 units=\"metric\".",
                             "days": 3,
                             "units": "metric",
                             "response_format": "concise",
-                            "output_format": "normalized_v1"
+                            "output_format": "item_v2"
                         }
                     ],
                     "properties": {
@@ -517,8 +513,8 @@ Example: location=\"San Francisco\" days=2 units=\"metric\".",
                         },
                         "output_format": {
                             "type": "string",
-                            "description": "Default raw. Use normalized_v1/display_v1 for ingest/display pipelines.",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
+                            "description": "Default raw. Use item_v2/display_v1 for ingest/display pipelines.",
+                            "enum": ["raw", "item_v2", "display_v1"],
                             "default": "raw"
                         }
                     },
@@ -586,7 +582,7 @@ Example: location=\"San Francisco\" days=2 units=\"metric\".",
                     .map(|day| Self::format_forecast_summary(day, units))
                     .collect::<Vec<_>>();
 
-                if parsed.output_format.is_normalized() || parsed.output_format.is_display() {
+                if parsed.output_format.is_item() || parsed.output_format.is_display() {
                     let page = Self::normalized_weather_page(
                         &resolved_location,
                         &current_summary,

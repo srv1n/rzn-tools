@@ -707,7 +707,7 @@ pub fn structured_result_with_text<T: Serialize>(
 }
 
 /// Build a CallToolResult with structured JSON without injecting helper fields.
-/// Prefer this for strict schema outputs (e.g., normalized ingest payloads).
+/// Prefer this for strict schema outputs (e.g., rzn.item/v2 payloads).
 pub fn structured_result<T: Serialize>(data: &T) -> Result<CallToolResult, ConnectorError> {
     let value = serde_json::to_value(data).map_err(|e| ConnectorError::Other(e.to_string()))?;
     let content_text = tool_result_text_fallback(&value, None);
@@ -747,16 +747,15 @@ fn truncate_tool_result_text(text: String, max_chars: usize) -> String {
 
 fn summarize_structured_tool_value(value: &JsonValue) -> Option<String> {
     match value.get("type").and_then(JsonValue::as_str) {
-        Some(crate::ingest::NORMALIZED_ITEM_V1_TYPE) => summarize_normalized_item(value),
-        Some(crate::ingest::NORMALIZED_PAGE_V1_TYPE) => summarize_normalized_page(value),
+        Some(crate::item::ITEM_V2_TYPE) => summarize_item(value),
+        Some(crate::item::ITEMS_V2_TYPE) => summarize_items_page(value),
         Some(crate::display::v1::DISPLAY_ITEM_V1_TYPE) => summarize_display_item(value),
         Some(crate::display::v1::DISPLAY_PAGE_V1_TYPE) => summarize_display_page(value),
         _ => None,
     }
 }
 
-fn summarize_normalized_item(value: &JsonValue) -> Option<String> {
-    let item = value.get("item")?;
+fn summarize_item(item: &JsonValue) -> Option<String> {
     let title = item
         .get("title")
         .and_then(JsonValue::as_str)
@@ -765,66 +764,61 @@ fn summarize_normalized_item(value: &JsonValue) -> Option<String> {
         .get("kind")
         .and_then(JsonValue::as_str)
         .unwrap_or("item");
-    let url = item.get("canonical_url").and_then(JsonValue::as_str);
-    let authors = join_strings(
-        item.get("authors")
-            .and_then(JsonValue::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(|author| author.get("name").and_then(JsonValue::as_str)),
-        4,
-    );
+    let url = item.get("url").and_then(JsonValue::as_str);
+    let author = item.pointer("/author/name").and_then(JsonValue::as_str);
     let blocks = item
         .get("blocks")
         .and_then(JsonValue::as_array)
         .cloned()
         .unwrap_or_default();
-    let has_transcript = blocks.iter().any(|block| {
-        matches!(
-            block.get("block_kind").and_then(JsonValue::as_str),
-            Some("transcript" | "transcript_segment")
-        )
-    });
-    let description = blocks.iter().find_map(|block| {
-        (block.get("block_kind").and_then(JsonValue::as_str) == Some("description"))
-            .then(|| block.get("text").and_then(JsonValue::as_str))
-            .flatten()
-    });
-    let transcript = blocks.iter().find_map(|block| {
-        matches!(
-            block.get("block_kind").and_then(JsonValue::as_str),
-            Some("transcript" | "transcript_segment")
-        )
-        .then(|| block.get("text").and_then(JsonValue::as_str))
-        .flatten()
-    });
+    let is_transcript =
+        |block: &JsonValue| block.get("kind").and_then(JsonValue::as_str) == Some("transcript");
+    let has_transcript = blocks.iter().any(is_transcript);
+    let description = item
+        .pointer("/fields/description")
+        .and_then(JsonValue::as_str);
+    let text = blocks
+        .iter()
+        .filter_map(|block| block.get("text").and_then(JsonValue::as_str))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let text = (!text.trim().is_empty()).then_some(text);
 
     let mut lines = vec![format!("{}: {}", kind.to_ascii_uppercase(), title)];
     if let Some(url) = url {
         lines.push(format!("URL: {}", url));
     }
-    if let Some(authors) = authors {
-        lines.push(format!("Authors: {}", authors));
+    if let Some(author) = author {
+        lines.push(format!("Author: {}", author));
     }
-    lines.push(format!(
-        "Transcript available: {}",
-        if has_transcript { "yes" } else { "no" }
-    ));
+    if kind == "video" {
+        lines.push(format!(
+            "Transcript available: {}",
+            if has_transcript { "yes" } else { "no" }
+        ));
+    }
     if let Some(description) = description {
         lines.push(String::new());
         lines.push("Description excerpt:".to_string());
         lines.push(excerpt(description, 700));
     }
-    if let Some(transcript) = transcript {
+    if let Some(text) = text {
         lines.push(String::new());
-        lines.push("Transcript excerpt:".to_string());
-        lines.push(excerpt(transcript, 4000));
+        lines.push(
+            if has_transcript {
+                "Transcript excerpt:"
+            } else {
+                "Text excerpt:"
+            }
+            .to_string(),
+        );
+        lines.push(excerpt(&text, 4000));
     }
 
     Some(lines.join("\n"))
 }
 
-fn summarize_normalized_page(value: &JsonValue) -> Option<String> {
+fn summarize_items_page(value: &JsonValue) -> Option<String> {
     let items = value.get("items")?.as_array()?;
     let mut lines = vec![format!("Fetched {} items.", items.len())];
 
@@ -833,10 +827,7 @@ fn summarize_normalized_page(value: &JsonValue) -> Option<String> {
             .get("title")
             .and_then(JsonValue::as_str)
             .unwrap_or("Untitled item");
-        let url = item
-            .get("canonical_url")
-            .and_then(JsonValue::as_str)
-            .unwrap_or("");
+        let url = item.get("url").and_then(JsonValue::as_str).unwrap_or("");
         if url.is_empty() {
             lines.push(format!("{}. {}", idx + 1, title));
         } else {
@@ -913,16 +904,6 @@ fn summarize_display_page(value: &JsonValue) -> Option<String> {
     Some(lines.join("\n"))
 }
 
-fn join_strings<'a>(values: impl IntoIterator<Item = &'a str>, max_items: usize) -> Option<String> {
-    let collected = values
-        .into_iter()
-        .filter(|value| !value.trim().is_empty())
-        .take(max_items)
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
-    (!collected.is_empty()).then(|| collected.join(", "))
-}
-
 fn excerpt(text: &str, max_chars: usize) -> String {
     let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
     let char_count = normalized.chars().count();
@@ -969,19 +950,18 @@ mod tests {
     }
 
     #[test]
-    fn structured_result_summarizes_normalized_item_for_models() {
+    fn structured_result_summarizes_items_for_models() {
         let result = structured_result(&json!({
-            "type": crate::ingest::NORMALIZED_ITEM_V1_TYPE,
-            "item": {
-                "kind": "video",
-                "title": "Paperclip demo",
-                "canonical_url": "https://example.com/video",
-                "authors": [{"name": "AI Engineer"}],
-                "blocks": [
-                    {"block_kind": "description", "text": "Short description"},
-                    {"block_kind": "transcript", "text": "Transcript body goes here"}
-                ]
-            }
+            "type": crate::item::ITEM_V2_TYPE,
+            "key": "youtube:video:x",
+            "kind": "video",
+            "title": "Paperclip demo",
+            "url": "https://example.com/video",
+            "author": {"name": "AI Engineer"},
+            "fields": {"description": "Short description"},
+            "blocks": [
+                {"id": "t0", "kind": "transcript", "text": "Transcript body goes here", "at": {"time": {"start_ms": 0, "end_ms": 1}}}
+            ]
         }))
         .expect("tool result");
 
@@ -991,9 +971,7 @@ mod tests {
                 assert!(text.text.contains("VIDEO: Paperclip demo"));
                 assert!(text.text.contains("Transcript available: yes"));
                 assert!(text.text.contains("Transcript excerpt:"));
-                assert!(!text
-                    .text
-                    .contains("\"type\":\"rzn-tools.normalized_item.v1\""));
+                assert!(!text.text.contains("\"type\":\"rzn.item/v2\""));
             }
             other => panic!("expected text content, got {other:?}"),
         }

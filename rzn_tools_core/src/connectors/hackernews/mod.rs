@@ -8,10 +8,8 @@ use std::sync::Arc;
 
 use crate::auth::AuthDetails;
 use crate::error::ConnectorError;
-use crate::ingest::{
-    self, Author, ContentBlock, ContentItem, NormalizedItemV1, NormalizedPageV1, OutputFormat,
-    Partial, Relationship, Source,
-};
+use crate::ingest::{self, OutputFormat};
+use crate::item::{ItemsPage, Listing};
 use crate::utils::{html_to_text, structured_result, structured_result_with_text};
 use crate::Connector;
 use crate::{URLParamExtraction, URLPatternSpec};
@@ -19,6 +17,7 @@ use rmcp::model::*;
 use urlencoding;
 
 // Import the types module
+mod item_v2;
 mod types;
 pub use types::{AlgoliaHit, HackerNewsItem, ItemType, SimpleItem};
 
@@ -126,10 +125,6 @@ fn parse_output_format(
     args: &serde_json::Map<String, Value>,
 ) -> Result<OutputFormat, ConnectorError> {
     ingest::output_format_from_args(args)
-}
-
-fn hn_item_ref(kind: &str, id: i64) -> String {
-    format!("hackernews:{}:{}", kind, id)
 }
 
 fn extract_hn_id_from_url(url: &str) -> Option<i64> {
@@ -407,16 +402,6 @@ fn compact_thread_payload(item: &HackerNewsItem, max_comments: usize) -> Value {
     Value::Object(map)
 }
 
-fn hn_author(name: Option<&String>) -> Vec<Author> {
-    match name {
-        Some(n) if !n.is_empty() => vec![Author {
-            name: n.to_string(),
-            id: None,
-        }],
-        _ => Vec::new(),
-    }
-}
-
 fn hn_created_at_from_timestamp(ts: i64) -> Option<String> {
     if ts <= 0 {
         return None;
@@ -440,77 +425,6 @@ fn hn_created_at_hit(hit: &AlgoliaHit) -> Option<String> {
         }
     }
     hit.created_at_i.and_then(hn_created_at_from_timestamp)
-}
-
-fn append_hn_comments(
-    item: &HackerNewsItem,
-    story_id: i64,
-    depth: i64,
-    item_ref: &str,
-    blocks: &mut Vec<ContentBlock>,
-    relationships: &mut Vec<Relationship>,
-) {
-    let children = item.children.as_deref().unwrap_or(&[]);
-
-    for child in children {
-        if !matches!(child.r#type, Some(ItemType::Comment)) {
-            continue;
-        }
-        let Some(id) = child.id else { continue };
-
-        let block_ref = hn_item_ref("comment", id);
-        let text_html = child.text.as_deref().unwrap_or("");
-        let text = html_to_text(text_html);
-        let reply_to = child.parent_id.and_then(|parent_id| {
-            if parent_id == story_id {
-                None
-            } else {
-                Some(hn_item_ref("comment", parent_id))
-            }
-        });
-        let position = Some(serde_json::json!({ "kind": "thread_depth", "depth": depth }));
-
-        blocks.push(ContentBlock {
-            block_ref: block_ref.clone(),
-            block_kind: "comment".to_string(),
-            text,
-            author: child.author.as_ref().map(|name| Author {
-                name: name.to_string(),
-                id: None,
-            }),
-            created_at: hn_created_at_item(child),
-            reply_to: reply_to.clone(),
-            position,
-            score: child.points.map(|p| p as f64),
-            attachments: Vec::new(),
-            metadata: Some(serde_json::json!({
-                "points": child.points,
-                "parent_id": child.parent_id,
-            })),
-        });
-
-        relationships.push(Relationship {
-            rel: "has_block".to_string(),
-            from: item_ref.to_string(),
-            to: block_ref.clone(),
-        });
-        if let Some(parent_ref) = reply_to {
-            relationships.push(Relationship {
-                rel: "replies_to".to_string(),
-                from: block_ref.clone(),
-                to: parent_ref,
-            });
-        }
-
-        append_hn_comments(
-            child,
-            story_id,
-            depth.saturating_add(1),
-            item_ref,
-            blocks,
-            relationships,
-        );
-    }
 }
 
 fn story_item_to_payload(
@@ -1360,8 +1274,8 @@ impl Connector for HackerNewsConnector {
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                            "enum": ["raw", "item_v2", "display_v1"],
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                             "default": "raw"
                         },
                         "storyFields": {
@@ -1423,8 +1337,8 @@ impl Connector for HackerNewsConnector {
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                            "enum": ["raw", "item_v2", "display_v1"],
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                             "default": "raw"
                         }
                     },
@@ -1473,8 +1387,8 @@ impl Connector for HackerNewsConnector {
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                            "enum": ["raw", "item_v2", "display_v1"],
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                             "default": "raw"
                         }
                     },
@@ -1525,8 +1439,8 @@ impl Connector for HackerNewsConnector {
                         },
                         "output_format": {
                             "type": "string",
-                            "enum": ["raw", "normalized_v1", "display_v1"],
-                            "description": "Default raw. Use normalized_v1 for ingestion pipelines. Use display_v1 for UI-friendly output.",
+                            "enum": ["raw", "item_v2", "display_v1"],
+                            "description": "Default raw. Use item_v2 for ingestion pipelines. Use display_v1 for UI-friendly output.",
                             "default": "raw"
                         },
                         "storyFields": {
@@ -1633,43 +1547,9 @@ impl Connector for HackerNewsConnector {
 
                 tracing::debug!(url = %url, "Executing Hacker News search");
                 let result: AlgoliaSearchResponse = self.fetch_algolia_search(&url).await?;
-                if output_format == OutputFormat::NormalizedV1 {
+                if output_format == OutputFormat::ItemV2 {
                     let hits = result.hits.clone().unwrap_or_default();
-                    let items: Vec<ContentItem> = hits
-                        .into_iter()
-                        .filter_map(|hit| {
-                            let id = hit.object_id.as_ref().and_then(|s| s.parse::<i64>().ok())?;
-                            let is_story = hit.is_story();
-                            let kind_label = if is_story { "story" } else { "comment" };
-                            let kind = if is_story { "thread" } else { "comment" };
-                            let canonical_url =
-                                format!("https://news.ycombinator.com/item?id={}", id);
-                            let tags = hit.tags.clone().unwrap_or_default();
-                            Some(ContentItem {
-                                item_ref: hn_item_ref(kind_label, id),
-                                kind: kind.to_string(),
-                                canonical_url: Some(canonical_url),
-                                title: hit
-                                    .title
-                                    .clone()
-                                    .or(hit.story_title.clone())
-                                    .filter(|t| !t.is_empty()),
-                                created_at: hn_created_at_hit(&hit),
-                                source_updated_at: None,
-                                authors: hn_author(hit.author.as_ref()),
-                                tags,
-                                metadata: Some(json!({
-                                    "points": hit.points,
-                                    "url": hit.url,
-                                    "story_id": hit.story_id,
-                                    "parent_id": hit.parent_id,
-                                })),
-                                blocks: Vec::new(),
-                                relationships: Vec::new(),
-                                truncation: None,
-                            })
-                        })
-                        .collect();
+                    let items: Vec<_> = hits.iter().filter_map(item_v2::hit_entry).collect();
 
                     let has_more = result
                         .nb_pages
@@ -1681,13 +1561,7 @@ impl Connector for HackerNewsConnector {
                     } else {
                         None
                     };
-                    let page_out = NormalizedPageV1::new(
-                        items,
-                        next_cursor,
-                        has_more,
-                        Partial::complete(Some(ingest::limits_max_items(hits_per_page as u64))),
-                        Source::new("hackernews", "search"),
-                    );
+                    let page_out = ItemsPage::new(items, next_cursor, Listing::Feed);
                     return structured_result(&page_out);
                 }
 
@@ -1772,43 +1646,9 @@ impl Connector for HackerNewsConnector {
                 }
 
                 let result: AlgoliaSearchResponse = self.fetch_algolia_search(&url).await?;
-                if output_format == OutputFormat::NormalizedV1 {
+                if output_format == OutputFormat::ItemV2 {
                     let hits = result.hits.clone().unwrap_or_default();
-                    let items: Vec<ContentItem> = hits
-                        .into_iter()
-                        .filter_map(|hit| {
-                            let id = hit.object_id.as_ref().and_then(|s| s.parse::<i64>().ok())?;
-                            let is_story = hit.is_story();
-                            let kind_label = if is_story { "story" } else { "comment" };
-                            let kind = if is_story { "thread" } else { "comment" };
-                            let canonical_url =
-                                format!("https://news.ycombinator.com/item?id={}", id);
-                            let tags = hit.tags.clone().unwrap_or_default();
-                            Some(ContentItem {
-                                item_ref: hn_item_ref(kind_label, id),
-                                kind: kind.to_string(),
-                                canonical_url: Some(canonical_url),
-                                title: hit
-                                    .title
-                                    .clone()
-                                    .or(hit.story_title.clone())
-                                    .filter(|t| !t.is_empty()),
-                                created_at: hn_created_at_hit(&hit),
-                                source_updated_at: None,
-                                authors: hn_author(hit.author.as_ref()),
-                                tags,
-                                metadata: Some(json!({
-                                    "points": hit.points,
-                                    "url": hit.url,
-                                    "story_id": hit.story_id,
-                                    "parent_id": hit.parent_id,
-                                })),
-                                blocks: Vec::new(),
-                                relationships: Vec::new(),
-                                truncation: None,
-                            })
-                        })
-                        .collect();
+                    let items: Vec<_> = hits.iter().filter_map(item_v2::hit_entry).collect();
 
                     let has_more = result
                         .nb_pages
@@ -1820,13 +1660,7 @@ impl Connector for HackerNewsConnector {
                     } else {
                         None
                     };
-                    let page_out = NormalizedPageV1::new(
-                        items,
-                        next_cursor,
-                        has_more,
-                        Partial::complete(Some(ingest::limits_max_items(hits_per_page as u64))),
-                        Source::new("hackernews", "search_recent"),
-                    );
+                    let page_out = ItemsPage::new(items, next_cursor, Listing::Feed);
                     return structured_result(&page_out);
                 }
 
@@ -1928,42 +1762,16 @@ impl Connector for HackerNewsConnector {
                     None
                 };
 
-                if output_format == OutputFormat::NormalizedV1 {
+                if output_format == OutputFormat::ItemV2 {
                     let mut items = Vec::new();
                     for item in story_ids.iter().skip(start_index).take(limit) {
                         if let Some(id) = item.id {
                             let story = self.get_item(id).await?;
-                            let canonical_url =
-                                format!("https://news.ycombinator.com/item?id={}", id);
-                            let content = ContentItem {
-                                item_ref: hn_item_ref("story", id),
-                                kind: "thread".to_string(),
-                                canonical_url: Some(canonical_url),
-                                title: story.title.clone().filter(|t| !t.is_empty()),
-                                created_at: hn_created_at_item(&story),
-                                source_updated_at: None,
-                                authors: hn_author(story.author.as_ref()),
-                                tags: Vec::new(),
-                                metadata: Some(json!({
-                                    "points": story.points,
-                                    "url": story.url,
-                                    "story_id": story.story_id,
-                                })),
-                                blocks: Vec::new(),
-                                relationships: Vec::new(),
-                                truncation: None,
-                            };
-                            items.push(content);
+                            items.push(item_v2::story_entry(id, &story));
                         }
                     }
 
-                    let page = NormalizedPageV1::new(
-                        items,
-                        next_cursor,
-                        has_more,
-                        Partial::complete(Some(ingest::limits_max_items(limit as u64))),
-                        Source::new("hackernews", "list_threads"),
-                    );
+                    let page = ItemsPage::new(items, next_cursor, Listing::Feed);
                     return structured_result(&page);
                 }
 
@@ -2018,74 +1826,8 @@ impl Connector for HackerNewsConnector {
                 let url = format!("https://hn.algolia.com/api/v1/items/{}", id);
                 let result = self.fetch_typed::<HackerNewsItem>(&url).await?;
 
-                if output_format == OutputFormat::NormalizedV1 {
-                    let story_id = result.id.unwrap_or(id);
-                    let item_ref = hn_item_ref("story", story_id);
-                    let canonical_url =
-                        format!("https://news.ycombinator.com/item?id={}", story_id);
-                    let mut blocks: Vec<ContentBlock> = Vec::new();
-                    let mut relationships: Vec<Relationship> = Vec::new();
-
-                    let body_text = result.text.as_deref().unwrap_or("");
-                    let body_clean = html_to_text(body_text);
-                    if !body_clean.is_empty() || result.title.as_deref().unwrap_or("").is_empty() {
-                        let body_ref = format!("hackernews:story_body:{}", story_id);
-                        blocks.push(ContentBlock {
-                            block_ref: body_ref.clone(),
-                            block_kind: "post_body".to_string(),
-                            text: body_clean,
-                            author: result.author.as_ref().map(|name| Author {
-                                name: name.to_string(),
-                                id: None,
-                            }),
-                            created_at: hn_created_at_item(&result),
-                            reply_to: None,
-                            position: None,
-                            score: None,
-                            attachments: Vec::new(),
-                            metadata: None,
-                        });
-                        relationships.push(Relationship {
-                            rel: "has_block".to_string(),
-                            from: item_ref.clone(),
-                            to: body_ref,
-                        });
-                    }
-
-                    append_hn_comments(
-                        &result,
-                        story_id,
-                        0,
-                        &item_ref,
-                        &mut blocks,
-                        &mut relationships,
-                    );
-
-                    let item = ContentItem {
-                        item_ref: item_ref.clone(),
-                        kind: "thread".to_string(),
-                        canonical_url: Some(canonical_url),
-                        title: result.title.clone().filter(|t| !t.is_empty()),
-                        created_at: hn_created_at_item(&result),
-                        source_updated_at: None,
-                        authors: hn_author(result.author.as_ref()),
-                        tags: Vec::new(),
-                        metadata: Some(json!({
-                            "points": result.points,
-                            "url": result.url,
-                            "story_id": result.story_id,
-                        })),
-                        blocks,
-                        relationships,
-                        truncation: None,
-                    };
-
-                    let normalized = NormalizedItemV1::new(
-                        item,
-                        Partial::complete(None),
-                        Source::new("hackernews", "get_thread"),
-                    );
-                    return structured_result(&normalized);
+                if output_format == OutputFormat::ItemV2 {
+                    return structured_result(&item_v2::thread_item(id, &result));
                 }
 
                 if response_format == "compact" {

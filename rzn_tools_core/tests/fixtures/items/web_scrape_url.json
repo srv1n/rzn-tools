@@ -1,0 +1,22 @@
+{
+  "type": "rzn.item/v2",
+  "key": "web:page:aHR0cHM6Ly9leGFtcGxlLmNvbS8",
+  "kind": "page",
+  "url": "https://example.com/",
+  "title": "Example Page",
+  "published_in": {
+    "name": "example.com",
+    "id": "example.com"
+  },
+  "blocks": [
+    {
+      "id": "content",
+      "kind": "paragraph",
+      "text": "Example content."
+    }
+  ],
+  "author": {
+    "name": "example.com"
+  },
+  "published_at": "2025-01-01T00:00:00Z"
+}
