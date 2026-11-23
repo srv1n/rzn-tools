@@ -100,6 +100,9 @@ pub(super) fn transcript_blocks(
             });
             if let Some(chapter) = chapter_at(chapters, segment.start_ms) {
                 block.path = vec![chapter.title.clone()];
+                block
+                    .fields
+                    .insert("chapter".to_string(), json!(chapter.title));
             }
             block
         })
@@ -266,6 +269,7 @@ mod tests {
             json!({"time": {"start_ms": 0, "end_ms": 2500}})
         );
         assert_eq!(value["blocks"][1]["path"], json!(["Night weaning"]));
+        assert_eq!(value["blocks"][1]["fields"]["chapter"], "Night weaning");
         assert_eq!(value["blocks"][1]["at"]["time"]["start_ms"], 61_000);
         for block in value["blocks"].as_array().unwrap() {
             assert_eq!(block["kind"], "transcript");
