@@ -3176,6 +3176,7 @@ AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
         builder = builder.default_headers(headers);
     }
     builder
+        .timeout(StdDuration::from_secs(20))
         .build()
         .map_err(|e| ConnectorError::Other(e.to_string()))
 }
@@ -3372,8 +3373,7 @@ async fn fetch_transcript_with_fallback(
 ) -> Result<TimedTextTranscript, (&'static str, String)> {
     match fetch_transcript_from_player(client, player).await {
         Ok(transcript) => Ok(transcript),
-        Err(error @ ("transcripts_disabled", _)) => Err(error),
-        Err(primary) => match fetch_transcript_via_yt_dlp(video_id).await {
+        Err(primary) => match fetch_transcript_via_yt_dlp(client, video_id).await {
             Ok(transcript) => Ok(transcript),
             Err(fallback) => {
                 tracing::warn!(error = %fallback, video_id, "Optional yt-dlp fallback failed");
@@ -3436,11 +3436,23 @@ fn extract_caption_tracks(player: &Value) -> Result<Vec<TimedTextTrack>, Connect
 }
 
 async fn fetch_transcript_via_yt_dlp(
+    client: &HttpClient,
     video_id: &str,
 ) -> Result<TimedTextTranscript, ConnectorError> {
     let mut cmd = Command::new("yt-dlp");
     cmd.arg("-J")
+        .arg("--ignore-config")
+        .arg("--no-playlist")
         .arg("--skip-download")
+        .arg("--ignore-no-formats-error")
+        .arg("--js-runtimes")
+        .arg("node")
+        .arg("--socket-timeout")
+        .arg("10")
+        .arg("--retries")
+        .arg("1")
+        .arg("--extractor-retries")
+        .arg("1")
         .arg("--no-warnings")
         .arg(format!("https://www.youtube.com/watch?v={video_id}"))
         .kill_on_drop(true);
@@ -3467,17 +3479,13 @@ async fn fetch_transcript_via_yt_dlp(
             ConnectorError::Other("yt-dlp output did not include usable caption URLs".to_string())
         })?;
 
-    let client = HttpClient::builder()
-        .user_agent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
-AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        )
-        .build()
-        .map_err(|e| ConnectorError::Other(e.to_string()))?;
-    fetch_transcript_from_timedtext_url(&client, &timedtext_url)
+    fetch_transcript_from_timedtext_url(client, &timedtext_url)
         .await
         .map(|mut transcript| {
-            transcript.language_code = language_code;
+            transcript.language_code = language_code
+                .strip_suffix("-orig")
+                .unwrap_or(&language_code)
+                .to_string();
             transcript.is_generated = is_generated;
             transcript
         })
@@ -3549,18 +3557,36 @@ fn select_yt_dlp_caption_url(info: &Value) -> Option<(String, String, bool)> {
     let automatic = info.get("automatic_captions").and_then(|v| v.as_object());
     let subtitles = info.get("subtitles").and_then(|v| v.as_object());
 
-    for preferred in ENGLISH_CODES {
-        if let Some((url, lang, generated)) = automatic
-            .and_then(|m| select_track_url_for_lang(m, preferred, true))
-            .or_else(|| subtitles.and_then(|m| select_track_url_for_lang(m, preferred, false)))
-        {
-            return Some((url, lang, generated));
+    // Match the native path: manual English before generated English.
+    // Auto-generated endpoints can be rate-limited while manual captions still work.
+    for (tracks, generated) in [(subtitles, false), (automatic, true)] {
+        // yt-dlp's `en` can be an auto-translation of another language.
+        // `en-orig` is the original English track and avoids translation rate limits.
+        for preferred in if generated {
+            ["en-orig", "en", "en-us", "en-gb", "en-in"]
+        } else {
+            ENGLISH_CODES
+        } {
+            if let Some(selected) =
+                tracks.and_then(|m| select_track_url_for_lang(m, preferred, generated))
+            {
+                return Some(selected);
+            }
+        }
+        if let Some(selected) = tracks.and_then(|m| {
+            m.iter()
+                .filter(|(language_code, _)| language_code.to_ascii_lowercase().starts_with("en-"))
+                .find_map(|(language_code, tracks)| {
+                    select_track_url(tracks).map(|url| (url, language_code.clone(), generated))
+                })
+        }) {
+            return Some(selected);
         }
     }
 
-    automatic
-        .and_then(|m| select_any_track_url(m, true))
-        .or_else(|| subtitles.and_then(|m| select_any_track_url(m, false)))
+    subtitles
+        .and_then(|m| select_any_track_url(m, false))
+        .or_else(|| automatic.and_then(|m| select_any_track_url(m, true)))
 }
 
 fn select_track_url_for_lang(
@@ -3593,17 +3619,16 @@ fn select_track_url(tracks: &Value) -> Option<String> {
             .and_then(|v| v.as_str())
             .unwrap_or_default();
         if ext.eq_ignore_ascii_case("json3") {
-            if let Some(url) = entry.get("url").and_then(|v| v.as_str()) {
+            if let Some(url) = entry
+                .get("url")
+                .and_then(Value::as_str)
+                .filter(|url| !url.is_empty())
+            {
                 return Some(url.to_string());
             }
         }
     }
-    entries.iter().find_map(|entry| {
-        entry
-            .get("url")
-            .and_then(|v| v.as_str())
-            .map(ToString::to_string)
-    })
+    None
 }
 
 async fn fetch_transcript_from_timedtext_url(
@@ -3944,6 +3969,70 @@ mod tests {
         );
         assert_eq!(chapters[0].content, "Hello & welcome");
         assert_eq!(chapters[1].content, "Main point");
+    }
+
+    #[test]
+    fn yt_dlp_caption_selection_prefers_manual_english_and_requires_json3() {
+        let manual = json!([{ "ext": "json3", "url": "https://example.test/manual" }]);
+        let generated = json!([{ "ext": "json3", "url": "https://example.test/generated" }]);
+        let unsupported = json!([
+            { "ext": "vtt", "url": "https://example.test/manual.vtt" },
+            { "ext": "json3", "url": "" }
+        ]);
+
+        for language in ["en", "en-US", "en-AU"] {
+            let info = json!({
+                "subtitles": { language: manual.clone() },
+                "automatic_captions": { "en": generated.clone() }
+            });
+            assert_eq!(
+                select_yt_dlp_caption_url(&info),
+                Some((
+                    "https://example.test/manual".to_string(),
+                    language.to_string(),
+                    false
+                ))
+            );
+        }
+
+        let info = json!({
+            "subtitles": { "en": unsupported.clone(), "es": manual.clone() },
+            "automatic_captions": { "en": generated.clone() }
+        });
+        assert_eq!(
+            select_yt_dlp_caption_url(&info),
+            Some((
+                "https://example.test/generated".to_string(),
+                "en".to_string(),
+                true
+            ))
+        );
+        let info = json!({
+            "automatic_captions": {
+                "en": [{ "ext": "json3", "url": "https://example.test/captions?lang=ar&tlang=en" }],
+                "en-orig": [{ "ext": "json3", "url": "https://example.test/captions?lang=en" }]
+            }
+        });
+        assert_eq!(
+            select_yt_dlp_caption_url(&info),
+            Some((
+                "https://example.test/captions?lang=en".to_string(),
+                "en-orig".to_string(),
+                true
+            ))
+        );
+        assert_eq!(
+            select_yt_dlp_caption_url(&json!({ "subtitles": { "es": manual } })),
+            Some((
+                "https://example.test/manual".to_string(),
+                "es".to_string(),
+                false
+            ))
+        );
+        assert!(select_yt_dlp_caption_url(&json!({
+            "subtitles": { "en": unsupported }, "automatic_captions": {}
+        }))
+        .is_none());
     }
 
     #[tokio::test]
