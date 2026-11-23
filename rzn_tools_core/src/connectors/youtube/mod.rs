@@ -1169,7 +1169,7 @@ impl Connector for YouTubeConnector {
                 let chapters = video_info.chapters.clone();
 
                 let mut transcript_unavailable_reason: Option<&'static str> = None;
-                let transcript = fetch_transcript_with_fallback(&client, &player, &video_id).await;
+                let transcript = fetch_transcript_with_fallback(&client, &player, &video_id, &watch_html).await;
                 if want_item {
                     let fetched = match &transcript {
                         Ok(fetched) => Ok((
@@ -2442,6 +2442,15 @@ fn collect_playlist_video_renderers<'a>(value: &'a Value, out: &mut Vec<&'a Valu
                 out.push(renderer);
                 return;
             }
+            // Playlist pages render their entries as video lockups since late 2026.
+            if let Some(renderer) = map.get("lockupViewModel") {
+                if renderer.get("contentType").and_then(Value::as_str)
+                    == Some("LOCKUP_CONTENT_TYPE_VIDEO")
+                {
+                    out.push(renderer);
+                    return;
+                }
+            }
             for child in map.values() {
                 collect_playlist_video_renderers(child, out);
             }
@@ -2562,6 +2571,9 @@ fn listed_video_from_lockup_view_model(
 }
 
 fn listed_video_from_playlist_renderer(renderer: &Value) -> Option<ListedVideo> {
+    if renderer.get("contentType").is_some() {
+        return listed_video_from_lockup_view_model(renderer, None);
+    }
     let id = renderer
         .get("videoId")
         .or_else(|| renderer.get("video_id"))?
@@ -3127,21 +3139,59 @@ fn extract_video_chapters(player: &Value) -> Vec<VideoChapter> {
     chapters
 }
 
+/// The watch page's caption URLs need a proof-of-origin token since late 2026 and come back
+/// empty without one; the Android player's caption URLs still answer, so they are the second try.
 async fn fetch_transcript_with_fallback(
     client: &HttpClient,
     player: &Value,
     video_id: &str,
+    watch_html: &str,
 ) -> Result<TimedTextTranscript, (&'static str, String)> {
-    match fetch_transcript_from_player(client, player).await {
+    let primary = match fetch_transcript_from_player(client, player).await {
+        Ok(transcript) => return Ok(transcript),
+        Err(primary) => primary,
+    };
+    let android = match fetch_android_player(client, watch_html, video_id).await {
+        Ok(android) => fetch_transcript_from_player(client, &android).await,
+        Err(error) => Err(("upstream_request_failed", error.to_string())),
+    };
+    match android {
         Ok(transcript) => Ok(transcript),
-        Err(primary) => match fetch_transcript_via_yt_dlp(client, video_id).await {
-            Ok(transcript) => Ok(transcript),
-            Err(fallback) => {
-                tracing::warn!(error = %fallback, video_id, "Optional yt-dlp fallback failed");
-                Err(primary)
+        Err(android) => {
+            tracing::warn!(error = %android.1, video_id, "Android player captions failed");
+            match fetch_transcript_via_yt_dlp(client, video_id).await {
+                Ok(transcript) => Ok(transcript),
+                Err(fallback) => {
+                    tracing::warn!(error = %fallback, video_id, "Optional yt-dlp fallback failed");
+                    Err(primary)
+                }
             }
-        },
+        }
     }
+}
+
+const ANDROID_CLIENT_VERSION: &str = "20.10.38";
+
+async fn fetch_android_player(
+    client: &HttpClient,
+    watch_html: &str,
+    video_id: &str,
+) -> Result<Value, ConnectorError> {
+    let api_key = extract_innertube_config(watch_html)?.api_key;
+    client
+        .post(format!("https://www.youtube.com/youtubei/v1/player?key={api_key}"))
+        .json(&json!({
+            "context": {"client": {"clientName": "ANDROID", "clientVersion": ANDROID_CLIENT_VERSION}},
+            "videoId": video_id,
+        }))
+        .send()
+        .await
+        .map_err(ConnectorError::HttpRequest)?
+        .error_for_status()
+        .map_err(ConnectorError::HttpRequest)?
+        .json()
+        .await
+        .map_err(ConnectorError::HttpRequest)
 }
 
 async fn fetch_transcript_from_player(
@@ -4268,6 +4318,52 @@ mod tests {
             extract_continuation_token(&initial.root).as_deref(),
             Some("next-token")
         );
+    }
+
+    #[test]
+    fn playlist_entries_rendered_as_video_lockups_are_listed() {
+        let page = json!({
+            "itemSectionRenderer": {
+                "contents": [
+                    {
+                        "lockupViewModel": {
+                            "contentId": "fNk_zzaMoSs",
+                            "contentType": "LOCKUP_CONTENT_TYPE_VIDEO",
+                            "metadata": {
+                                "lockupMetadataViewModel": {
+                                    "title": {"content": "Vectors | Chapter 1"}
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "lockupViewModel": {
+                            "contentId": "PLother",
+                            "contentType": "LOCKUP_CONTENT_TYPE_PLAYLIST",
+                            "metadata": {
+                                "lockupMetadataViewModel": {"title": {"content": "Another playlist"}}
+                            }
+                        }
+                    }
+                ]
+            }
+        });
+        let mut seen_ids = HashSet::new();
+        let mut videos = Vec::new();
+
+        append_videos_from_value(
+            &page,
+            ListSource::Playlist,
+            None,
+            None,
+            None,
+            &mut seen_ids,
+            &mut videos,
+        );
+
+        assert_eq!(videos.len(), 1);
+        assert_eq!(videos[0].id, "fNk_zzaMoSs");
+        assert_eq!(videos[0].title, "Vectors | Chapter 1");
     }
 
     #[test]
