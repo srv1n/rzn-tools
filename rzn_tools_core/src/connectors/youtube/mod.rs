@@ -1175,7 +1175,10 @@ impl Connector for YouTubeConnector {
                 let watch_html = fetch_youtube_watch_html(&client, &video_id).await?;
                 let player = extract_player_response(&watch_html)?;
                 classify_player_response(&player, &video_id)?;
-                let video_info = parse_video_details(&player, &video_id)?;
+                let mut video_info = parse_video_details(&player, &video_id)?;
+                if video_info.chapters.is_empty() {
+                    video_info.chapters = watch_page_chapters(&watch_html);
+                }
                 let chapters = video_info.chapters.clone();
 
                 let mut transcript_unavailable_reason: Option<&'static str> = None;
@@ -3121,6 +3124,17 @@ fn parse_video_details(
     })
 }
 
+/// A real watch page carries chapters in `ytInitialData` (the player bar's markers and the
+/// chapters panel), not in the player JSON.
+fn watch_page_chapters(watch_html: &str) -> Vec<VideoChapter> {
+    ["var ytInitialData = ", "window[\"ytInitialData\"] = "]
+        .iter()
+        .find_map(|marker| extract_json_object_after_marker(watch_html, marker))
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .map(|data| extract_video_chapters(&data))
+        .unwrap_or_default()
+}
+
 fn extract_video_chapters(player: &Value) -> Vec<VideoChapter> {
     fn collect(value: &Value, out: &mut Vec<VideoChapter>) {
         match value {
@@ -3672,6 +3686,26 @@ mod tests {
         assert_eq!(details.view_count, 42);
         assert_eq!(details.chapters.len(), 2);
         assert_eq!(details.chapters[1].start_time, 60);
+    }
+
+    #[test]
+    fn chapters_come_from_the_watch_page_initial_data() {
+        let data = json!({"playerOverlays": {"playerOverlayRenderer": {"decoratedPlayerBarRenderer": {
+        "decoratedPlayerBarRenderer": {"playerBar": {"multiMarkersPlayerBarRenderer": {
+            "markersMap": [{"value": {"chapters": [
+                {"chapterRenderer": {"title": {"simpleText": "Intro"}, "timeRangeStartMillis": 0}},
+                {"chapterRenderer": {"title": {"simpleText": "Shear"}, "timeRangeStartMillis": 95000}}
+            ]}}]}}}}}}});
+        let html = format!(
+            "<script>var ytInitialPlayerResponse = {{}};</script><script>var ytInitialData = {data};</script>"
+        );
+        let chapters = watch_page_chapters(&html);
+        assert_eq!(chapters.len(), 2);
+        assert_eq!(chapters[1].title, "Shear");
+        assert_eq!(chapters[1].start_time, 95);
+        assert!(
+            watch_page_chapters("<script>var ytInitialPlayerResponse = {};</script>").is_empty()
+        );
     }
 
     #[test]
