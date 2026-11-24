@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::ConnectorError;
+use crate::http::Egress;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceAuthStart {
@@ -38,7 +39,8 @@ pub async fn ms_device_authorize(
         ("client_id", client_id.to_string()),
         ("scope", scopes.to_string()),
     ];
-    let resp = reqwest::Client::new()
+    let resp = Egress::default()
+        .client(|b| b)?
         .post(url)
         .form(&body)
         .send()
@@ -92,7 +94,8 @@ pub async fn ms_device_poll(
         ("client_id", client_id.to_string()),
         ("device_code", device_code.to_string()),
     ];
-    let resp = reqwest::Client::new()
+    let resp = Egress::default()
+        .client(|b| b)?
         .post(url)
         .form(&body)
         .send()
@@ -136,7 +139,8 @@ pub async fn google_device_authorize(
         ("client_id", client_id.to_string()),
         ("scope", scopes.to_string()),
     ];
-    let resp = reqwest::Client::new()
+    let resp = Egress::default()
+        .client(|b| b)?
         .post(url)
         .form(&body)
         .send()
@@ -190,7 +194,8 @@ pub async fn google_device_poll(
             body.push(("client_secret", cs.to_string()));
         }
     }
-    let resp = reqwest::Client::new()
+    let resp = Egress::default()
+        .client(|b| b)?
         .post(url)
         .form(&body)
         .send()
@@ -295,7 +300,8 @@ pub async fn ms_refresh_token(
             body.push(("client_secret", s.to_string()));
         }
     }
-    let resp = reqwest::Client::new()
+    let resp = Egress::default()
+        .client(|b| b)?
         .post(url)
         .form(&body)
         .send()
@@ -346,7 +352,8 @@ pub async fn google_refresh_token(
             body.push(("client_secret", cs.to_string()));
         }
     }
-    let resp = reqwest::Client::new()
+    let resp = Egress::default()
+        .client(|b| b)?
         .post(url)
         .form(&body)
         .send()

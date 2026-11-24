@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::borrow::Cow;
@@ -8,6 +7,7 @@ use std::sync::Arc;
 
 use crate::auth::AuthDetails;
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::ingest::{self, OutputFormat};
 use crate::item::{ItemsPage, Listing};
 use crate::utils::{html_to_text, structured_result, structured_result_with_text};
@@ -974,36 +974,14 @@ pub struct BannerLink {
 // Remove AlgoliaHit and related structs
 #[derive(Clone)]
 pub struct HackerNewsConnector {
-    client: reqwest::Client,
-}
-
-impl Default for HackerNewsConnector {
-    fn default() -> Self {
-        Self::new()
-    }
+    client: HttpClient,
 }
 
 impl HackerNewsConnector {
-    pub fn new() -> Self {
-        HackerNewsConnector {
-            client: reqwest::Client::builder()
-                .user_agent("rzn-tools/0.1.0")
-                .build()
-                .unwrap_or_else(|_| reqwest::Client::new()),
-        }
-    }
-
-    fn client_from_proxy(proxy_url: Option<&str>) -> Result<reqwest::Client, ConnectorError> {
-        let mut builder = reqwest::Client::builder().user_agent("rzn-tools/0.1.0");
-        if let Some(url) = proxy_url {
-            let proxy = reqwest::Proxy::all(url).map_err(|e| {
-                ConnectorError::InvalidParams(format!("Invalid proxy_url '{}': {}", url, e))
-            })?;
-            builder = builder.proxy(proxy);
-        }
-        builder
-            .build()
-            .map_err(|e| ConnectorError::Other(format!("Failed to build HTTP client: {}", e)))
+    pub fn new() -> Result<Self, ConnectorError> {
+        Ok(HackerNewsConnector {
+            client: HttpClient::new(Egress::default(), |b| b.user_agent("rzn-tools/0.1.0"))?,
+        })
     }
 
     // Helper: fetch JSON from URL
@@ -1232,11 +1210,8 @@ impl Connector for HackerNewsConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
-        // No auth required for public Hacker News APIs, but profiles may still want to
-        // route traffic via a per-account proxy.
-        let proxy_url = details.get("proxy_url").map(String::as_str);
-        self.client = Self::client_from_proxy(proxy_url)?;
-        Ok(())
+        // No auth for the public Hacker News APIs; a connection may still set a proxy.
+        self.client.apply_auth(&details)
     }
 
     async fn test_auth(&self) -> Result<(), ConnectorError> {
@@ -1945,7 +1920,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_invalid_proxy_url() {
-        let mut connector = HackerNewsConnector::new();
+        let mut connector = HackerNewsConnector::new().unwrap();
         let mut details = AuthDetails::new();
         details.insert("proxy_url".to_string(), "not a url".to_string());
 
@@ -2007,7 +1982,7 @@ mod tests {
 
     #[tokio::test]
     async fn tool_schema_advertises_string_friendly_id_inputs() {
-        let connector = HackerNewsConnector::new();
+        let connector = HackerNewsConnector::new().unwrap();
         let tools = connector.list_tools(None).await.expect("list tools").tools;
 
         for tool_name in ["get_thread"] {

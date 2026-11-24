@@ -1765,7 +1765,7 @@ mod tests {
     async fn prefixed_hackernews_tools_expose_string_friendly_id_schema() {
         let mut registry = ProviderRegistry::new();
         registry.register_provider(Box::new(
-            crate::connectors::hackernews::HackerNewsConnector::new(),
+            crate::connectors::hackernews::HackerNewsConnector::new().unwrap(),
         ));
         let server = McpServer::new(Arc::new(Mutex::new(registry)));
 

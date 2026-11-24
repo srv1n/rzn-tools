@@ -9,6 +9,7 @@ use crate::auth::AuthDetails;
 use crate::auth_store::{AuthStore, FileAuthStore};
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::oauth;
 use crate::utils::structured_result_with_text;
 use crate::Connector;
@@ -18,16 +19,15 @@ const GSC_URL_INSPECTION_ENDPOINT: &str =
     "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect";
 
 pub struct GoogleSearchConsoleConnector {
-    client: reqwest::Client,
+    client: HttpClient,
     auth: RwLock<AuthDetails>,
 }
 
 impl GoogleSearchConsoleConnector {
     pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
-        let client = reqwest::Client::builder()
-            .user_agent("rzn-tools/0.2 (google-search-console)")
-            .build()
-            .map_err(|e| ConnectorError::Other(e.to_string()))?;
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| {
+            b.user_agent("rzn-tools/0.2 (google-search-console)")
+        })?;
         Ok(Self {
             client,
             auth: RwLock::new(auth),
@@ -868,6 +868,7 @@ impl Connector for GoogleSearchConsoleConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         let mut guard = self.auth.write().await;
         *guard = details;
         Ok(())

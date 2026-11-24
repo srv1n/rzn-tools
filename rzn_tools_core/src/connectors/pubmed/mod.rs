@@ -1,9 +1,10 @@
 use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::ingest::{self, OutputFormat};
 use crate::item::{rfc3339, Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{collect_paginated, structured_result_with_text, Page};
-use crate::{Connector, URLParamExtraction, URLPatternSpec};
+use crate::{auth::AuthDetails, Connector, URLParamExtraction, URLPatternSpec};
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, ACCEPT_LANGUAGE};
 use rmcp::model::*;
@@ -257,7 +258,7 @@ impl PubMedAbstract {
 
 #[derive(Clone)]
 pub struct PubMedConnector {
-    client: reqwest::Client,
+    client: HttpClient,
     headers: HeaderMap,
 }
 
@@ -267,7 +268,8 @@ const MAX_SEARCH_PAGES: usize = 100;
 impl PubMedConnector {
     pub async fn new() -> Result<Self, ConnectorError> {
         // Build a tuned HTTP client to avoid slow handshakes or protocol quirks
-        let client = reqwest::Client::builder()
+        let client = HttpClient::new(Egress::default(), |b| {
+            b
             // http/2 can occasionally stall on misconfigured servers; http1 is safer for scraping
             .http1_only()
             .connect_timeout(Duration::from_secs(5))
@@ -275,8 +277,7 @@ impl PubMedConnector {
             .pool_max_idle_per_host(2)
             .tcp_keepalive(Some(Duration::from_secs(30)))
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36")
-            .build()
-            .map_err(|e| ConnectorError::Other(format!("failed to build http client: {}", e)))?;
+        })?;
 
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -826,6 +827,10 @@ impl PubMedConnector {
 
 #[async_trait]
 impl Connector for PubMedConnector {
+    async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)
+    }
+
     fn name(&self) -> &'static str {
         "pubmed"
     }

@@ -18,7 +18,7 @@ serde_yaml = "0.9"
 toml = "0.9.10"
 tokio = { version = "1.47.1", default-features = false, features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "io-std", "process"] }
 thiserror = "2.0.17"
-reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls", "socks"] }
 tracing = { version = "0.1.41", default-features = false, features = ["std"] }
 regex = { version = "1.11.3", default-features = false, features = [
     "std",

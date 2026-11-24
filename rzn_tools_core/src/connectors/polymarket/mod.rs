@@ -1,15 +1,16 @@
 use crate::error::ConnectorError;
 use crate::ingest::{self, OutputFormat};
 use crate::item::{Block, Item, ItemsPage, Listing, Party};
-use crate::utils::{build_reqwest_client, structured_result, structured_result_with_text};
+use crate::utils::{structured_result, structured_result_with_text};
 use crate::{
+    auth::AuthDetails,
+    http::{Egress, HttpClient},
     CallToolRequestParam, Connector, ListToolsResult, PaginatedRequestParam, Tool,
     URLParamExtraction, URLPatternSpec,
 };
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use reqwest::Client;
 use serde::de::{self, Deserializer};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -977,15 +978,13 @@ struct OutcomeTokenInfo {
 }
 
 pub struct PolymarketConnector {
-    client: Client,
+    client: HttpClient,
 }
 
 impl PolymarketConnector {
     pub async fn new() -> Result<Self, ConnectorError> {
-        let client = build_reqwest_client(|| {
-            Client::builder()
-                .timeout(Duration::from_secs(20))
-                .user_agent(USER_AGENT)
+        let client = HttpClient::new(Egress::default(), |b| {
+            b.timeout(Duration::from_secs(20)).user_agent(USER_AGENT)
         })?;
 
         Ok(Self { client })
@@ -3084,6 +3083,10 @@ where
 
 #[async_trait]
 impl Connector for PolymarketConnector {
+    async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)
+    }
+
     fn name(&self) -> &'static str {
         "polymarket"
     }

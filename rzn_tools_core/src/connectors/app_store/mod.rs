@@ -1,6 +1,7 @@
+use crate::http::{Egress, HttpClient};
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, USER_AGENT};
-use reqwest::{Client, Method, StatusCode};
+use reqwest::{Method, StatusCode};
 use rmcp::model::*;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -37,19 +38,18 @@ struct ReviewsInput {
 }
 
 pub struct AppStoreConnector {
-    http: Client,
+    http: HttpClient,
 }
 
 impl AppStoreConnector {
-    pub async fn new(_auth: AuthDetails) -> Result<Self, ConnectorError> {
+    pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
         let mut headers = HeaderMap::new();
         headers.insert(USER_AGENT, HeaderValue::from_static(APP_STORE_USER_AGENT));
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
-        let http = Client::builder()
-            .default_headers(headers)
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .map_err(ConnectorError::HttpRequest)?;
+        let http = HttpClient::new(Egress::from_auth(&auth)?, move |b| {
+            b.default_headers(headers.clone())
+                .timeout(std::time::Duration::from_secs(30))
+        })?;
         Ok(Self { http })
     }
 
@@ -89,6 +89,10 @@ impl AppStoreConnector {
 
 #[async_trait]
 impl Connector for AppStoreConnector {
+    async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.http.apply_auth(&details)
+    }
+
     fn name(&self) -> &'static str {
         "app-store"
     }

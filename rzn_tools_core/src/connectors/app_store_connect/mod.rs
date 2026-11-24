@@ -1,8 +1,9 @@
+use crate::http::{Egress, HttpClient};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
-use reqwest::{Client, Method, StatusCode};
+use reqwest::{Method, StatusCode};
 use rmcp::model::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -187,10 +188,10 @@ struct DownloadFinanceReportInput {
     max_preview_chars: Option<usize>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct AppStoreConnectConnector {
     auth: AuthDetails,
-    client: Client,
+    client: HttpClient,
 }
 
 impl AppStoreConnectConnector {
@@ -199,11 +200,10 @@ impl AppStoreConnectConnector {
         headers.insert(USER_AGENT, HeaderValue::from_static(ASC_USER_AGENT));
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
 
-        let client = Client::builder()
-            .default_headers(headers)
-            .timeout(std::time::Duration::from_secs(60))
-            .build()
-            .map_err(ConnectorError::HttpRequest)?;
+        let client = HttpClient::new(Egress::from_auth(&auth)?, move |b| {
+            b.default_headers(headers.clone())
+                .timeout(std::time::Duration::from_secs(60))
+        })?;
 
         Ok(Self { auth, client })
     }
@@ -337,7 +337,7 @@ impl AppStoreConnectConnector {
         accept: Option<&'static str>,
     ) -> Result<reqwest::Response, ConnectorError>
     where
-        F: Fn(&Client, String) -> reqwest::RequestBuilder,
+        F: Fn(&reqwest::Client, String) -> reqwest::RequestBuilder,
     {
         use tokio::time::{sleep, Duration as TokioDuration};
 
@@ -345,7 +345,7 @@ impl AppStoreConnectConnector {
         let mut delay_ms = 700u64;
         for attempt in 0..=MAX_RETRIES {
             let token = self.jwt_token()?;
-            let mut req = build(&self.client, token);
+            let mut req = build(&*self.client, token);
             if let Some(accept_value) = accept {
                 req = req.header(ACCEPT, accept_value);
             }
@@ -1312,6 +1312,7 @@ impl Connector for AppStoreConnectConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         self.auth = details.clone();
         if !details.is_empty() {
             let _ = FileAuthStore::new_default().save(self.name(), &details);

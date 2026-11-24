@@ -4,7 +4,7 @@ use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let connector = HackerNewsConnector::new();
+    let connector = HackerNewsConnector::new()?;
     connector.test_auth().await?;
 
     let search_response = connector

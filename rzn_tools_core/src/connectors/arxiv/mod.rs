@@ -1,13 +1,13 @@
 use crate::capabilities::ConnectorConfigSchema;
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::ingest::{self, OutputFormat};
 use crate::item::{rfc3339, Block, Item, ItemsPage, Listing, Party};
-use crate::utils::{build_reqwest_client, structured_result, structured_result_with_text};
+use crate::utils::{structured_result, structured_result_with_text};
 use crate::{auth::AuthDetails, Connector, URLParamExtraction, URLPatternSpec};
 use async_trait::async_trait;
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
-use reqwest::Client;
 use rmcp::model::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -112,13 +112,13 @@ struct ArxivCursor {
 }
 
 pub struct ArxivConnector {
-    client: Client,
+    client: HttpClient,
 }
 
 impl ArxivConnector {
-    pub async fn new(_auth: AuthDetails) -> Result<Self, ConnectorError> {
+    pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
         Ok(Self {
-            client: build_reqwest_client(Client::builder)?,
+            client: HttpClient::new(Egress::from_auth(&auth)?, |b| b)?,
         })
     }
 
@@ -468,6 +468,10 @@ impl ArxivConnector {
 
 #[async_trait]
 impl Connector for ArxivConnector {
+    async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)
+    }
+
     fn name(&self) -> &'static str {
         "arxiv"
     }

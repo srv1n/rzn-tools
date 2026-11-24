@@ -9,6 +9,7 @@ use crate::auth::AuthDetails;
 use crate::auth_store::{AuthStore, FileAuthStore};
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::utils::structured_result_with_text;
 use crate::Connector;
 use crate::{URLParamExtraction, URLPatternSpec};
@@ -16,11 +17,15 @@ use crate::{URLParamExtraction, URLPatternSpec};
 #[derive(Clone)]
 pub struct GitHubConnector {
     auth: AuthDetails,
+    client: HttpClient,
 }
 
 impl GitHubConnector {
     pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
-        Ok(Self { auth })
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| {
+            b.user_agent("rzn-datasourcer/0.1 github-connector")
+        })?;
+        Ok(Self { auth, client })
     }
 
     fn resolve_token(&self) -> Option<String> {
@@ -48,16 +53,13 @@ impl GitHubConnector {
         F: Fn(&reqwest::Client) -> reqwest::RequestBuilder,
     {
         use tokio::time::{sleep, Duration};
-        let client = reqwest::Client::builder()
-            .user_agent("rzn-datasourcer/0.1 github-connector")
-            .build()
-            .map_err(|e| ConnectorError::Other(e.to_string()))?;
+        let client = &*self.client;
         const MAX_RETRIES: usize = 4;
         let mut delay_ms = 700u64;
         for attempt in 0..=MAX_RETRIES {
-            let resp = build(&client)
+            let resp = build(client)
                 .try_clone()
-                .unwrap_or_else(|| build(&client))
+                .unwrap_or_else(|| build(client))
                 .send()
                 .await;
             match resp {
@@ -625,7 +627,8 @@ impl Connector for GitHubConnector {
                     })
                     .await?;
                 // send_with_backoff parsed JSON; but diff is text. Fallback to bytes fetch without JSON parsing using one more request
-                let raw = reqwest::Client::new()
+                let raw = self
+                    .client
                     .get(url)
                     .header(reqwest::header::ACCEPT, "application/vnd.github.v3.diff")
                     .bearer_auth(token)
@@ -736,7 +739,7 @@ impl Connector for GitHubConnector {
                 structured_result_with_text(&v, None)
             }
             "auth_start" => {
-                let client = reqwest::Client::new();
+                let client = &self.client;
                 let m: serde_json::Map<String, Value> = args_map;
                 let client_id = m
                     .get("client_id")
@@ -756,7 +759,7 @@ impl Connector for GitHubConnector {
                 structured_result_with_text(&resp, None)
             }
             "auth_poll" => {
-                let client = reqwest::Client::new();
+                let client = &self.client;
                 let m: serde_json::Map<String, Value> = args_map;
                 let client_id = m
                     .get("client_id")
@@ -824,6 +827,7 @@ impl Connector for GitHubConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         self.auth = details.clone();
         if !self.auth.is_empty() {
             let store = FileAuthStore::new_default();

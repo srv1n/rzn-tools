@@ -1,5 +1,6 @@
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::ingest::{self, OutputFormat};
 #[cfg(feature = "browser-cookie-import")]
 use crate::utils::get_cookies;
@@ -82,7 +83,7 @@ mod item_v2;
 
 #[derive(Clone)]
 pub struct WebConnector {
-    client: reqwest::Client,
+    client: HttpClient,
     pub headers: HeaderMap,
     pub browser: Browser,
     cookie_cache: Arc<Mutex<HashMap<String, String>>>,
@@ -97,15 +98,14 @@ impl WebConnector {
         )
         .await?;
 
-        let client = reqwest::Client::builder()
-            .http1_only()
-            .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_secs(20))
-            .pool_max_idle_per_host(2)
-            .tcp_keepalive(Some(Duration::from_secs(30)))
-            .user_agent(DEFAULT_USER_AGENT)
-            .build()
-            .map_err(|e| ConnectorError::Other(format!("failed to build http client: {}", e)))?;
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| {
+            b.http1_only()
+                .connect_timeout(Duration::from_secs(5))
+                .timeout(Duration::from_secs(20))
+                .pool_max_idle_per_host(2)
+                .tcp_keepalive(Some(Duration::from_secs(30)))
+                .user_agent(DEFAULT_USER_AGENT)
+        })?;
 
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -544,6 +544,7 @@ impl Connector for WebConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         self.headers.clear();
 
         let user_agent = details

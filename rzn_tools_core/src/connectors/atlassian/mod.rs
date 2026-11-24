@@ -9,22 +9,22 @@ use crate::auth::AuthDetails;
 use crate::auth_store::{AuthStore, FileAuthStore};
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::utils::structured_result_with_text;
 use crate::Connector;
 use base64::Engine as _;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct AtlassianConnector {
     auth: AuthDetails,
-    client: reqwest::Client,
+    client: HttpClient,
 }
 
 impl AtlassianConnector {
     pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
-        let client = reqwest::Client::builder()
-            .user_agent("rzn-datasourcer/0.1 atlassian-connector")
-            .build()
-            .map_err(|e| ConnectorError::Other(e.to_string()))?;
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| {
+            b.user_agent("rzn-datasourcer/0.1 atlassian-connector")
+        })?;
         Ok(Self { auth, client })
     }
 
@@ -124,9 +124,9 @@ impl AtlassianConnector {
         const MAX_RETRIES: usize = 4;
         let mut delay_ms = 700u64;
         for attempt in 0..=MAX_RETRIES {
-            let resp = build(&self.client)
+            let resp = build(&*self.client)
                 .try_clone()
-                .unwrap_or_else(|| build(&self.client))
+                .unwrap_or_else(|| build(&*self.client))
                 .send()
                 .await;
             match resp {
@@ -341,6 +341,7 @@ impl Connector for AtlassianConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         self.auth = details.clone();
         let _ = FileAuthStore::new_default().save(self.name(), &details);
         Ok(())

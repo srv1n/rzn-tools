@@ -7,6 +7,7 @@ pub mod display;
 pub mod error;
 pub mod federated;
 pub mod flow_failure;
+pub mod http;
 pub mod ingest;
 pub mod item;
 pub mod mcp_server;
@@ -271,7 +272,7 @@ pub async fn build_registry_enabled_only() -> ProviderRegistry {
     }
 
     #[cfg(feature = "hackernews")]
-    register_sync!(connectors::hackernews::HackerNewsConnector::new());
+    register_async!(connectors::hackernews::HackerNewsConnector::new());
 
     #[cfg(feature = "wikipedia")]
     register_async!(connectors::wikipedia::WikipediaConnector::new(auth::AuthDetails::new()).await);

@@ -1,8 +1,8 @@
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::utils::structured_result_with_text;
 use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
-use reqwest::Client;
 use rmcp::model::*;
 use scraper::{Html, Selector};
 use serde::Deserialize;
@@ -18,16 +18,16 @@ struct SearchPapersArgs {
 }
 
 pub struct GoogleScholarConnector {
-    client: Client,
+    client: HttpClient,
 }
 
 impl GoogleScholarConnector {
-    pub async fn new(_auth: AuthDetails) -> Result<Self, ConnectorError> {
+    pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
         Ok(Self {
-            client: Client::builder()
+            client: HttpClient::new(Egress::from_auth(&auth)?, |b| {
+                b
                 .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-                .build()
-                .map_err(ConnectorError::HttpRequest)?,
+            })?,
         })
     }
 
@@ -113,6 +113,10 @@ impl GoogleScholarConnector {
 
 #[async_trait]
 impl Connector for GoogleScholarConnector {
+    async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)
+    }
+
     fn name(&self) -> &'static str {
         "google-scholar"
     }

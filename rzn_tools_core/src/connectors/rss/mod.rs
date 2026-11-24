@@ -1,4 +1,5 @@
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::ingest::{self, OutputFormat};
 use crate::item::{Block, Item, ItemsPage, Listing, Party};
 use crate::utils::structured_result_with_text;
@@ -6,7 +7,6 @@ use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use feed_rs::parser;
-use reqwest::Client;
 use rmcp::model::*;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
@@ -57,16 +57,15 @@ struct RssCursor {
 }
 
 pub struct RssConnector {
-    client: Client,
+    client: HttpClient,
 }
 
 impl RssConnector {
-    pub async fn new(_auth: AuthDetails) -> Result<Self, ConnectorError> {
+    pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
         Ok(Self {
-            client: Client::builder()
-                .user_agent("rzn-tools-rss-connector/0.1.0")
-                .build()
-                .map_err(ConnectorError::HttpRequest)?,
+            client: HttpClient::new(Egress::from_auth(&auth)?, |b| {
+                b.user_agent("rzn-tools-rss-connector/0.1.0")
+            })?,
         })
     }
 
@@ -161,6 +160,10 @@ fn rss_item_from_entry(entry: &feed_rs::model::Entry, feed_url: &str) -> Item {
 
 #[async_trait]
 impl Connector for RssConnector {
+    async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)
+    }
+
     fn name(&self) -> &'static str {
         "rss"
     }

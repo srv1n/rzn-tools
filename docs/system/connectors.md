@@ -3,7 +3,7 @@ title: "Connectors"
 subject: connectors
 keywords: [providers, adapters, sources, features, tools]
 part_of: overview
-describes: [rzn_tools_core/src/connectors, rzn_tools_core/Cargo.toml, rzn_tools_core/src/lib.rs]
+describes: [rzn_tools_core/src/connectors, rzn_tools_core/Cargo.toml, rzn_tools_core/src/lib.rs, rzn_tools_core/src/http.rs]
 status: canonical
 created: 2026-08-23
 last_verified: 2026-08-23 @ working-tree
@@ -133,9 +133,27 @@ Apple Search Ads uses the provider path `/api/v5`. This is an Apple API identifi
 
 These Apple connectors use macOS permissions. They do not use an API key. There is no Apple Calendar connector.
 
+## Proxies
+
+Any connector that reaches the internet over reqwest sends all of its traffic through a proxy
+when its auth details hold `proxy_url`: `http://`, `https://`, `socks5://` or `socks5h://`,
+optionally with `user:pass@`. The host sets it, for example from a connection's proxy
+profile; a connection may hold only `{"proxy_url": "..."}`. YouTube passes it to yt-dlp as
+`--proxy`. If the proxy cannot be reached the call fails; it never falls back to a direct
+connection. An invalid value fails with `invalid_params`, and errors name only the proxy's
+scheme and host, never its credentials.
+
+[`rzn_tools_core/src/http.rs`](../../rzn_tools_core/src/http.rs) builds every reqwest client
+and owns the shared `proxy_url` field. A test there fails on a client built anywhere else.
+Exempt: `whatsapp`, which talks to its local WuzAPI bridge. Connectors whose provider SDK has
+its own HTTP stack do not use the proxy yet: `github` (octocrab calls), `microsoft` (Graph SDK
+calls), the `google-*` connectors, `discord`, `telegram`, `imap` and `smtp`.
+
 ## Change a connector
 
-1. Change its module under `rzn_tools_core/src/connectors/`.
+1. Change its module under `rzn_tools_core/src/connectors/`. Build reqwest clients with
+   `crate::http::HttpClient` (stored) or `Egress::client` (one-off), and call
+   `HttpClient::apply_auth` in `set_auth_details`.
 2. Update its Cargo feature.
 3. Update `build_registry_enabled_only`.
 4. Update resolver rules when URL handling changes.

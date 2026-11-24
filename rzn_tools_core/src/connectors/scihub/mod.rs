@@ -1,5 +1,6 @@
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::HttpClient;
 use crate::utils::structured_result_with_text;
 use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
@@ -25,7 +26,7 @@ pub struct SciHubResult {
 }
 
 pub struct SciHubConnector {
-    client: reqwest::Client,
+    client: HttpClient,
     headers: HeaderMap,
     unpaywall_email: Option<String>,
     unpaywall_base_url: String,
@@ -124,7 +125,7 @@ impl SciHubConnector {
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
 
         let mut connector = SciHubConnector {
-            client: reqwest::Client::new(),
+            client: HttpClient::direct()?,
             headers,
             unpaywall_email,
             unpaywall_base_url: "https://api.unpaywall.org".to_string(),
@@ -424,6 +425,7 @@ impl Connector for SciHubConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         if let Some(email) = details
             .get("unpaywall_email")
             .or_else(|| details.get("email"))
@@ -720,7 +722,7 @@ mod tests {
 
     fn test_connector() -> SciHubConnector {
         SciHubConnector {
-            client: reqwest::Client::new(),
+            client: HttpClient::direct().unwrap(),
             headers: HeaderMap::new(),
             unpaywall_email: None,
             unpaywall_base_url: "https://api.unpaywall.org".to_string(),

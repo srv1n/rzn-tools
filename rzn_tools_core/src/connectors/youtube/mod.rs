@@ -1,7 +1,9 @@
 // src/connectors/youtube/mod.rs
 
 use crate::error::ConnectorError;
+use crate::http::Egress;
 mod item_v2;
+mod yt_dlp;
 
 use crate::ingest::{self, OutputFormat};
 use crate::utils::{clean_html_entities, structured_result, structured_result_with_text};
@@ -24,7 +26,6 @@ use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration as StdDuration;
-use tokio::process::Command;
 use url::{form_urlencoded, Url};
 
 fn inline_output_format_property(schema: &mut Value) {
@@ -746,12 +747,14 @@ pub struct ChapterContent {
 #[derive(Clone)]
 pub struct YouTubeConnector {
     cookie_header: Option<String>,
+    egress: Egress,
 }
 
 impl YouTubeConnector {
     pub async fn new(auth: Option<AuthDetails>) -> Result<Self, ConnectorError> {
         let mut connector = YouTubeConnector {
             cookie_header: None,
+            egress: Egress::default(),
         };
 
         if let Some(auth) = auth {
@@ -841,6 +844,7 @@ impl Connector for YouTubeConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.egress = Egress::from_auth(&details)?;
         if let Some(cookie_header) = details.get("cookie").or_else(|| details.get("cookies")) {
             self.cookie_header = Some(cookie_header.to_string());
             return Ok(());
@@ -1136,32 +1140,38 @@ impl Connector for YouTubeConnector {
                 let video_id = match target {
                     YouTubeGetTarget::Video(video_id) => video_id,
                     YouTubeGetTarget::Playlist(playlist) => {
-                        return list_videos_call_result(ListVideosInput {
-                            source: ListSource::Playlist,
-                            channel: None,
-                            playlist: Some(playlist),
-                            limit: None,
-                            published_after: None,
-                            published_within_days: None,
-                            output_format: input.output_format,
-                        })
+                        return list_videos_call_result(
+                            &self.egress,
+                            ListVideosInput {
+                                source: ListSource::Playlist,
+                                channel: None,
+                                playlist: Some(playlist),
+                                limit: None,
+                                published_after: None,
+                                published_within_days: None,
+                                output_format: input.output_format,
+                            },
+                        )
                         .await;
                     }
                     YouTubeGetTarget::Channel(channel) => {
-                        return list_videos_call_result(ListVideosInput {
-                            source: ListSource::Channel,
-                            channel: Some(channel),
-                            playlist: None,
-                            limit: None,
-                            published_after: None,
-                            published_within_days: None,
-                            output_format: input.output_format,
-                        })
+                        return list_videos_call_result(
+                            &self.egress,
+                            ListVideosInput {
+                                source: ListSource::Channel,
+                                channel: Some(channel),
+                                playlist: None,
+                                limit: None,
+                                published_after: None,
+                                published_within_days: None,
+                                output_format: input.output_format,
+                            },
+                        )
                         .await;
                     }
                 };
                 let want_item = input.output_format == OutputFormat::ItemV2;
-                let client = youtube_http_client(self.cookie_header.as_deref())?;
+                let client = youtube_http_client(&self.egress, self.cookie_header.as_deref())?;
                 let watch_html = fetch_youtube_watch_html(&client, &video_id).await?;
                 let player = extract_player_response(&watch_html)?;
                 classify_player_response(&player, &video_id)?;
@@ -1169,8 +1179,14 @@ impl Connector for YouTubeConnector {
                 let chapters = video_info.chapters.clone();
 
                 let mut transcript_unavailable_reason: Option<&'static str> = None;
-                let transcript =
-                    fetch_transcript_with_fallback(&client, &player, &video_id, &watch_html).await;
+                let transcript = fetch_transcript_with_fallback(
+                    &client,
+                    &self.egress,
+                    &player,
+                    &video_id,
+                    &watch_html,
+                )
+                .await;
                 if want_item {
                     let fetched = match &transcript {
                         Ok(fetched) => Ok((
@@ -1264,7 +1280,7 @@ impl Connector for YouTubeConnector {
                 let input: SearchVideosInput = serde_json::from_value(Value::Object(args_map))
                     .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
 
-                let client = youtube_http_client(self.cookie_header.as_deref())?;
+                let client = youtube_http_client(&self.egress, self.cookie_header.as_deref())?;
                 let mut mapped_results = search_youtube_native(
                     &client,
                     &input.query,
@@ -1349,7 +1365,7 @@ impl Connector for YouTubeConnector {
             "list" => {
                 let input: ListVideosInput = serde_json::from_value(Value::Object(args_map))
                     .map_err(|e| ConnectorError::InvalidParams(e.to_string()))?;
-                list_videos_call_result(input).await
+                list_videos_call_result(&self.egress, input).await
             }
             "resolve_channel" => {
                 let input: ResolveChannelInput = serde_json::from_value(Value::Object(args_map))
@@ -1377,11 +1393,10 @@ impl Connector for YouTubeConnector {
 
                 let limit = input.limit.clamp(1, 10) as usize;
 
-                let client = HttpClient::builder()
-                    .user_agent("rzn-datasourcer/0.2.x youtube-connector")
-                    .timeout(std::time::Duration::from_secs(20))
-                    .build()
-                    .map_err(|e| ConnectorError::Other(e.to_string()))?;
+                let client = self.egress.client(|b| {
+                    b.user_agent("rzn-datasourcer/0.2.x youtube-connector")
+                        .timeout(std::time::Duration::from_secs(20))
+                })?;
 
                 // If a concrete channel identifier was provided, normalize to UC... when possible.
                 let resolved_channel_id = if let Some(ch) = input.channel.as_deref() {
@@ -1447,10 +1462,13 @@ enum YouTubeGetTarget {
     Channel(String),
 }
 
-async fn list_videos_call_result(input: ListVideosInput) -> Result<CallToolResult, ConnectorError> {
+async fn list_videos_call_result(
+    egress: &Egress,
+    input: ListVideosInput,
+) -> Result<CallToolResult, ConnectorError> {
     let output_format = input.output_format;
     let listing = item_v2::listing_kind(&input, effective_list_source(&input)?);
-    let out = list_videos_output(input).await?;
+    let out = list_videos_output(egress, input).await?;
 
     if output_format == OutputFormat::ItemV2 {
         return structured_result(&item_v2::listing_page(listing, &out));
@@ -1460,16 +1478,12 @@ async fn list_videos_call_result(input: ListVideosInput) -> Result<CallToolResul
     structured_result_with_text(&out, Some(text))
 }
 
-async fn list_videos_output(input: ListVideosInput) -> Result<ListVideosOutput, ConnectorError> {
+async fn list_videos_output(
+    egress: &Egress,
+    input: ListVideosInput,
+) -> Result<ListVideosOutput, ConnectorError> {
     let source = effective_list_source(&input)?;
-    let client = HttpClient::builder()
-        .user_agent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
-AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        )
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-        .map_err(|e| ConnectorError::Other(e.to_string()))?;
+    let client = youtube_http_client(egress, None)?;
 
     let after = if let Some(days) = input.published_within_days {
         Some(Utc::now() - Duration::days(days as i64))
@@ -2934,25 +2948,27 @@ fn parse_abbreviated_count(raw: &str) -> u64 {
     (number.parse::<f64>().unwrap_or_default() * multiplier) as u64
 }
 
-fn youtube_http_client(cookie_header: Option<&str>) -> Result<HttpClient, ConnectorError> {
-    let mut builder = HttpClient::builder().user_agent(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
-AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    );
+fn youtube_http_client(
+    egress: &Egress,
+    cookie_header: Option<&str>,
+) -> Result<HttpClient, ConnectorError> {
+    let mut headers = HeaderMap::new();
     if let Some(cookie) = cookie_header {
-        let mut headers = HeaderMap::new();
         headers.insert(
             COOKIE,
             HeaderValue::from_str(cookie).map_err(|_| {
                 ConnectorError::InvalidInput("YouTube cookie header is invalid".to_string())
             })?,
         );
-        builder = builder.default_headers(headers);
     }
-    builder
+    egress.client(|b| {
+        b.user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        )
+        .default_headers(headers.clone())
         .timeout(StdDuration::from_secs(20))
-        .build()
-        .map_err(|e| ConnectorError::Other(e.to_string()))
+    })
 }
 
 async fn fetch_youtube_watch_html(
@@ -3144,6 +3160,7 @@ fn extract_video_chapters(player: &Value) -> Vec<VideoChapter> {
 /// empty without one; the Android player's caption URLs still answer, so they are the second try.
 async fn fetch_transcript_with_fallback(
     client: &HttpClient,
+    egress: &Egress,
     player: &Value,
     video_id: &str,
     watch_html: &str,
@@ -3160,7 +3177,7 @@ async fn fetch_transcript_with_fallback(
         Ok(transcript) => Ok(transcript),
         Err(android) => {
             tracing::warn!(error = %android.1, video_id, "Android player captions failed");
-            match fetch_transcript_via_yt_dlp(client, video_id).await {
+            match fetch_transcript_via_yt_dlp(client, egress, video_id).await {
                 Ok(transcript) => Ok(transcript),
                 Err(fallback) => {
                     tracing::warn!(error = %fallback, video_id, "Optional yt-dlp fallback failed");
@@ -3249,43 +3266,10 @@ fn extract_caption_tracks(player: &Value) -> Result<Vec<TimedTextTrack>, Connect
 
 async fn fetch_transcript_via_yt_dlp(
     client: &HttpClient,
+    egress: &Egress,
     video_id: &str,
 ) -> Result<TimedTextTranscript, ConnectorError> {
-    let mut cmd = Command::new("yt-dlp");
-    cmd.arg("-J")
-        .arg("--ignore-config")
-        .arg("--no-playlist")
-        .arg("--skip-download")
-        .arg("--ignore-no-formats-error")
-        .arg("--js-runtimes")
-        .arg("node")
-        .arg("--socket-timeout")
-        .arg("10")
-        .arg("--retries")
-        .arg("1")
-        .arg("--extractor-retries")
-        .arg("1")
-        .arg("--no-warnings")
-        .arg(format!("https://www.youtube.com/watch?v={video_id}"))
-        .kill_on_drop(true);
-
-    let output = tokio::time::timeout(StdDuration::from_secs(30), cmd.output())
-        .await
-        .map_err(|_| ConnectorError::Other("yt-dlp timed out while fetching captions".to_string()))?
-        .map_err(|e| ConnectorError::Other(format!("Failed to execute yt-dlp: {e}")))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let reason = if stderr.is_empty() {
-            format!("yt-dlp exited with status {}", output.status)
-        } else {
-            format!("yt-dlp failed: {stderr}")
-        };
-        return Err(ConnectorError::Other(reason));
-    }
-
-    let info: Value =
-        serde_json::from_slice(&output.stdout).map_err(|e| ConnectorError::Other(e.to_string()))?;
+    let info = yt_dlp::video_info(egress.proxy_url(), video_id).await?;
     let (timedtext_url, language_code, is_generated) = select_yt_dlp_caption_url(&info)
         .ok_or_else(|| {
             ConnectorError::Other("yt-dlp output did not include usable caption URLs".to_string())
@@ -3817,7 +3801,7 @@ mod tests {
     async fn captions_disabled_has_stable_reason_without_network() {
         let mut player = player_fixture();
         player.as_object_mut().unwrap().remove("captions");
-        let client = youtube_http_client(None).unwrap();
+        let client = youtube_http_client(&Egress::default(), None).unwrap();
         let error = fetch_transcript_from_player(&client, &player)
             .await
             .expect_err("captions disabled");

@@ -9,6 +9,7 @@ use url::Url;
 use crate::auth::AuthDetails;
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::utils::structured_result_with_text;
 use crate::Connector;
 
@@ -16,16 +17,15 @@ const BWT_API_BASE: &str = "https://ssl.bing.com/webmaster/api.svc/json";
 const INDEXNOW_API_ENDPOINT: &str = "https://api.indexnow.org/indexnow";
 
 pub struct BingWebmasterToolsConnector {
-    client: reqwest::Client,
+    client: HttpClient,
     auth: RwLock<AuthDetails>,
 }
 
 impl BingWebmasterToolsConnector {
     pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
-        let client = reqwest::Client::builder()
-            .user_agent("rzn-tools/0.2 (bing-webmaster-tools)")
-            .build()
-            .map_err(|e| ConnectorError::Other(e.to_string()))?;
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| {
+            b.user_agent("rzn-tools/0.2 (bing-webmaster-tools)")
+        })?;
         Ok(Self {
             client,
             auth: RwLock::new(auth),
@@ -1162,6 +1162,7 @@ impl Connector for BingWebmasterToolsConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         let mut guard = self.auth.write().await;
         *guard = details;
         Ok(())

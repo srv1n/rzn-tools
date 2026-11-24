@@ -1,12 +1,12 @@
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::ingest::{self, OutputFormat};
 use crate::item::{Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{collect_paginated, structured_result_with_text, Page};
 use crate::{auth::AuthDetails, Connector, URLParamExtraction, URLPatternSpec};
 use async_trait::async_trait;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use reqwest::Client;
 use rmcp::model::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -76,7 +76,7 @@ fn default_radius() -> u16 {
 
 // Define the Wikipedia connector
 pub struct WikipediaConnector {
-    client: Client,
+    client: HttpClient,
     language: String,
     search_limit: u32,
 }
@@ -87,10 +87,9 @@ const MAX_SR_LIMIT_PER_REQUEST: u32 = 50;
 
 impl WikipediaConnector {
     pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
-        let client = Client::builder()
-            .user_agent("rzn-tools/0.1.0")
-            .build()
-            .map_err(|e| ConnectorError::Other(e.to_string()))?;
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| {
+            b.user_agent("rzn-tools/0.1.0")
+        })?;
 
         let language = auth.get("language").unwrap_or(&"en".to_string()).clone();
         let search_limit = auth
@@ -594,6 +593,7 @@ impl Connector for WikipediaConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         if let Some(language) = details.get("language") {
             self.language = language.clone();
         }

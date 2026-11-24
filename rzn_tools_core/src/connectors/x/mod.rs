@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::utils::structured_result_with_text;
 use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
@@ -11,7 +12,7 @@ use base64::Engine as _;
 use chrono::{DateTime, Duration, NaiveDate, NaiveTime, Utc};
 use hmac::{Hmac, Mac};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
-use reqwest::{Client, Method};
+use reqwest::Method;
 use rmcp::model::*;
 use serde_json::{json, Value};
 use sha1::Sha1;
@@ -61,7 +62,7 @@ struct XOperationSpec {
 }
 
 pub struct XApiConnector {
-    client: Client,
+    client: HttpClient,
     bearer_token: Option<String>,
     oauth2_access_token: Option<String>,
     oauth2_refresh_token: Option<String>,
@@ -81,10 +82,7 @@ pub struct XApiConnector {
 
 impl XApiConnector {
     pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
-        let client = Client::builder()
-            .user_agent("rzn-tools/x")
-            .build()
-            .map_err(|e| ConnectorError::Other(e.to_string()))?;
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| b.user_agent("rzn-tools/x"))?;
 
         let bearer_token = auth
             .get("bearer_token")
@@ -1090,6 +1088,7 @@ impl Connector for XApiConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         self.bearer_token = details
             .get("bearer_token")
             .cloned()

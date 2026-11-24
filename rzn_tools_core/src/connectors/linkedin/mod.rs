@@ -4,7 +4,7 @@ use base64::Engine;
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
-use reqwest::{Client, Method, StatusCode};
+use reqwest::{Method, StatusCode};
 use rmcp::model::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -15,7 +15,8 @@ use tokio::sync::RwLock;
 use crate::auth::AuthDetails;
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
-use crate::utils::{build_reqwest_client, structured_result_with_text};
+use crate::http::{Egress, HttpClient};
+use crate::utils::structured_result_with_text;
 use crate::Connector;
 
 const LINKEDIN_API_BASE: &str = "https://api.linkedin.com";
@@ -114,7 +115,7 @@ struct HttpResponsePayload {
 }
 
 pub struct LinkedInConnector {
-    client: Client,
+    client: HttpClient,
     auth: RwLock<AuthDetails>,
     api_base: String,
     oauth_base: String,
@@ -138,15 +139,14 @@ impl LinkedInConnector {
         oauth_base: &str,
         discovery_url: &str,
     ) -> Result<Self, ConnectorError> {
-        let client = build_reqwest_client(|| {
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| {
             let mut headers = HeaderMap::new();
             headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
             headers.insert(
                 HeaderName::from_static("user-agent"),
                 HeaderValue::from_static("rzn-tools/0.2 (linkedin)"),
             );
-            Client::builder()
-                .default_headers(headers)
+            b.default_headers(headers)
                 .timeout(std::time::Duration::from_secs(30))
         })?;
 
@@ -1267,6 +1267,7 @@ impl Connector for LinkedInConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         let mut guard = self.auth.write().await;
         *guard = details;
         Ok(())

@@ -1,8 +1,8 @@
+use crate::http::{Egress, HttpClient};
 use async_trait::async_trait;
 use chrono::{NaiveDate, Utc};
 use regex::Regex;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_LANGUAGE, USER_AGENT};
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::borrow::Cow;
@@ -59,14 +59,16 @@ struct PlayStoreApp {
 }
 
 pub struct PlayStoreConnector {
-    http: Client,
+    http: HttpClient,
 }
 
 impl PlayStoreConnector {
-    pub async fn new(_auth: AuthDetails) -> Result<Self, ConnectorError> {
+    pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
         let mut headers = HeaderMap::new();
         headers.insert(USER_AGENT, HeaderValue::from_static(PLAY_STORE_USER_AGENT));
-        let http = Client::builder().default_headers(headers).build()?;
+        let http = HttpClient::new(Egress::from_auth(&auth)?, move |b| {
+            b.default_headers(headers.clone())
+        })?;
         Ok(Self { http })
     }
 
@@ -281,6 +283,10 @@ impl PlayStoreConnector {
 
 #[async_trait]
 impl Connector for PlayStoreConnector {
+    async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.http.apply_auth(&details)
+    }
+
     fn name(&self) -> &'static str {
         "play-store"
     }

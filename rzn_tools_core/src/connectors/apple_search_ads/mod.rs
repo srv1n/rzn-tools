@@ -1,8 +1,9 @@
+use crate::http::{Egress, HttpClient};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
-use reqwest::{Client, Method, StatusCode};
+use reqwest::{Method, StatusCode};
 use rmcp::model::*;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -72,7 +73,7 @@ struct CreateCampaignInput {
 #[derive(Clone)]
 pub struct AppleSearchAdsConnector {
     auth: AuthDetails,
-    http: Client,
+    http: HttpClient,
     token: Arc<tokio::sync::Mutex<Option<CachedToken>>>,
 }
 
@@ -82,11 +83,10 @@ impl AppleSearchAdsConnector {
         headers.insert(USER_AGENT, HeaderValue::from_static(ASA_USER_AGENT));
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
 
-        let http = Client::builder()
-            .default_headers(headers)
-            .timeout(std::time::Duration::from_secs(60))
-            .build()
-            .map_err(ConnectorError::HttpRequest)?;
+        let http = HttpClient::new(Egress::from_auth(&auth)?, move |b| {
+            b.default_headers(headers.clone())
+                .timeout(std::time::Duration::from_secs(60))
+        })?;
 
         Ok(Self {
             auth,
@@ -307,7 +307,7 @@ impl AppleSearchAdsConnector {
 
     async fn send_with_backoff<F>(&self, build: F) -> Result<reqwest::Response, ConnectorError>
     where
-        F: Fn(&Client, &str, &str, &str) -> reqwest::RequestBuilder,
+        F: Fn(&reqwest::Client, &str, &str, &str) -> reqwest::RequestBuilder,
     {
         use tokio::time::{sleep, Duration as TokioDuration};
 
@@ -321,7 +321,7 @@ impl AppleSearchAdsConnector {
             })?;
             let (token_type, access_token) = self.ensure_access_token().await?;
 
-            let resp = build(&self.http, &token_type, &access_token, &org_id)
+            let resp = build(&*self.http, &token_type, &access_token, &org_id)
                 .send()
                 .await;
             match resp {
@@ -721,6 +721,7 @@ impl Connector for AppleSearchAdsConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.http.apply_auth(&details)?;
         self.auth = details.clone();
         if !details.is_empty() {
             let _ = FileAuthStore::new_default().save(self.name(), &details);

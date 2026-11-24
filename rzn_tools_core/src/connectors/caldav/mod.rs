@@ -1,10 +1,11 @@
+use crate::http::{Egress, HttpClient};
 use async_trait::async_trait;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
-use reqwest::{Client, Method, RequestBuilder};
+use reqwest::{Method, RequestBuilder};
 use rmcp::model::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -240,17 +241,16 @@ fn default_limit() -> usize {
 }
 
 pub struct CaldavConnector {
-    client: Client,
+    client: HttpClient,
     config: Option<CaldavConfig>,
 }
 
 impl CaldavConnector {
     pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
-        let client = Client::builder()
-            .user_agent("rzn-tools-caldav-connector/0.1.0")
-            .timeout(std::time::Duration::from_secs(45))
-            .build()
-            .map_err(ConnectorError::HttpRequest)?;
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| {
+            b.user_agent("rzn-tools-caldav-connector/0.1.0")
+                .timeout(std::time::Duration::from_secs(45))
+        })?;
 
         let mut connector = Self {
             client,
@@ -1437,6 +1437,7 @@ impl Connector for CaldavConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         let base_url = value_from_details_or_env(&details, "base_url", "CALDAV_BASE_URL")
             .ok_or_else(|| {
                 ConnectorError::InvalidInput(

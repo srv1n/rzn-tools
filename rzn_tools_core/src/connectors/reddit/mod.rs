@@ -13,6 +13,7 @@ use std::sync::Arc;
 use crate::auth::AuthDetails;
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::{proxy_url_field, Egress};
 use crate::ingest::{self, OutputFormat};
 use crate::item::{ItemsPage, Listing};
 use crate::utils::{
@@ -67,7 +68,7 @@ struct RedditPostTarget {
 
 impl RedditConnector {
     pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
-        let http_client = Self::reqwest_client(None, REDDIT_USER_AGENT)?;
+        let http_client = Egress::default().client(|b| b.user_agent(REDDIT_USER_AGENT))?;
         let mut connector = RedditConnector {
             http_client,
             api_base_url: REDDIT_CANONICAL_BASE_URL.to_string(),
@@ -76,22 +77,6 @@ impl RedditConnector {
         connector.set_auth_details(auth).await?;
 
         Ok(connector)
-    }
-
-    fn reqwest_client(
-        proxy_url: Option<&str>,
-        user_agent: &str,
-    ) -> Result<reqwest::Client, ConnectorError> {
-        let mut builder = reqwest::Client::builder().user_agent(user_agent);
-        if let Some(url) = proxy_url {
-            let proxy = reqwest::Proxy::all(url).map_err(|e| {
-                ConnectorError::InvalidParams(format!("Invalid proxy_url '{}': {}", url, e))
-            })?;
-            builder = builder.proxy(proxy);
-        }
-        builder
-            .build()
-            .map_err(|e| ConnectorError::Other(format!("Failed to build HTTP client: {}", e)))
     }
 
     fn resolve_oauth_token_base_url(details: &AuthDetails) -> Result<String, ConnectorError> {
@@ -216,7 +201,7 @@ impl Connector for RedditConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
-        let proxy_url = details.get("proxy_url").map(String::as_str);
+        let egress = Egress::from_auth(&details)?;
         self.api_base_url = Self::resolve_api_base_url(&details)?;
         self.access_token = None;
 
@@ -231,7 +216,7 @@ impl Connector for RedditConnector {
             .or_else(|| details.get("token"))
             .filter(|token| !token.trim().is_empty())
         {
-            self.http_client = Self::reqwest_client(proxy_url, REDDIT_USER_AGENT)?;
+            self.http_client = egress.client(|b| b.user_agent(REDDIT_USER_AGENT))?;
             self.access_token = Some(access_token.to_string());
             if details.get("api_base_url").is_none() && env::var("RZN_REDDIT_API_BASE_URL").is_err()
             {
@@ -241,7 +226,7 @@ impl Connector for RedditConnector {
             (username, password, client_id, client_secret)
         {
             let ua = format!("{} (by /u/{})", REDDIT_USER_AGENT, username);
-            self.http_client = Self::reqwest_client(proxy_url, &ua)?;
+            self.http_client = egress.client(|b| b.user_agent(ua.as_str()))?;
             let oauth_token_base_url = Self::resolve_oauth_token_base_url(&details)?;
             self.access_token = Some(
                 self.password_grant_access_token(
@@ -268,7 +253,7 @@ impl Connector for RedditConnector {
             ));
         } else {
             let ua = format!("{} (anonymous)", REDDIT_USER_AGENT);
-            self.http_client = Self::reqwest_client(proxy_url, &ua)?;
+            self.http_client = egress.client(|b| b.user_agent(ua.as_str()))?;
         }
 
         Ok(())
@@ -334,17 +319,7 @@ impl Connector for RedditConnector {
                     label: "Client Secret".to_string(),
                     options: None,
                 },
-                Field {
-                    name: "proxy_url".to_string(),
-                    field_type: FieldType::Secret,
-                    description: Some(
-                        "Optional proxy URL (http(s)://host:port, may include user:pass)"
-                            .to_string(),
-                    ),
-                    required: false,
-                    label: "Proxy URL".to_string(),
-                    options: None,
-                },
+                proxy_url_field(),
                 Field {
                     name: "api_base_url".to_string(),
                     field_type: FieldType::Text,
@@ -2390,7 +2365,7 @@ mod tests {
     #[test]
     fn oauth_access_token_is_applied_to_tool_requests() {
         let connector = RedditConnector {
-            http_client: reqwest::Client::new(),
+            http_client: Egress::default().client(|b| b).unwrap(),
             api_base_url: REDDIT_OAUTH_API_BASE_URL.to_string(),
             access_token: Some("test-bearer-token".to_string()),
         };
@@ -2412,7 +2387,7 @@ mod tests {
     #[test]
     fn anonymous_requests_do_not_send_an_authorization_header() {
         let connector = RedditConnector {
-            http_client: reqwest::Client::new(),
+            http_client: Egress::default().client(|b| b).unwrap(),
             api_base_url: REDDIT_CANONICAL_BASE_URL.to_string(),
             access_token: None,
         };

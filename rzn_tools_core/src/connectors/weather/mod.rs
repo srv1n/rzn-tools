@@ -1,11 +1,11 @@
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::ingest::OutputFormat;
 use crate::item::{Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{structured_result, structured_result_with_text};
 use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use reqwest::Client;
 use rmcp::model::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -171,15 +171,14 @@ struct WttrResponse {
 }
 
 pub struct WeatherConnector {
-    client: Client,
+    client: HttpClient,
 }
 
 impl WeatherConnector {
-    pub async fn new(_auth: AuthDetails) -> Result<Self, ConnectorError> {
-        let client = Client::builder()
-            .user_agent("rzn-tools-weather-connector/0.1.0")
-            .build()
-            .map_err(ConnectorError::HttpRequest)?;
+    pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| {
+            b.user_agent("rzn-tools-weather-connector/0.1.0")
+        })?;
         Ok(Self { client })
     }
 
@@ -433,6 +432,10 @@ impl WeatherConnector {
 
 #[async_trait]
 impl Connector for WeatherConnector {
+    async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)
+    }
+
     fn name(&self) -> &'static str {
         "weather"
     }

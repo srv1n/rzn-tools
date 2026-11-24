@@ -13,6 +13,7 @@ use graph_rs_sdk::prelude::Graph;
 use crate::auth::AuthDetails;
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::Egress;
 use crate::utils::{collect_paginated_with_cursor, structured_result_with_text, Page};
 use crate::Connector;
 use crate::{
@@ -366,7 +367,7 @@ impl Connector for GraphConnector {
                     .map(str::to_string);
                 let token = self.access_token().await?;
 
-                let http = reqwest::Client::new();
+                let http = Egress::from_auth(&self.auth)?.client(|b| b)?;
                 let concise = !matches!(
                     args.get("response_format").and_then(|v| v.as_str()),
                     Some("detailed")
@@ -484,7 +485,7 @@ impl Connector for GraphConnector {
                     .and_then(|v| v.as_str())
                     .map(str::to_string);
 
-                let http = reqwest::Client::new();
+                let http = Egress::from_auth(&self.auth)?.client(|b| b)?;
                 let concise = !matches!(
                     args.get("response_format").and_then(|v| v.as_str()),
                     Some("detailed")

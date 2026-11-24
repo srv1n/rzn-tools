@@ -1,4 +1,5 @@
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::ingest::{self, OutputFormat};
 use crate::item::{rfc3339, Block, Item, ItemsPage, Listing, Party};
 use crate::utils::structured_result_with_text;
@@ -6,7 +7,6 @@ use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{Duration, Utc};
-use reqwest::Client;
 use rmcp::model::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -106,17 +106,16 @@ struct GetByDoiArgs {
 }
 
 pub struct BiorxivConnector {
-    client: Client,
+    client: HttpClient,
 }
 
 impl BiorxivConnector {
-    pub async fn new(_auth: AuthDetails) -> Result<Self, ConnectorError> {
+    pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
         Ok(Self {
-            client: Client::builder()
-                .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
-                .http1_only()
-                .build()
-                .map_err(ConnectorError::HttpRequest)?,
+            client: HttpClient::new(Egress::from_auth(&auth)?, |b| {
+                b.user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+                    .http1_only()
+            })?,
         })
     }
 
@@ -291,6 +290,10 @@ fn biorxiv_item_from_paper(paper: &BiorxivPaperRaw) -> Item {
 
 #[async_trait]
 impl Connector for BiorxivConnector {
+    async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)
+    }
+
     fn name(&self) -> &'static str {
         "biorxiv"
     }

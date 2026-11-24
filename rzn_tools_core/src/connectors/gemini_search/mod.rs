@@ -1,26 +1,25 @@
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::utils::{build_filters_clause, resolve_search_filters, structured_result_with_text};
 use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
-use reqwest::Client;
 use rmcp::model::*;
 use serde_json::{json, Value};
 use std::borrow::Cow;
 use std::sync::Arc;
 
 pub struct GeminiSearchConnector {
-    client: Client,
+    client: HttpClient,
     api_key: Option<String>,
     default_model: String,
 }
 
 impl GeminiSearchConnector {
     pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
-        let client = Client::builder()
-            .user_agent("rzn-tools/0.1.0")
-            .build()
-            .map_err(|e| ConnectorError::Other(e.to_string()))?;
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| {
+            b.user_agent("rzn-tools/0.1.0")
+        })?;
 
         let api_key = auth
             .get("api_key")
@@ -217,6 +216,7 @@ impl Connector for GeminiSearchConnector {
         Ok(auth)
     }
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         self.api_key = details
             .get("api_key")
             .cloned()

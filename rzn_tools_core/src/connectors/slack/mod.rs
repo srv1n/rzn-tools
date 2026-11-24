@@ -9,6 +9,7 @@ use crate::auth::AuthDetails;
 use crate::auth_store::{AuthStore, FileAuthStore};
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::utils::{collect_paginated_with_cursor, structured_result_with_text, Page};
 use crate::Connector;
 
@@ -19,16 +20,15 @@ const SLACK_MAX_REQUESTS: usize = 100;
 
 #[derive(Clone)]
 pub struct SlackConnector {
-    client: reqwest::Client,
+    client: HttpClient,
     auth: AuthDetails,
 }
 
 impl SlackConnector {
     pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
-        let client = reqwest::Client::builder()
-            .user_agent("rzn-datasourcer/0.1 slack-connector")
-            .build()
-            .map_err(|e| ConnectorError::Other(e.to_string()))?;
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| {
+            b.user_agent("rzn-datasourcer/0.1 slack-connector")
+        })?;
         Ok(Self { client, auth })
     }
 
@@ -65,9 +65,9 @@ impl SlackConnector {
         let mut last_status: Option<u16> = None;
 
         for attempt in 0..=MAX_RETRIES {
-            let resp = build(&self.client)
+            let resp = build(&*self.client)
                 .try_clone()
-                .unwrap_or_else(|| build(&self.client))
+                .unwrap_or_else(|| build(&*self.client))
                 .send()
                 .await;
 
@@ -833,6 +833,7 @@ impl Connector for SlackConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         self.auth = details.clone();
         // Persist for CLI convenience
         if !self.auth.is_empty() {

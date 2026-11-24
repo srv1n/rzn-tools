@@ -1,5 +1,6 @@
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
+use crate::http::{Egress, HttpClient};
 use crate::utils::structured_result_with_text;
 use crate::utils::{collect_paginated, Page};
 use crate::{auth::AuthDetails, Connector, URLParamExtraction, URLPatternSpec};
@@ -143,7 +144,7 @@ fn default_fields_of_study() -> Option<Vec<String>> {
 
 // Define the Semantic Scholar connector
 pub struct SemanticScholarConnector {
-    client: reqwest::Client,
+    client: HttpClient,
     api_key: Option<String>,
 }
 
@@ -153,10 +154,9 @@ const MAX_REQUESTS: usize = 100;
 
 impl SemanticScholarConnector {
     pub async fn new(auth: AuthDetails) -> Result<Self, ConnectorError> {
-        let client = reqwest::Client::builder()
-            .user_agent("rzn-tools/0.1.0")
-            .build()
-            .map_err(|e| ConnectorError::Other(e.to_string()))?;
+        let client = HttpClient::new(Egress::from_auth(&auth)?, |b| {
+            b.user_agent("rzn-tools/0.1.0")
+        })?;
 
         let api_key = auth.get("api_key").map(|v| v.to_string());
 
@@ -564,6 +564,7 @@ impl Connector for SemanticScholarConnector {
     }
 
     async fn set_auth_details(&mut self, details: AuthDetails) -> Result<(), ConnectorError> {
+        self.client.apply_auth(&details)?;
         self.api_key = details.get("api_key").map(|v| v.to_string());
         Ok(())
     }

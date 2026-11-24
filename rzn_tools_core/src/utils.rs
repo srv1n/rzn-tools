@@ -14,18 +14,6 @@ use std::future::Future;
 use thiserror::Error;
 use url::Url;
 
-pub fn build_reqwest_client(
-    make_builder: impl Fn() -> reqwest::ClientBuilder,
-) -> Result<reqwest::Client, ConnectorError> {
-    let built = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| make_builder().build()));
-
-    match built {
-        Ok(Ok(client)) => Ok(client),
-        Ok(Err(e)) => Err(ConnectorError::HttpRequest(e)),
-        Err(_) => Ok(make_builder().no_proxy().build()?),
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum Browser {
     Firefox,
