@@ -1,7 +1,7 @@
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
 use crate::ingest::{self, OutputFormat};
-use crate::item::{Block, Item, ItemsPage, Listing, Party};
+use crate::item::{Audience, Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{structured_result, structured_result_with_text};
 use crate::{auth::AuthDetails, Connector};
 use async_trait::async_trait;
@@ -614,7 +614,8 @@ impl Connector for DiscordConnector {
                             item_ref.clone(),
                             "daily_window".to_string(),
                             (channel_url.clone()).unwrap_or_default(),
-                        );
+                        )
+                        .with_audience(Audience::Restricted);
                         item.title = Some(format!(
                             "Discord channel {} daily window {}",
                             args.channel_id, date_str
@@ -695,7 +696,8 @@ impl Connector for DiscordConnector {
                         item_ref.clone(),
                         "rolling_window".to_string(),
                         (channel_url).unwrap_or_default(),
-                    );
+                    )
+                    .with_audience(Audience::Restricted);
                     item.title = Some(format!(
                         "Discord channel {} rolling last {} messages",
                         args.channel_id, last_n
@@ -801,7 +803,8 @@ impl Connector for DiscordConnector {
                             item_ref.clone(),
                             "backfill_range".to_string(),
                             (channel_url.clone()).unwrap_or_default(),
-                        );
+                        )
+                        .with_audience(Audience::Restricted);
                         item.title = Some(format!(
                             "Discord channel {} messages {}-{}",
                             args.channel_id, oldest_id, newest_id
@@ -922,7 +925,8 @@ impl Connector for DiscordConnector {
                             item_ref.clone(),
                             "channel_window".to_string(),
                             String::new(),
-                        );
+                        )
+                        .with_audience(Audience::Restricted);
                         item.published_in = Some(Party::named("Discord").with_id("discord.com"));
                         if let Some(meta) = Some(json!({
                             "channel_id": args.channel_id,
@@ -1419,7 +1423,8 @@ fn build_discord_item(
             item_ref,
             kind.to_string(),
             (canonical_url).unwrap_or_default(),
-        );
+        )
+        .with_audience(Audience::Restricted);
         item.title = Some(title);
         item.published_at = (created_at).as_deref().and_then(crate::item::rfc3339);
         item.marker = source_updated_at;

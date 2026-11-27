@@ -92,6 +92,7 @@ fn pubmed_item_from_search(article: &PubMedArticle) -> Item {
         "paper",
         pubmed_canonical_url(&article.pmid),
     )
+    .public()
     .with_title(article.title.clone())
     .with_published_in(pubmed_party())
     .with_fields(
@@ -115,6 +116,7 @@ fn pubmed_item_from_abstract(abstract_data: &PubMedAbstract) -> Item {
         "paper",
         pubmed_canonical_url(&abstract_data.pmid),
     )
+    .public()
     .with_title(abstract_data.title.clone())
     .with_published_at(rfc3339(&abstract_data.publication_date))
     .with_published_in(journal)

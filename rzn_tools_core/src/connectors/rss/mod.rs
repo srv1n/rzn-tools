@@ -133,6 +133,7 @@ fn rss_item_from_entry(entry: &feed_rs::model::Entry, feed_url: &str) -> Item {
         .unwrap_or_default();
 
     let mut item = Item::new(rss_item_ref(&base_id), "entry", url)
+        .public()
         .with_title(
             entry
                 .title

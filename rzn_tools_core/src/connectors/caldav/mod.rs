@@ -18,7 +18,7 @@ use crate::auth::AuthDetails;
 use crate::capabilities::{ConnectorConfigSchema, Field, FieldType};
 use crate::error::ConnectorError;
 use crate::ingest::OutputFormat;
-use crate::item::{Block, Item, ItemsPage, Listing, Party};
+use crate::item::{Audience, Block, Item, ItemsPage, Listing, Party};
 use crate::utils::{structured_result, structured_result_with_text};
 use crate::Connector;
 
@@ -730,7 +730,8 @@ impl CaldavConnector {
                 event.item_ref.clone(),
                 "event".to_string(),
                 event.url.clone(),
-            );
+            )
+            .with_audience(Audience::Restricted);
             item.title = event.summary.clone();
             item.published_at = (event.start.clone())
                 .as_deref()

@@ -121,6 +121,7 @@ pub(super) fn page_item(page: FetchedPage) -> Result<Item, ConnectorError> {
     .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
     let text_hash = sha256_hex(page.main_text.as_bytes());
     let mut item = Item::new(page.key.clone(), "page", url.clone())
+        .public()
         .with_title(page.fields.title.clone().unwrap_or_default())
         .with_author(author)
         .with_published_at(Some(published_at))
@@ -151,6 +152,7 @@ pub(super) fn page_item(page: FetchedPage) -> Result<Item, ConnectorError> {
 pub(super) fn not_modified_item(key: &str, validators: Validators) -> Item {
     let place = site(key);
     let mut item = Item::new(key, "page", key)
+        .public()
         .with_author(place.clone())
         .with_published_in(place)
         .with_published_at(
@@ -193,6 +195,7 @@ pub(super) fn pages_page(
         }
         items.push(
             Item::new(key.clone(), "page", key)
+                .public()
                 .with_published_at(lastmod.as_deref().and_then(rfc3339))
                 .with_marker(Some(stamp.clone())),
         );
@@ -242,6 +245,7 @@ pub(super) fn feed_page(xml: &[u8]) -> Result<ItemsPage, ConnectorError> {
         }
         items.push(
             Item::new(key.clone(), "page", key)
+                .public()
                 .with_title(entry.title.map(|t| t.content).unwrap_or_default())
                 .with_published_at(entry.published.or(entry.updated).map(|d| d.to_rfc3339()))
                 .with_marker(Some(stamp.clone())),

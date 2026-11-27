@@ -253,6 +253,7 @@ fn biorxiv_item_from_paper(paper: &BiorxivPaperRaw) -> Item {
         "paper",
         format!("https://doi.org/{}", paper.doi),
     )
+    .public()
     .with_title(paper.title.clone())
     .with_published_at(rfc3339(&paper.date))
     .with_published_in(

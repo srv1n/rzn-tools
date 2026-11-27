@@ -481,7 +481,8 @@ fn wiki_item_from_title(title: &str, language: &str) -> Item {
             wiki_item_ref(title),
             "article".to_string(),
             wiki_canonical_url(title, language),
-        );
+        )
+        .public();
         item.title = Some(title.to_string());
         item.published_in = Some(Party::named("Wikipedia").with_id("wikipedia.org"));
         item
@@ -514,7 +515,8 @@ fn wiki_item_with_content(
             item_ref,
             "article".to_string(),
             wiki_canonical_url(title, language),
-        );
+        )
+        .public();
         item.title = Some(title.to_string());
         item.published_in = Some(Party::named("Wikipedia").with_id("wikipedia.org"));
         item.blocks = blocks;

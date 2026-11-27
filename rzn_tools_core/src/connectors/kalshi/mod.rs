@@ -772,7 +772,8 @@ impl KalshiConnector {
                 item_ref.clone(),
                 format!("kalshi_{entity_type}"),
                 String::new(),
-            );
+            )
+            .public();
             item.title = title;
             item.marker = string_field(summary, "last_updated_ts")
                 .or_else(|| string_field(summary, "close_time"));

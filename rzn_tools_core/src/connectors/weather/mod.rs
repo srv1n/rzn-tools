@@ -408,7 +408,8 @@ impl WeatherConnector {
                 item_ref,
                 "weather_report".to_string(),
                 "https://wttr.in".to_string(),
-            );
+            )
+            .public();
             item.title = Some(format!("Weather for {}", resolved_location));
             item.published_in = Some(Party::named("wttr.in").with_id("wttr.in"));
             crate::item::merge_fields(

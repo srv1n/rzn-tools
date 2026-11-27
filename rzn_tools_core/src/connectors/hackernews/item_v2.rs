@@ -29,6 +29,7 @@ fn user(name: &str) -> Party {
 
 fn head(key: String, url: String, title: Option<&String>, author: Option<&String>) -> Item {
     let mut item = Item::new(key, "thread", url)
+        .public()
         .with_title(title.cloned().unwrap_or_default())
         .with_published_in(hn_party());
     if let Some(name) = author.filter(|name| !name.is_empty()) {

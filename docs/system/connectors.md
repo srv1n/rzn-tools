@@ -159,5 +159,9 @@ calls), the `google-*` connectors, `discord`, `telegram`, `imap` and `smtp`.
 4. Update resolver rules when URL handling changes.
 5. Add one focused test with mocked provider data.
 6. Update this page when public scope changes.
+7. Set every `rzn.item/v2` item's `audience`: `.public()` for what the author showed to everyone,
+   `Audience::Restricted` for direct messages, private groups, connections-only posts and personal
+   data. An item that does not say is restricted, and a shared index refuses it. Discord and CalDAV
+   items are restricted; every other connector's are public.
 
 Do not add a second name for the same connector or tool.

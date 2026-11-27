@@ -2754,7 +2754,8 @@ impl PolymarketConnector {
                 format!("polymarket:event:{}", summary.id),
                 "prediction_event".to_string(),
                 (summary.url.clone()).unwrap_or_default(),
-            );
+            )
+            .public();
             item.title = Some(summary.title.clone());
             item.published_at = (summary.start_date.clone())
                 .as_deref()
@@ -2885,7 +2886,8 @@ impl PolymarketConnector {
                 format!("polymarket:event:{}", detail.id),
                 "prediction_event".to_string(),
                 (detail.url.clone()).unwrap_or_default(),
-            );
+            )
+            .public();
             item.title = Some(detail.title.clone());
             item.published_at = (detail
                 .created_at
@@ -2951,7 +2953,8 @@ impl PolymarketConnector {
                 format!("polymarket:market:{}", detail.id),
                 "prediction_market".to_string(),
                 (detail.url.clone()).unwrap_or_default(),
-            );
+            )
+            .public();
             item.title = Some(detail.question.clone());
             item.published_at = (detail.start_date.clone())
                 .as_deref()

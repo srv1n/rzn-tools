@@ -38,6 +38,7 @@ pub(super) fn post_entry(data: &Value) -> Item {
     let url = absolute(data["permalink"].as_str().unwrap_or(""))
         .unwrap_or_else(|| format!("{REDDIT_CANONICAL_BASE_URL}/comments/{post_id}"));
     let mut item = Item::new(thread_key(post_id), "thread", url)
+        .public()
         .with_title(data["title"].as_str().unwrap_or("").to_string())
         .with_published_at(date(&data["created_utc"]))
         .with_marker(
@@ -145,6 +146,7 @@ pub(super) fn user_item(username: &str, profile: &Value) -> Item {
         "user_profile",
         format!("https://www.reddit.com/user/{username}/"),
     )
+    .public()
     .with_title(format!("u/{username}"))
     .with_published_at(date(&profile["created_utc"]))
     .with_published_in(Party::named("Reddit").with_id("reddit.com"))

@@ -45,6 +45,7 @@ pub(super) fn video_item(
         "video",
         format!("https://www.youtube.com/watch?v={video_id}"),
     )
+    .public()
     .with_title(info.title.clone())
     .with_author(channel.clone())
     .with_published_at(Some(published_at))
@@ -129,6 +130,7 @@ pub(super) fn listing_page(input_listing: Listing, out: &ListVideosOutput) -> It
                 .or(video.channel_title.as_deref())
                 .or(out.channel_title.as_deref());
             let mut item = Item::new(video_key(&video.id), "video", video.url.clone())
+                .public()
                 .with_title(video.title.clone())
                 .with_published_at(video.published_at.as_deref().and_then(parse_video_date))
                 .with_fields(json!({ "playlist_title": video.playlist_title }));
@@ -159,6 +161,7 @@ pub(super) fn search_page(results: &[SearchResultItem]) -> ItemsPage {
         .filter_map(|result| match result {
             SearchResultItem::Video(video) => {
                 let mut item = Item::new(video_key(&video.id), "video", video.url.clone())
+                    .public()
                     .with_title(video.title.clone())
                     .with_published_at(video.uploaded_at.as_deref().and_then(parse_video_date))
                     .with_fields(json!({ "duration_s": video.duration_seconds }))

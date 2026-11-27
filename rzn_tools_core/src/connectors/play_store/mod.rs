@@ -457,7 +457,7 @@ impl Connector for PlayStoreConnector {
                     }];
 
                     let item = {
-                        let mut item = Item::new(item_ref, "app".to_string(), url);
+                        let mut item = Item::new(item_ref, "app".to_string(), url).public();
                         item.title = title;
                         item.marker = app.updated_on_iso.clone();
                         item.author = (authors).into_iter().next();

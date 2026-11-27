@@ -436,6 +436,7 @@ impl ArxivConnector {
             "paper",
             format!("https://arxiv.org/abs/{}", paper.id),
         )
+        .public()
         .with_title(paper.title.clone())
         .with_published_at(rfc3339(&paper.published))
         .with_published_in(

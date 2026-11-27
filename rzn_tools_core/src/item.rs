@@ -166,6 +166,29 @@ fn describe_type() -> String {
     DESCRIBE_V2_TYPE.to_string()
 }
 
+/// Who the author showed an item to (backend design `docs/plans/source-network/design.md` 4.6).
+/// `public`: everyone (a public post, video, page). `restricted`: specific people (a direct
+/// message, a private group, a connections-only post, a personal calendar). A shared index
+/// refuses a restricted item; an item that does not say is restricted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Audience {
+    Public,
+    Restricted,
+}
+
+/// An item of a private index that is about an item of a shared index (a customer's own note
+/// or card on a shared post): the shared index, the shared item's id there, and the one passage
+/// or card when the item is about that unit. The shared item's text is never copied.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SharedItem {
+    pub index_id: String,
+    pub source_item_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit_id: Option<String>,
+}
+
 /// `rzn.item/v2`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Item {
@@ -204,6 +227,12 @@ pub struct Item {
     pub document: Option<DocumentRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub truncated: Option<Truncated>,
+    /// Who the author showed the item to; absent is `restricted`. Every connector sets it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audience: Option<Audience>,
+    /// The shared item this item is about, for an item pushed to a private index.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shared_item: Option<SharedItem>,
 }
 
 impl Item {
@@ -225,7 +254,25 @@ impl Item {
             blocks: Vec::new(),
             document: None,
             truncated: None,
+            audience: None,
+            shared_item: None,
         }
+    }
+
+    /// Who the author showed the item to.
+    pub fn with_audience(mut self, audience: Audience) -> Self {
+        self.audience = Some(audience);
+        self
+    }
+
+    /// Everyone sees it: shorthand for [`Audience::Public`].
+    pub fn public(self) -> Self {
+        self.with_audience(Audience::Public)
+    }
+
+    /// The item's audience: absent is restricted.
+    pub fn audience(&self) -> Audience {
+        self.audience.unwrap_or(Audience::Restricted)
     }
 
     pub fn with_author(mut self, author: Party) -> Self {
@@ -674,6 +721,23 @@ mod tests {
         });
         item.blocks.push(block);
         item
+    }
+
+    #[test]
+    fn an_item_that_names_no_audience_is_restricted() {
+        let item = video();
+        assert_eq!(item.audience(), Audience::Restricted);
+        assert!(serde_json::to_value(&item).unwrap().get("audience").is_none());
+        let public = video().public();
+        assert_eq!(serde_json::to_value(&public).unwrap()["audience"], "public");
+        let pushed: Item = serde_json::from_value(json!({
+            "key": "note:1", "kind": "note", "url": "https://example.com/n/1",
+            "audience": "restricted",
+            "shared_item": {"index_id": "ai-compute", "source_item_id": "item-7"}
+        }))
+        .unwrap();
+        assert_eq!(pushed.audience(), Audience::Restricted);
+        assert_eq!(pushed.shared_item.unwrap().index_id, "ai-compute");
     }
 
     #[test]
