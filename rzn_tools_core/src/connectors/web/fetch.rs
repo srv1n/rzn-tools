@@ -4,7 +4,9 @@
 
 use crate::error::ConnectorError;
 use crate::http::HttpClient;
-use reqwest::header::{HeaderMap, HeaderValue, ETAG, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED};
+use reqwest::header::{
+    HeaderMap, HeaderValue, ETAG, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED,
+};
 use reqwest::StatusCode;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -25,7 +27,9 @@ type HostSlot = Arc<tokio::sync::Mutex<Option<Instant>>>;
 fn host_slot(host: &str) -> HostSlot {
     static HOSTS: OnceLock<Mutex<HashMap<String, HostSlot>>> = OnceLock::new();
     let hosts = HOSTS.get_or_init(Default::default);
-    let mut hosts = hosts.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut hosts = hosts
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     hosts.entry(host.to_string()).or_default().clone()
 }
 
@@ -138,7 +142,8 @@ pub(super) async fn get(
             }
         };
         let status = response.status();
-        if (status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()) && attempt < RETRIES
+        if (status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error())
+            && attempt < RETRIES
         {
             attempt += 1;
             let wait = backoff(base, attempt, response.headers().get("retry-after"));

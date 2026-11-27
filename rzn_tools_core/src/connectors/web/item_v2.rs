@@ -14,8 +14,8 @@ use serde_json::json;
 
 /// Query parameters that only track a click and never change the page (design 3.3).
 const TRACKING: &[&str] = &[
-    "gclid", "fbclid", "msclkid", "dclid", "yclid", "igshid", "mc_cid", "mc_eid", "ref",
-    "ref_src", "_hsenc", "_hsmi",
+    "gclid", "fbclid", "msclkid", "dclid", "yclid", "igshid", "mc_cid", "mc_eid", "ref", "ref_src",
+    "_hsenc", "_hsmi",
 ];
 
 fn tracking(name: &str) -> bool {
@@ -47,9 +47,10 @@ pub(super) fn normalize_url(raw: &str) -> Result<String, ConnectorError> {
 }
 
 fn bare_host(url: &str) -> Option<String> {
-    url::Url::parse(url)
-        .ok()
-        .and_then(|u| u.host_str().map(|h| h.trim_start_matches("www.").to_string()))
+    url::Url::parse(url).ok().and_then(|u| {
+        u.host_str()
+            .map(|h| h.trim_start_matches("www.").to_string())
+    })
 }
 
 fn site(url: &str) -> Party {
@@ -59,9 +60,14 @@ fn site(url: &str) -> Party {
 
 /// The URL a page is cited by: its `rel=canonical` when that is on the same site, otherwise the
 /// URL it was served from after redirects.
-pub(super) fn cited_url(final_url: &str, canonical: Option<&str>) -> Result<String, ConnectorError> {
+pub(super) fn cited_url(
+    final_url: &str,
+    canonical: Option<&str>,
+) -> Result<String, ConnectorError> {
     match canonical {
-        Some(canonical) if bare_host(canonical).is_some() && bare_host(canonical) == bare_host(final_url) => {
+        Some(canonical)
+            if bare_host(canonical).is_some() && bare_host(canonical) == bare_host(final_url) =>
+        {
             normalize_url(canonical)
         }
         _ => normalize_url(final_url),
@@ -372,7 +378,10 @@ mod tests {
         // Raw HTML noise does not change the hash; the main text does.
         let mut noisy = fetched("https://example.com/post", None);
         noisy.body = b"<html>raw, other nonce</html>".to_vec();
-        assert_eq!(page_item(noisy).unwrap().document.unwrap().sha256, document.sha256);
+        assert_eq!(
+            page_item(noisy).unwrap().document.unwrap().sha256,
+            document.sha256
+        );
         assert!(item.check().is_ok());
     }
 

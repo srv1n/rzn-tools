@@ -132,7 +132,11 @@ fn read_ld(html: &Html) -> LdFields {
             out.site_name = out.site_name.take().or_else(|| get("name"));
             continue;
         }
-        out.title = out.title.take().or_else(|| get("headline")).or_else(|| get("name"));
+        out.title = out
+            .title
+            .take()
+            .or_else(|| get("headline"))
+            .or_else(|| get("name"));
         out.description = out.description.take().or_else(|| get("description"));
         out.author = out.author.take().or_else(|| get("author"));
         out.published = out.published.take().or_else(|| get("datePublished"));
@@ -168,7 +172,11 @@ pub(super) fn read_fields(html: &Html, base: &url::Url) -> PageFields {
             ld.description,
             named(&["description"]),
         ]),
-        site_name: first([og(&["og:site_name"]), ld.site_name, named(&["application-name"])]),
+        site_name: first([
+            og(&["og:site_name"]),
+            ld.site_name,
+            named(&["application-name"]),
+        ]),
         author: first([og_author, ld_author, named(&["author"])]),
         published: first([
             og(&["article:published_time", "og:published_time"]),
@@ -180,14 +188,14 @@ pub(super) fn read_fields(html: &Html, base: &url::Url) -> PageFields {
             ld.modified,
             named(&["last-modified"]),
         ]),
-        image: first([og(&["og:image", "og:image:url"]), ld.image, named(&["twitter:image"])])
-            .and_then(|src| resolve(base, &src)),
+        image: first([
+            og(&["og:image", "og:image:url"]),
+            ld.image,
+            named(&["twitter:image"]),
+        ])
+        .and_then(|src| resolve(base, &src)),
         keywords: named(&["keywords"])
-            .map(|k| {
-                k.split(',')
-                    .filter_map(clean)
-                    .collect::<Vec<_>>()
-            })
+            .map(|k| k.split(',').filter_map(clean).collect::<Vec<_>>())
             .unwrap_or_default(),
         canonical: select(html, "link[rel=\"canonical\"]")
             .into_iter()
@@ -208,7 +216,15 @@ pub(super) fn words(text: &str) -> usize {
 pub(super) const SHELL_WORDS: usize = 50;
 
 /// Element ids an app mounts into.
-const MOUNTS: &[&str] = &["#root", "#app", "#__next", "#__nuxt", "#___gatsby", "#svelte", "app-root"];
+const MOUNTS: &[&str] = &[
+    "#root",
+    "#app",
+    "#__next",
+    "#__nuxt",
+    "#___gatsby",
+    "#svelte",
+    "app-root",
+];
 
 const JS_NOTICES: &[&str] = &[
     "enable javascript",
@@ -233,12 +249,16 @@ pub(super) fn empty_shell(html: &Html, main_words: usize) -> Option<String> {
         .map(|el| el.text().collect::<String>().to_lowercase())
         .collect::<String>();
     if let Some(notice) = JS_NOTICES.iter().find(|notice| body_text.contains(*notice)) {
-        return Some(format!("empty_shell: {main_words} words and a \"{notice}\" notice"));
+        return Some(format!(
+            "empty_shell: {main_words} words and a \"{notice}\" notice"
+        ));
     }
     for mount in MOUNTS {
         if let Some(el) = select(html, mount).into_iter().next() {
             if words(&el.text().collect::<String>()) < 5 {
-                return Some(format!("empty_shell: {main_words} words and an empty {mount} mount"));
+                return Some(format!(
+                    "empty_shell: {main_words} words and an empty {mount} mount"
+                ));
             }
         }
     }
@@ -313,8 +333,14 @@ mod tests {
         assert_eq!(fields.site_name.as_deref(), Some("Example Inc"));
         assert_eq!(fields.published.as_deref(), Some("2026-01-02"));
         assert_eq!(fields.modified.as_deref(), Some("2026-02-03"));
-        assert_eq!(fields.image.as_deref(), Some("https://example.com/img/a.png"));
-        assert_eq!(fields.canonical.as_deref(), Some("https://example.com/post/1?"));
+        assert_eq!(
+            fields.image.as_deref(),
+            Some("https://example.com/img/a.png")
+        );
+        assert_eq!(
+            fields.canonical.as_deref(),
+            Some("https://example.com/post/1?")
+        );
     }
 
     #[test]
@@ -344,7 +370,9 @@ mod tests {
             r#"<html><body><noscript>You need to enable JavaScript to run this app.</noscript>
             <div id="app"></div></body></html>"#,
         );
-        assert!(empty_shell(&notice, 8).unwrap().contains("enable javascript"));
+        assert!(empty_shell(&notice, 8)
+            .unwrap()
+            .contains("enable javascript"));
         let short = Html::parse_document(
             r#"<html><head><script src="/analytics.js"></script></head><body><main>
             <h1>Contact</h1><p>Write to us at hello at example dot com, or call during office
@@ -363,7 +391,10 @@ mod tests {
         let wall = "<html><title>Just a moment...</title><body>Checking</body></html>";
         assert!(blocked(StatusCode::OK, wall).unwrap().contains("bot wall"));
         assert!(blocked(StatusCode::SERVICE_UNAVAILABLE, wall).is_some());
-        assert_eq!(blocked(StatusCode::OK, "<html><body>Hello</body></html>"), None);
+        assert_eq!(
+            blocked(StatusCode::OK, "<html><body>Hello</body></html>"),
+            None
+        );
         assert_eq!(blocked(StatusCode::NOT_FOUND, "missing"), None);
     }
 }

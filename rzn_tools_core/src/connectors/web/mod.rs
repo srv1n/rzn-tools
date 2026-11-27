@@ -895,14 +895,16 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
                 match (fetched, output_format == OutputFormat::ItemV2) {
                     (PageFetch::NotModified(validators), true) => {
                         let key = item_v2::normalize_url(url)?;
-                        crate::utils::structured_result(&item_v2::not_modified_item(&key, validators))
+                        crate::utils::structured_result(&item_v2::not_modified_item(
+                            &key, validators,
+                        ))
                     }
                     (PageFetch::Page(_, page), true) => {
                         crate::utils::structured_result(&item_v2::page_item(*page)?)
                     }
-                    (PageFetch::NotModified(_), false) => {
-                        Ok(CallToolResult::success("not modified".to_string().into_contents()))
-                    }
+                    (PageFetch::NotModified(_), false) => Ok(CallToolResult::success(
+                        "not modified".to_string().into_contents(),
+                    )),
                     (PageFetch::Page(content, _), false) => {
                         let text = serde_json::to_string(&content)?;
                         Ok(CallToolResult::success(text.into_contents()))

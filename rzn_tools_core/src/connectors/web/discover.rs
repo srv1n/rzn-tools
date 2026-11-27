@@ -141,8 +141,9 @@ impl WebConnector {
 
     /// The URLs an llms.txt lists.
     pub(super) async fn llms_listing(&self, url: &str) -> Result<Vec<String>, ConnectorError> {
-        let base = url::Url::parse(url)
-            .map_err(|e| ConnectorError::InvalidParams(format!("invalid llms.txt URL {url}: {e}")))?;
+        let base = url::Url::parse(url).map_err(|e| {
+            ConnectorError::InvalidParams(format!("invalid llms.txt URL {url}: {e}"))
+        })?;
         Ok(llms_urls(&self.fetch_text(url).await?, &base))
     }
 
@@ -218,8 +219,13 @@ mod tests {
         let html = r#"<html><head>
           <link rel="alternate" type="application/rss+xml" href="/feed.xml">
           <link rel="alternate" hreflang="de" href="/de/"></head></html>"#;
-        assert_eq!(feed_links(html, &base), vec!["https://example.com/feed.xml"]);
-        assert!(looks_like_feed("<?xml version=\"1.0\"?><rss version=\"2.0\">"));
+        assert_eq!(
+            feed_links(html, &base),
+            vec!["https://example.com/feed.xml"]
+        );
+        assert!(looks_like_feed(
+            "<?xml version=\"1.0\"?><rss version=\"2.0\">"
+        ));
         assert!(!looks_like_feed(html));
     }
 }
