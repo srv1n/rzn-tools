@@ -40,7 +40,7 @@ The registry in [`rzn_tools_core/src/lib.rs`](../../rzn_tools_core/src/lib.rs) i
 | `reddit` | Listing, search, thread, media, and user reads | OAuth is optional. |
 | `wikipedia` | Search, nearby search, and page reads | Public data only. |
 | `rss` | RSS and Atom feed reads | JSON Feed is not supported. |
-| `web` | URL fetch and scrape | Caller headers and cookies can expose private data. |
+| `web` | URL fetch and scrape; pages for an index from a URL list, sitemap, feed, a site's robots.txt sitemaps and llms.txt. One paced request per host (1 s with jitter, back-off on 429 and 5xx); a get sends the last ETag and Last-Modified and a 304 returns `not_modified`; the fetched bytes ride inline; 403, 429 and bot walls fail as `blocked:`, an empty script shell is marked `shell`. | Caller headers and cookies can expose private data. |
 | `weather` | wttr.in weather reads | Forecast length is one to three days. |
 | `x` | Official X API reads and writes | Auth and provider access levels apply. |
 | `linkedin` | Identity, post, token, and raw API operations | An imported token is required. |

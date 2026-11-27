@@ -77,9 +77,43 @@ pub struct WebMetadata {
     pub keywords: Vec<String>,
     pub author: Option<String>,
     pub published_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modified_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub site_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canonical: Option<String>,
 }
 
+impl From<&page::PageFields> for WebMetadata {
+    fn from(fields: &page::PageFields) -> Self {
+        Self {
+            description: fields.description.clone(),
+            keywords: fields.keywords.clone(),
+            author: fields.author.clone(),
+            published_date: fields.published.clone(),
+            modified_date: fields.modified.clone(),
+            site_name: fields.site_name.clone(),
+            image: fields.image.clone(),
+            canonical: fields.canonical.clone(),
+        }
+    }
+}
+
+mod discover;
+mod fetch;
 mod item_v2;
+mod page;
+#[cfg(test)]
+mod served_tests;
+
+/// One page fetch, read: either the page or a 304 to the validators it was asked with.
+enum PageFetch {
+    NotModified(fetch::Validators),
+    Page(Box<WebContent>, Box<item_v2::FetchedPage>),
+}
 
 #[derive(Clone)]
 pub struct WebConnector {
@@ -87,6 +121,8 @@ pub struct WebConnector {
     pub headers: HeaderMap,
     pub browser: Browser,
     cookie_cache: Arc<Mutex<HashMap<String, String>>>,
+    /// The gap between two requests to one host.
+    gap: Duration,
 }
 
 impl WebConnector {
@@ -121,10 +157,132 @@ impl WebConnector {
             client,
             headers,
             cookie_cache: Arc::new(Mutex::new(HashMap::new())),
+            gap: fetch::HOST_GAP,
         };
 
         connector.set_auth_details(auth).await?;
         Ok(connector)
+    }
+
+    /// The request headers for one fetch: the user agent and, when asked for, the cookies.
+    fn request_headers(
+        &self,
+        browser: &Browser,
+        cookies: Option<&str>,
+    ) -> Result<HeaderMap, ConnectorError> {
+        let user_agent = self
+            .headers
+            .get(USER_AGENT)
+            .and_then(|value| value.to_str().ok())
+            .map(|ua| ua.to_string())
+            .unwrap_or_else(|| get_user_agent(browser.clone()));
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            ACCEPT,
+            HeaderValue::from_static(
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            ),
+        );
+        headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_static("en-US,en;q=0.9"));
+        headers.insert(
+            USER_AGENT,
+            HeaderValue::from_str(&user_agent).map_err(|e| ConnectorError::Other(e.to_string()))?,
+        );
+        if let Some(cookie_header) = cookies.filter(|c| !c.is_empty()) {
+            headers.insert(
+                COOKIE,
+                HeaderValue::from_str(cookie_header)
+                    .map_err(|e| ConnectorError::Other(e.to_string()))?,
+            );
+        }
+        Ok(headers)
+    }
+
+    /// Fetch one page once, paced, with `validators`; a block (403, 429 after back-off, a bot
+    /// wall) or any other failed status is an error naming it.
+    async fn fetch_page(
+        &self,
+        url: &str,
+        browser: &Browser,
+        cookies: Option<&str>,
+        validators: &fetch::Validators,
+    ) -> Result<PageFetch, ConnectorError> {
+        let headers = self.request_headers(browser, cookies)?;
+        let fetched = fetch::get(&self.client, url, &headers, validators, self.gap).await?;
+        if fetched.status == reqwest::StatusCode::NOT_MODIFIED {
+            return Ok(PageFetch::NotModified(fetch::Validators {
+                etag: fetched.validators.etag.or_else(|| validators.etag.clone()),
+                last_modified: fetched
+                    .validators
+                    .last_modified
+                    .or_else(|| validators.last_modified.clone()),
+            }));
+        }
+        let text = String::from_utf8_lossy(&fetched.body).into_owned();
+        if let Some(reason) = page::blocked(fetched.status, &text) {
+            return Err(ConnectorError::Other(format!("{reason} from {url}")));
+        }
+        if !fetched.status.is_success() {
+            return Err(ConnectorError::Other(format!(
+                "HTTP {} from {url}",
+                fetched.status.as_u16()
+            )));
+        }
+        let media_type = fetched
+            .content_type
+            .as_deref()
+            .and_then(|value| value.split(';').next())
+            .map(|value| value.trim().to_ascii_lowercase())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "text/html".to_string());
+        let base = url::Url::parse(&fetched.final_url)
+            .map_err(|e| ConnectorError::Other(format!("final URL of {url}: {e}")))?;
+        let (main_text, fields, shell) = if media_type.contains("html") {
+            let html = Html::parse_document(&text);
+            let main_text = strip_multiple_newlines(&html_to_markdown(&find_main_content(&html)));
+            let fields = page::read_fields(&html, &base);
+            let shell = page::empty_shell(&html, page::words(&main_text));
+            (main_text, fields, shell)
+        } else {
+            let fields = page::PageFields {
+                title: text
+                    .lines()
+                    .find_map(|line| line.strip_prefix("# "))
+                    .map(|title| title.trim().to_string()),
+                ..Default::default()
+            };
+            (text.clone(), fields, None)
+        };
+        debug!(
+            target: "connector.web",
+            url = %url,
+            status = %fetched.status.as_u16(),
+            body_bytes = %fetched.body.len(),
+            main_words = %page::words(&main_text),
+            "fetched page"
+        );
+        let raw_sha256 = {
+            use sha2::{Digest, Sha256};
+            format!("{:x}", Sha256::digest(&fetched.body))
+        };
+        let content = WebContent {
+            url: fetched.final_url.clone(),
+            title: fields.title.clone(),
+            content: main_text.clone(),
+            metadata: WebMetadata::from(&fields),
+            raw_sha256,
+        };
+        let page = item_v2::FetchedPage {
+            key: item_v2::normalize_url(url)?,
+            final_url: fetched.final_url,
+            fields,
+            main_text,
+            media_type,
+            body: fetched.body,
+            validators: fetched.validators,
+            shell,
+        };
+        Ok(PageFetch::Page(Box::new(content), Box::new(page)))
     }
 
     async fn scrape_url(
@@ -133,112 +291,51 @@ impl WebConnector {
         browser: &Browser,
         cookies: Option<&str>,
     ) -> Result<WebContent, ConnectorError> {
-        let user_agent = self
-            .headers
-            .get(USER_AGENT)
-            .and_then(|value| value.to_str().ok())
-            .map(|ua| ua.to_string())
-            .unwrap_or_else(|| get_user_agent(browser.clone()));
-
-        let mut request = self.client.get(url);
-        request = request.header(
-            USER_AGENT,
-            HeaderValue::from_str(&user_agent).map_err(|e| ConnectorError::Other(e.to_string()))?,
-        );
-
-        if let Some(cookie_header) = cookies {
-            if !cookie_header.is_empty() {
-                request = request.header(
-                    COOKIE,
-                    HeaderValue::from_str(cookie_header)
-                        .map_err(|e| ConnectorError::Other(e.to_string()))?,
-                );
-            }
+        match self
+            .fetch_page(url, browser, cookies, &fetch::Validators::default())
+            .await?
+        {
+            PageFetch::Page(content, _) => Ok(*content),
+            PageFetch::NotModified(_) => Err(ConnectorError::Other(format!(
+                "{url} answered 304 to a request without validators"
+            ))),
         }
-
-        let t0 = std::time::Instant::now();
-        let resp = request
-            .send()
-            .await
-            .map_err(|e| ConnectorError::Other(e.to_string()))?;
-        let t1 = std::time::Instant::now();
-        let response = resp
-            .text()
-            .await
-            .map_err(|e| ConnectorError::Other(e.to_string()))?;
-        let t2 = std::time::Instant::now();
-
-        debug!(
-            target: "connector.web",
-            url = %url,
-            connect_send_ms = %((t1 - t0).as_millis()),
-            read_body_ms = %((t2 - t1).as_millis()),
-            total_ms = %((t2 - t0).as_millis()),
-            "scraped url"
-        );
-
-        let raw_sha256 = {
-            use sha2::{Digest, Sha256};
-            format!("{:x}", Sha256::digest(response.as_bytes()))
-        };
-        let t3 = std::time::Instant::now();
-        let content = strip_multiple_newlines(&response);
-        let t4 = std::time::Instant::now();
-
-        let html = Html::parse_document(&content);
-        let t5 = std::time::Instant::now();
-        let main_html = find_main_content(&html);
-        let t6 = std::time::Instant::now();
-        let content = html_to_markdown(&main_html);
-        let t7 = std::time::Instant::now();
-        let metadata = self.extract_metadata(&html)?;
-        let t8 = std::time::Instant::now();
-        let title = html
-            .select(&Selector::parse("title").map_err(|e| {
-                ConnectorError::Other(format!("Failed to parse title selector: {}", e))
-            })?)
-            .next()
-            .map(|el| el.inner_html());
-
-        debug!(
-            target: "connector.web",
-            url = %url,
-            trim_ms = %((t4 - t3).as_millis()),
-            parse_ms = %((t5 - t4).as_millis()),
-            find_ms = %((t6 - t5).as_millis()),
-            md_ms = %((t7 - t6).as_millis()),
-            meta_ms = %((t8 - t7).as_millis()),
-            body_bytes = %response.len(),
-            content_chars = %content.len(),
-            "processed html to markdown"
-        );
-
-        Ok(WebContent {
-            url: url.to_string(),
-            title,
-            content,
-            metadata,
-            raw_sha256,
-        })
     }
 
+    /// A listing document (robots.txt, a sitemap, a feed, an llms.txt), paced like a page; any
+    /// status but success is an error.
     async fn fetch_text(&self, url: &str) -> Result<String, ConnectorError> {
-        let browser = self.browser.clone();
-        let user_agent = get_user_agent(browser);
-        self.client
-            .get(url)
-            .header(
-                USER_AGENT,
-                HeaderValue::from_str(&user_agent)
-                    .map_err(|e| ConnectorError::Other(e.to_string()))?,
-            )
-            .send()
-            .await
-            .and_then(|response| response.error_for_status())
-            .map_err(|e| ConnectorError::Other(e.to_string()))?
-            .text()
-            .await
-            .map_err(|e| ConnectorError::Other(e.to_string()))
+        self.fetch_optional(url)
+            .await?
+            .ok_or_else(|| ConnectorError::Other(format!("HTTP 404 from {url}")))
+    }
+
+    /// As [`Self::fetch_text`], but a 404 or 410 is `None`.
+    async fn fetch_optional(&self, url: &str) -> Result<Option<String>, ConnectorError> {
+        let headers = self.request_headers(&self.browser.clone(), None)?;
+        let fetched = fetch::get(
+            &self.client,
+            url,
+            &headers,
+            &fetch::Validators::default(),
+            self.gap,
+        )
+        .await?;
+        let status = fetched.status;
+        if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::GONE {
+            return Ok(None);
+        }
+        let text = String::from_utf8_lossy(&fetched.body).into_owned();
+        if let Some(reason) = page::blocked(status, &text) {
+            return Err(ConnectorError::Other(format!("{reason} from {url}")));
+        }
+        if !status.is_success() {
+            return Err(ConnectorError::Other(format!(
+                "HTTP {} from {url}",
+                status.as_u16()
+            )));
+        }
+        Ok(Some(text))
     }
 
     /// Pages to index from one scope, as `rzn.items/v2`.
@@ -246,28 +343,27 @@ impl WebConnector {
         &self,
         args: &serde_json::Map<String, serde_json::Value>,
     ) -> Result<CallToolResult, ConnectorError> {
+        use crate::item::Listing;
+        let text = |name: &str| args.get(name).and_then(|v| v.as_str());
         let page = if let Some(urls) = args.get("urls").and_then(|v| v.as_array()) {
             let urls: Vec<String> = urls
                 .iter()
                 .filter_map(|v| v.as_str().map(str::to_string))
                 .collect();
             item_v2::url_list_page(&urls)?
-        } else if let Some(sitemap) = args.get("sitemap").and_then(|v| v.as_str()) {
-            let (mut entries, index) = item_v2::parse_sitemap(&self.fetch_text(sitemap).await?);
-            if index {
-                // A sitemap index lists sitemaps; read each once (no deeper nesting).
-                let mut pages = Vec::new();
-                for (child, _) in entries {
-                    pages.extend(item_v2::parse_sitemap(&self.fetch_text(&child).await?).0);
-                }
-                entries = pages;
-            }
-            item_v2::sitemap_page(&entries)?
-        } else if let Some(feed) = args.get("feed").and_then(|v| v.as_str()) {
-            item_v2::feed_page(self.fetch_text(feed).await?.as_bytes())?
+        } else if let Some(sitemap) = text("sitemap") {
+            let entries = self.sitemap_entries(vec![sitemap.to_string()]).await?;
+            item_v2::pages_page(&entries, Listing::Full)?
+        } else if let Some(feed) = text("feed") {
+            self.feed_listing(feed).await?
+        } else if let Some(site) = text("site") {
+            item_v2::pages_page(&self.site_entries(site).await?, Listing::Full)?
+        } else if let Some(llms) = text("llms_txt") {
+            let urls = self.llms_listing(llms).await?;
+            item_v2::url_list_page(&urls)?
         } else {
             return Err(ConnectorError::InvalidParams(
-                "list_pages needs one of urls, sitemap or feed".to_string(),
+                "list_pages needs one of urls, sitemap, feed, site or llms_txt".to_string(),
             ));
         };
         crate::utils::structured_result(&page)
@@ -364,56 +460,6 @@ impl WebConnector {
 
             Ok(Some(cookies))
         }
-    }
-
-    fn extract_metadata(&self, document: &scraper::Html) -> Result<WebMetadata, ConnectorError> {
-        let mut metadata = WebMetadata::default();
-
-        // Extract meta description
-        if let Ok(selector) = Selector::parse("meta[name='description']") {
-            if let Some(desc) = document
-                .select(&selector)
-                .next()
-                .and_then(|el| el.value().attr("content"))
-            {
-                metadata.description = Some(desc.to_string());
-            }
-        }
-
-        // Extract meta keywords
-        if let Ok(selector) = Selector::parse("meta[name='keywords']") {
-            if let Some(keywords) = document
-                .select(&selector)
-                .next()
-                .and_then(|el| el.value().attr("content"))
-            {
-                metadata.keywords = keywords.split(',').map(|s| s.trim().to_string()).collect();
-            }
-        }
-
-        // Extract meta author
-        if let Ok(selector) = Selector::parse("meta[name='author']") {
-            if let Some(author) = document
-                .select(&selector)
-                .next()
-                .and_then(|el| el.value().attr("content"))
-            {
-                metadata.author = Some(author.to_string());
-            }
-        }
-
-        // Extract published date
-        if let Ok(selector) = Selector::parse("meta[property='article:published_time']") {
-            if let Some(date) = document
-                .select(&selector)
-                .next()
-                .and_then(|el| el.value().attr("content"))
-            {
-                metadata.published_date = Some(date.to_string());
-            }
-        }
-
-        Ok(metadata)
     }
 
     fn process_url_template(
@@ -651,6 +697,8 @@ the main page content (not structured scraping). Example: url=\"https://example.
                                 "description": "Whether to use an explicitly configured Cookie header. Automatic browser import requires browser-cookie-import.",
                                 "default": false
                             },
+                            "if_none_match": {"type": "string", "description": "The ETag of the last fetch; a 304 returns an item marked not_modified."},
+                            "if_modified_since": {"type": "string", "description": "The Last-Modified of the last fetch."},
                         "browser": {
                             "type": "string",
                             "description": "Override the browser identity used for user-agent selection; automatic cookie import requires browser-cookie-import.",
@@ -757,7 +805,7 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
                     name: Cow::Borrowed("list_pages"),
                     title: Some("List Pages For Ingestion".into()),
                     description: Some(Cow::Borrowed(
-                        "List pages to index from exactly one scope: `urls` (a list), `sitemap` (a sitemap or sitemap index URL), or `feed` (an RSS or Atom feed URL). Returns rzn.items/v2; fetch each with scrape_url output_format=item_v2. No link-following.",
+                        "List pages to index from exactly one scope: `urls` (a list), `sitemap` (a sitemap or sitemap index URL), `feed` (an RSS or Atom feed, or a page that links one), `site` (a site's robots.txt sitemaps, else /sitemap.xml, plus its /llms.txt), or `llms_txt` (an llms.txt URL). Returns rzn.items/v2; fetch each with scrape_url output_format=item_v2. No link-following.",
                     )),
                     annotations: Some(ToolAnnotations::new().read_only(true).open_world(true)),
                     input_schema: Arc::new(json!({
@@ -766,6 +814,8 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
                             "urls": {"type": "array", "items": {"type": "string"}},
                             "sitemap": {"type": "string"},
                             "feed": {"type": "string"},
+                            "site": {"type": "string", "description": "A site's home URL."},
+                            "llms_txt": {"type": "string"},
                             "limit": {"type": "integer", "description": "Ignored; a scope is listed whole."},
                             "cursor": {"type": "string", "description": "Ignored; one page."},
                             "output_format": crate::ingest::output_format_property()
@@ -838,15 +888,26 @@ you need specific fields (e.g., title/price) and scrape_url is too noisy.",
                     "executing scrape"
                 );
 
-                let content = self.scrape_url(url, &browser, cookies.as_deref()).await?;
-
-                if output_format == OutputFormat::ItemV2 {
-                    let item = item_v2::page_item(&content, &content.raw_sha256, None)?;
-                    return crate::utils::structured_result(&item);
+                let validators = fetch::Validators::from_args(&args);
+                let fetched = self
+                    .fetch_page(url, &browser, cookies.as_deref(), &validators)
+                    .await?;
+                match (fetched, output_format == OutputFormat::ItemV2) {
+                    (PageFetch::NotModified(validators), true) => {
+                        let key = item_v2::normalize_url(url)?;
+                        crate::utils::structured_result(&item_v2::not_modified_item(&key, validators))
+                    }
+                    (PageFetch::Page(_, page), true) => {
+                        crate::utils::structured_result(&item_v2::page_item(*page)?)
+                    }
+                    (PageFetch::NotModified(_), false) => {
+                        Ok(CallToolResult::success("not modified".to_string().into_contents()))
+                    }
+                    (PageFetch::Page(content, _), false) => {
+                        let text = serde_json::to_string(&content)?;
+                        Ok(CallToolResult::success(text.into_contents()))
+                    }
                 }
-
-                let text = serde_json::to_string(&content)?;
-                Ok(CallToolResult::success(text.into_contents()))
             }
             "scrape_with_config" => {
                 let tool_obj = match args.get("tool").and_then(|v| v.as_object()) {

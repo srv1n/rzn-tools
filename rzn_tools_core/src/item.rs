@@ -119,12 +119,30 @@ impl Block {
 }
 
 /// Bytes for a document-like source; they go through the file reader for `media_type`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct DocumentRef {
     pub uri: String,
     pub media_type: String,
+    /// Hash of what decides a re-read (for a web page, its main text, not the raw HTML).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
+    /// The bytes the connector fetched, base64. The index parses these and never fetches the
+    /// document a second time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_base64: Option<String>,
+    /// HTTP validators of this fetch; a caller sends them back on the next get as
+    /// `if_none_match` and `if_modified_since`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub etag: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_modified: Option<String>,
+    /// The server answered 304 to the validators the get carried: no bytes, nothing changed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub not_modified: bool,
+    /// Set when the fetched bytes are not the page itself (`empty_shell: ...`): a caller with
+    /// another route fetches it again through that route.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell: Option<String>,
 }
 
 /// Set when the connector returned fewer blocks than the item has. An index refuses such an item.
@@ -687,7 +705,7 @@ mod tests {
         item.document = Some(DocumentRef {
             uri: "https://example.com".into(),
             media_type: "text/html".into(),
-            sha256: None,
+            ..Default::default()
         });
         assert!(item.check().is_err());
         item.blocks.clear();
