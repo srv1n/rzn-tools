@@ -105,6 +105,8 @@ impl From<&page::PageFields> for WebMetadata {
 mod discover;
 mod fetch;
 mod item_v2;
+#[cfg(test)]
+mod live_checks;
 mod page;
 #[cfg(test)]
 mod served_tests;
@@ -239,7 +241,7 @@ impl WebConnector {
             .map_err(|e| ConnectorError::Other(format!("final URL of {url}: {e}")))?;
         let (main_text, fields, shell) = if media_type.contains("html") {
             let html = Html::parse_document(&text);
-            let main_text = strip_multiple_newlines(&html_to_markdown(&find_main_content(&html)));
+            let main_text = page_text(&html);
             let fields = page::read_fields(&html, &base);
             let shell = page::empty_shell(&html, page::words(&main_text));
             (main_text, fields, shell)
@@ -1132,6 +1134,18 @@ pub fn find_main_content(html: &Html) -> String {
 
     // Return empty string if no suitable element found
     String::new()
+}
+
+/// A page's text for its change hash and the empty-shell check: the whole body as Markdown,
+/// without navigation, header, footer and sidebars (`html_to_markdown` skips them). Not the
+/// first `article` or `main`: a page's first article is often one card, and streamed rendering
+/// parks the content outside both.
+fn page_text(html: &Html) -> String {
+    let body = Selector::parse("body")
+        .ok()
+        .and_then(|selector| html.select(&selector).next().map(|body| body.html()))
+        .unwrap_or_else(|| html.html());
+    strip_multiple_newlines(&html_to_markdown(&body))
 }
 
 pub fn html_to_markdown(html: &str) -> String {

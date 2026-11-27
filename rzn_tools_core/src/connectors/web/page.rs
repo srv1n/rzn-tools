@@ -281,6 +281,8 @@ const WALLS: &[&str] = &[
     "are you a robot",
     "sign in to confirm you",
     "unusual traffic from your computer",
+    "<title>human verification</title>",
+    "awswafcookiedomainlist",
 ];
 
 /// Why a fetched answer is a block rather than the page, or `None`.
@@ -291,7 +293,7 @@ pub(super) fn blocked(status: reqwest::StatusCode, body: &str) -> Option<String>
     match status {
         StatusCode::FORBIDDEN => Some("blocked: HTTP 403".to_string()),
         StatusCode::TOO_MANY_REQUESTS => Some("blocked: HTTP 429 after back-off".to_string()),
-        s if s.is_server_error() && wall.is_some() => {
+        s if (s.is_client_error() || s.is_server_error()) && wall.is_some() => {
             Some(format!("blocked: HTTP {} bot wall", s.as_u16()))
         }
         s if s.is_success() => wall
@@ -391,6 +393,9 @@ mod tests {
         let wall = "<html><title>Just a moment...</title><body>Checking</body></html>";
         assert!(blocked(StatusCode::OK, wall).unwrap().contains("bot wall"));
         assert!(blocked(StatusCode::SERVICE_UNAVAILABLE, wall).is_some());
+        // An AWS WAF challenge answers 405 with a verification page.
+        let waf = "<html><head><title>Human Verification</title><script>window.awsWafCookieDomainList = [];</script>";
+        assert!(blocked(StatusCode::METHOD_NOT_ALLOWED, waf).is_some());
         assert_eq!(
             blocked(StatusCode::OK, "<html><body>Hello</body></html>"),
             None
