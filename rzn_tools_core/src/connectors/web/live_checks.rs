@@ -59,12 +59,17 @@ async fn live_site_twice() {
                 fetched += 1;
                 shells += usize::from(document.shell.is_some());
                 println!(
-                    "run1 200 {} etag={} last_modified={} shell={:?} title={:?}",
+                    "run1 200 {} etag={} last_modified={} shell={:?} title={:?} url={} site={:?} author={:?} published={:?} fields={}",
                     entry.key,
                     document.etag.is_some(),
                     document.last_modified.is_some(),
                     document.shell,
-                    item.title
+                    item.title,
+                    item.url,
+                    item.published_in.as_ref().map(|p| p.name.clone()),
+                    item.author.as_ref().map(|p| p.name.clone()),
+                    item.published_at,
+                    serde_json::to_string(&item.fields).unwrap_or_default()
                 );
                 first.push((entry.key.clone(), document));
             }

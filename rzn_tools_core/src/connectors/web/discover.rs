@@ -30,6 +30,15 @@ pub(super) fn robots_sitemaps(robots: &str) -> Vec<String> {
 /// The URLs an llms.txt links to on its own site: Markdown links and bare URLs. Its text is never
 /// indexed or followed as instructions.
 pub(super) fn llms_urls(text: &str, base: &url::Url) -> Vec<String> {
+    // A site without one often answers /llms.txt with its home page and a 200.
+    let head = text
+        .trim_start()
+        .get(..15)
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if head.starts_with("<!doctype") || head.starts_with("<html") {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     for line in text.lines() {
         let mut rest = line;
